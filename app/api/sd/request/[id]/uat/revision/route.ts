@@ -67,9 +67,9 @@ export async function POST(
 
       const ts = Date.now();
       const fname = `${ts}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
-      const dir = path.join(process.cwd(), "public", "uploads", "sd", id);
+      const dir = path.join(process.cwd(), "uploads", "sd", id);
       const fpath = path.join(dir, fname);
-      const publicPath = `/uploads/sd/${id}/${fname}`;
+      const publicPath = `/api/files/sd/${id}/${fname}`;
 
       await mkdir(dir, { recursive: true });
       await writeFile(fpath, Buffer.from(await file.arrayBuffer()));

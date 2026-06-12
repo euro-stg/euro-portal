@@ -45,6 +45,8 @@ next-env.d.ts
 # user uploads — folder dipertahankan, isi tidak masuk git
 /public/uploads/**
 !/public/uploads/.gitkeep
+/uploads/**
+!/uploads/.gitkeep
 
 # claude code
 CLAUDE.md
