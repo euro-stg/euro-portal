@@ -49,8 +49,8 @@ export function ChatWidget() {
 
           {/* Header */}
           <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-3 flex items-center gap-3 flex-shrink-0">
-            <div className="w-8 h-8 rounded-full overflow-hidden bg-white/20 flex-shrink-0">
-              <Image src="/eurobot.png" alt="EuroBot" width={32} height={32} className="w-full h-full object-cover" />
+            <div className="w-8 h-8 flex-shrink-0">
+              <Image src="/eurobot1.png" alt="EuroBot" width={32} height={32} className="w-full h-full object-contain" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-white font-semibold text-sm">Portal Assistant</p>
@@ -69,8 +69,8 @@ export function ChatWidget() {
             {messages.map((m) => (
               <div key={m.id} className={`flex gap-2 ${m.role === "user" ? "justify-end" : "justify-start"}`}>
                 {m.role === "bot" && (
-                  <div className="w-7 h-7 rounded-full overflow-hidden flex-shrink-0 mt-0.5">
-                    <Image src="/eurobot.png" alt="bot" width={28} height={28} className="w-full h-full object-cover" />
+                  <div className="w-7 h-7 flex-shrink-0 mt-0.5">
+                    <Image src="/eurobot1.png" alt="bot" width={28} height={28} className="w-full h-full object-contain" />
                   </div>
                 )}
                 <div className={`max-w-[78%] px-3 py-2 rounded-2xl text-sm leading-relaxed ${
@@ -87,7 +87,7 @@ export function ChatWidget() {
             {thinking && (
               <div className="flex gap-2 justify-start">
                 <div className="w-7 h-7 rounded-full overflow-hidden flex-shrink-0 mt-0.5">
-                  <Image src="/eurobot.png" alt="bot" width={28} height={28} className="w-full h-full object-cover" />
+                  <Image src="/eurobot1.png" alt="bot" width={28} height={28} className="w-full h-full object-cover" />
                 </div>
                 <div className="bg-white border border-slate-100 rounded-2xl rounded-bl-sm px-3.5 py-3 shadow-sm">
                   <div className="flex gap-1 items-center">
@@ -138,17 +138,18 @@ export function ChatWidget() {
         )}
         <button
           onClick={() => setIsOpen((v) => !v)}
-          className={`rounded-full shadow-xl overflow-hidden transition-all duration-300 ease-in-out hover:scale-110 active:scale-95 focus:outline-none focus:ring-4 focus:ring-blue-500/30 ${
+          className={`transition-all duration-300 ease-in-out hover:scale-110 active:scale-95 focus:outline-none bg-transparent border-none ${
             isOpen ? "w-[60px] h-[60px]" : "w-[150px] h-[150px]"
           }`}
           aria-label="Buka Portal Assistant"
         >
           <Image
-            src="/eurobot.png"
+            src="/eurobot1.png"
             alt="EuroBot"
             width={150}
             height={150}
-            className="w-full h-full object-cover"
+            priority
+            className="w-full h-full object-contain drop-shadow-xl"
           />
         </button>
       </div>
