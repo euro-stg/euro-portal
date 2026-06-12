@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
 import { AppShell } from "@/components/ui/app-shell";
+import { ChatWidget } from "@/components/ui/chat-widget";
 import db from "@/lib/db/db";
 import type { SidebarModule } from "@/types/sidebar";
 
@@ -61,8 +62,11 @@ export default async function ProtectedLayout({
   }
 
   return (
-    <AppShell user={{ name: dbUser.name, role: portalRole }} modules={modules}>
-      {children}
-    </AppShell>
+    <>
+      <AppShell user={{ name: dbUser.name, role: portalRole }} modules={modules}>
+        {children}
+      </AppShell>
+      <ChatWidget />
+    </>
   );
 }
