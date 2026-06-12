@@ -42,8 +42,9 @@ next-env.d.ts
 
 /generated/prisma
 
-# user uploads (store in object storage, not git)
-/public/uploads/
+# user uploads — folder dipertahankan, isi tidak masuk git
+/public/uploads/**
+!/public/uploads/.gitkeep
 
 # claude code
 CLAUDE.md
