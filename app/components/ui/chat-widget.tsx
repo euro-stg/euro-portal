@@ -138,14 +138,14 @@ export function ChatWidget() {
         )}
         <button
           onClick={() => setIsOpen((v) => !v)}
-          className="w-14 h-14 rounded-full shadow-xl overflow-hidden transition-transform hover:scale-110 active:scale-95 focus:outline-none focus:ring-4 focus:ring-blue-500/30"
+          className="w-20 h-20 rounded-full shadow-xl overflow-hidden transition-transform hover:scale-110 active:scale-95 focus:outline-none focus:ring-4 focus:ring-blue-500/30"
           aria-label="Buka Portal Assistant"
         >
           <Image
             src="/eurobot.png"
             alt="EuroBot"
-            width={56}
-            height={56}
+            width={80}
+            height={80}
             className="w-full h-full object-cover"
           />
         </button>
