@@ -43,8 +43,6 @@ next-env.d.ts
 /generated/prisma
 
 # user uploads — folder dipertahankan, isi tidak masuk git
-/public/uploads/**
-!/public/uploads/.gitkeep
 /uploads/**
 !/uploads/.gitkeep
 
