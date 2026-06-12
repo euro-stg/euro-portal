@@ -1,0 +1,463 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ===================== AUTH =====================
+
+model User {
+  id               String   @id @default(cuid())
+  employeeId       String   @unique
+  name             String?
+  password         String?
+  joinDate         DateTime?
+  resignDate       DateTime?
+  status           String?
+  organizationId   String?
+  organizationName String?
+  jobPositionId    String?
+  jobPositionName  String?
+  branchId         String?
+  branchName       String?
+  age              Int?
+  image            String?
+  phone            String?
+  email            String?
+
+  accounts             Account[]
+  sessions             Session[]
+  userRoles            UserRole[]
+  notifications        Notification[]
+  sdRequests           SdRequest[]           @relation("SdRequester")
+  sdPicRequests        SdRequest[]           @relation("SdPic")
+  sdItDocCreated       SdItDocument[]        @relation("ItDocCreator")
+  sdItDocApproved      SdItDocument[]        @relation("ItDocApprover")
+  sdUatApproved        SdUat[]               @relation("UatApprover")
+  sdUatRevisions       SdUatRevision[]       @relation("UatRevisionCreator")
+  sdAttachments        SdAttachment[]        @relation("SdAttachUploader")
+  sdActivities         SdActivity[]          @relation("SdActivityActor")
+  sdApprovalSubmitted  SdApprovalRequest[]   @relation("SdApprovalSubmitter")
+  sdApprovalActions    SdApprovalRequestStep[] @relation("SdApprovalActor")
+  appTokensCreated     AppToken[]            @relation("AppTokenCreator")
+  ssoSessions          SsoSession[]          @relation("SsoSessionUser")
+  ssoRedirectTokens    SsoRedirectToken[]    @relation("SsoRedirectUser")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refreshToken      String?
+  accessToken       String?
+  expiresAt         Int?
+  tokenType         String?
+  scope             String?
+  idToken           String?
+  sessionState      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ===================== RBAC =====================
+
+// appId null  = role portal (superadmin, admin, user)
+// appId terisi = role spesifik untuk 1 app
+model Role {
+  id          String    @id @default(cuid())
+  name        String
+  appId       String?   // null = portal-level
+  description String?
+  isLocked    Boolean   @default(false)
+  status      String    @default("active")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime?
+  deletedAt   DateTime?
+
+  modules   RoleModule[]
+  userRoles UserRole[]
+
+  @@unique([name, appId])
+}
+
+// 1 user = 1 role per app (enforce via unique [userId, appId])
+model UserRole {
+  id        String   @id @default(cuid())
+  userId    String
+  roleId    String
+  appId     String?  // denorm dari role.appId — untuk unique constraint per app
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@unique([userId, appId])
+}
+
+// Module = App Launcher + Sidebar item
+// type "app"    → tampil di dashboard launcher
+// type "module" → tampil di sidebar navigasi
+// appId null    → portal-level module (sidebar portal)
+// appId terisi  → module milik app tertentu (sidebar dalam app)
+model Module {
+  id          String    @id @default(cuid())
+  name        String
+  path        String
+  icon        String?
+  color       String?   // "blue"|"violet"|"emerald"|"orange"|"rose"|"cyan"|"amber"|"indigo"
+  description String?   // subtitle untuk app launcher card
+  type        String    @default("module") // "app" | "module"
+  appId       String?   // null = portal; ref ke Module.id dengan type="app"
+  isExternal  Boolean   @default(false)   // true = apps eksternal, buka via SSO redirect
+  externalUrl String?                     // base URL apps eksternal untuk SSO redirect
+  group       String?
+  order       Int       @default(0)
+  status      String    @default("active")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime?
+  deletedAt   DateTime?
+
+  app      Module?   @relation("AppModules", fields: [appId], references: [id])
+  modules  Module[]  @relation("AppModules")
+  roles    RoleModule[]
+  appToken AppToken?
+
+  sdRequests SdRequest[]
+}
+
+model RoleModule {
+  id       String @id @default(cuid())
+  roleId   String
+  moduleId String
+  role     Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  module   Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, moduleId])
+}
+
+// ===================== SOFTWARE DEVELOPMENT APP =====================
+
+// Status: DRAFT → SUBMITTED → IT_REVIEW → APPROVED_IT → APPROVED_USER → IN_PROGRESS → UAT → DONE | REJECTED | CANCELLED
+model SdRequest {
+  id                   String    @id @default(cuid())
+  requestNo            String    @unique  // auto: "SD-2026-001"
+  type                 String    // "NEW_APP" | "CHANGE_REQUEST"
+  refAppId             String?   // CHANGE_REQUEST: Module.id (type="app")
+  title                String
+  description          String    @db.Text
+  requestedBy          String
+  picId                String?   // IT PIC userId
+  estimatedCompletedAt DateTime?
+  status               String    @default("DRAFT")
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime?
+  deletedAt            DateTime?
+
+  requester    User              @relation("SdRequester", fields: [requestedBy], references: [id])
+  pic          User?             @relation("SdPic", fields: [picId], references: [id])
+  refApp       Module?           @relation(fields: [refAppId], references: [id])
+  sdApproval   SdApprovalRequest?
+  itDocument   SdItDocument?
+  progresses   SdProgress[]
+  environments SdEnvironment[]
+  uat          SdUat?
+  uatRevisions SdUatRevision[]
+  attachments  SdAttachment[]
+  activities   SdActivity[]
+}
+
+// Dokumen teknis + bisnis dari IT — user harus approve sebelum dev mulai
+model SdItDocument {
+  id          String    @id @default(cuid())
+  requestId   String    @unique
+  content     String    @db.Text
+  createdBy   String
+  approvedBy  String?
+  approvedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime?
+
+  request     SdRequest    @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  creator     User         @relation("ItDocCreator", fields: [createdBy], references: [id])
+  approver    User?        @relation("ItDocApprover", fields: [approvedBy], references: [id])
+  attachments SdAttachment[]
+}
+
+// Pantau tahap development
+model SdProgress {
+  id        String    @id @default(cuid())
+  requestId String
+  label     String    // "Design" | "Backend" | "Frontend" | "Testing" | "Deployment"
+  note      String?   @db.Text
+  status    String    @default("IN_PROGRESS") // "IN_PROGRESS" | "DONE"
+  order     Int       @default(0)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime?
+
+  request SdRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+}
+
+// Info environment testing/staging untuk user
+model SdEnvironment {
+  id        String   @id @default(cuid())
+  requestId String
+  name      String   // "Staging" | "UAT"
+  url       String
+  username  String?
+  password  String?
+  note      String?  @db.Text
+  createdAt DateTime @default(now())
+
+  request SdRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+}
+
+// UAT — user approve setelah testing selesai → DONE
+model SdUat {
+  id         String    @id @default(cuid())
+  requestId  String    @unique
+  note       String?   @db.Text
+  approvedBy String?
+  approvedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime?
+
+  request  SdRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  approver User?     @relation("UatApprover", fields: [approvedBy], references: [id])
+}
+
+// File upload per step — category menentukan di step mana file diupload
+// category: "REQUEST" | "IT_DOC" | "PROGRESS" | "UAT" | "UAT_REVISION"
+model SdAttachment {
+  id              String   @id @default(cuid())
+  requestId       String?
+  itDocId         String?
+  uatRevisionId   String?
+  category        String   @default("REQUEST")
+  name            String
+  path            String
+  mimeType        String?
+  size            Int?
+  uploadedBy      String
+  createdAt       DateTime @default(now())
+
+  request     SdRequest?     @relation(fields: [requestId], references: [id])
+  itDoc       SdItDocument?  @relation(fields: [itDocId], references: [id])
+  uatRevision SdUatRevision? @relation(fields: [uatRevisionId], references: [id])
+  uploader    User           @relation("SdAttachUploader", fields: [uploadedBy], references: [id])
+}
+
+// Iterasi revisi UAT — dibuat oleh requester saat "Perlu Revisi"
+model SdUatRevision {
+  id          String   @id @default(cuid())
+  requestId   String
+  iteration   Int
+  note        String?  @db.Text
+  createdBy   String
+  createdAt   DateTime @default(now())
+
+  request     SdRequest      @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  creator     User           @relation("UatRevisionCreator", fields: [createdBy], references: [id])
+  attachments SdAttachment[]
+}
+
+// Audit trail semua aksi
+model SdActivity {
+  id        String   @id @default(cuid())
+  requestId String
+  userId    String
+  action    String   // "SUBMITTED" | "IT_REVIEWED" | "USER_APPROVED_DOC" | "PROGRESS_UPDATE" | "UAT_READY" | "UAT_APPROVED" | "REJECTED" | "CANCELLED" | "COMMENT"
+  note      String?  @db.Text
+  createdAt DateTime @default(now())
+
+  request SdRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  actor   User      @relation("SdActivityActor", fields: [userId], references: [id])
+}
+
+// ===================== SD APPROVAL =====================
+// Isolated approval untuk Software Development app.
+// Tiap app lain punya model approval sendiri, tidak sharing engine.
+
+model SdApprovalTemplate {
+  id        String    @id @default(cuid())
+  name      String
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime?
+  deletedAt DateTime?
+
+  steps    SdApprovalTemplateStep[]
+  requests SdApprovalRequest[]
+}
+
+model SdApprovalTemplateStep {
+  id               String  @id @default(cuid())
+  templateId       String
+  step             Int
+  label            String
+  jobPositionId    String?
+  jobPositionName  String?
+  organizationId   String?
+  organizationName String?
+  branchId         String?
+  branchName       String?
+
+  template SdApprovalTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, step])
+}
+
+model SdApprovalRequest {
+  id          String    @id @default(cuid())
+  sdRequestId String    @unique
+  title       String
+  submittedBy String
+  currentStep Int       @default(1)
+  status      String    @default("PENDING") // PENDING | APPROVED | REJECTED | CANCELLED
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime?
+
+  templateId String
+  template   SdApprovalTemplate    @relation(fields: [templateId], references: [id])
+  submitter  User                  @relation("SdApprovalSubmitter", fields: [submittedBy], references: [id])
+  sdRequest  SdRequest             @relation(fields: [sdRequestId], references: [id], onDelete: Cascade)
+  steps      SdApprovalRequestStep[]
+}
+
+model SdApprovalRequestStep {
+  id               String    @id @default(cuid())
+  requestId        String
+  step             Int
+  label            String
+  jobPositionId    String?
+  jobPositionName  String?
+  organizationId   String?
+  organizationName String?
+  branchId         String?
+  branchName       String?
+  status           String    @default("PENDING") // PENDING | APPROVED | REJECTED
+  actorId          String?
+  note             String?   @db.Text
+  actedAt          DateTime?
+  createdAt        DateTime  @default(now())
+
+  request SdApprovalRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  actor   User?             @relation("SdApprovalActor", fields: [actorId], references: [id])
+
+  @@unique([requestId, step])
+}
+
+// ===================== NOTIFICATION =====================
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  body      String
+  type      String   // "APPROVAL_REQUEST" | "APPROVAL_ACTION" | "TICKET" | "GENERAL"
+  refId     String?
+  appType   String?
+  read      Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ===================== SSO =====================
+
+// Token per aplikasi eksternal yang boleh akses SSO API
+model AppToken {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  token       String    @unique
+  active      Boolean   @default(true)
+  moduleId    String?   @unique  // relasi ke Module (type="app", isExternal=true)
+  createdBy   String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime?
+  deletedAt   DateTime?
+
+  creator          User               @relation("AppTokenCreator", fields: [createdBy], references: [id])
+  module           Module?            @relation(fields: [moduleId], references: [id])
+  ssoSessions      SsoSession[]
+  redirectTokens   SsoRedirectToken[]
+  activityLogs     SsoActivityLog[]
+}
+
+// Session user setelah login SSO — flag ke AppToken (apps mana yang buat)
+model SsoSession {
+  id         String   @id @default(cuid())
+  userId     String
+  appTokenId String
+  token      String   @unique
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  user     User     @relation("SsoSessionUser", fields: [userId], references: [id], onDelete: Cascade)
+  appToken AppToken @relation(fields: [appTokenId], references: [id], onDelete: Cascade)
+}
+
+// Log aktivitas validate SSO — untuk audit trail & monitoring
+model SsoActivityLog {
+  id         String   @id @default(cuid())
+  appTokenId String?
+  userId     String?
+  event      String   // "SSO_VALIDATE_REDIRECT" | "SSO_VALIDATE_SESSION"
+  status     String   // "SUCCESS" | "FAILED"
+  reason     String?  // pesan error jika FAILED
+  mode       String?  // "redirect" | "session"
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  appToken AppToken? @relation(fields: [appTokenId], references: [id])
+}
+
+// Token redirect short-lived untuk SSO Option A (deep link dari portal)
+// Single-use: setelah divalidasi sekali langsung usedAt terisi
+model SsoRedirectToken {
+  id         String    @id @default(cuid())
+  userId     String
+  appTokenId String
+  token      String    @unique
+  expiresAt  DateTime  // 5 menit
+  usedAt     DateTime? // null = belum dipakai, terisi = sudah
+  createdAt  DateTime  @default(now())
+
+  user     User     @relation("SsoRedirectUser", fields: [userId], references: [id], onDelete: Cascade)
+  appToken AppToken @relation(fields: [appTokenId], references: [id], onDelete: Cascade)
+}
