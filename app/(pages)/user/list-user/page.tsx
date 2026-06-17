@@ -25,6 +25,7 @@ type UserRow = {
   roles: RoleEntry[];
   age: number | null;
   phone: string | null;
+  mobilePhone: string | null;
   email: string | null;
 };
 
@@ -54,6 +55,7 @@ type FormState = {
   roles: RoleEntry[];
   image: string | null;
   phone: string;
+  mobilePhone: string;
   email: string;
   newPassword: string;
 };
@@ -144,7 +146,7 @@ export default function ListUserPage() {
     id: "", employeeId: "", name: "", status: "", joinDate: "", resignDate: "",
     organizationId: "", organizationName: "", jobPositionId: "", jobPositionName: "",
     branchId: "", branchName: "", age: "", role: "", roles: [], image: null,
-    phone: "", email: "", newPassword: "",
+    phone: "", mobilePhone: "", email: "", newPassword: "",
   };
 
   const [form, setForm] = useState<FormState>(emptyForm);
@@ -326,7 +328,7 @@ export default function ListUserPage() {
         branchId: d.branchId ?? "", branchName: d.branchName ?? "",
         age: d.age != null ? String(d.age) : "", role: d.role?.toLowerCase() ?? "",
         roles: d.roles ?? [], image: d.image ?? null,
-        phone: d.phone ?? "", email: d.email ?? "", newPassword: "",
+        phone: d.phone ?? "", mobilePhone: d.mobilePhone ?? "", email: d.email ?? "", newPassword: "",
       });
     } catch (err) {
       console.error(err);
@@ -664,6 +666,9 @@ export default function ListUserPage() {
                 </FormField>
                 <FormField label="Phone">
                   <input className={`${inputCls} bg-slate-50 text-slate-500 cursor-not-allowed`} readOnly value={form.phone} />
+                </FormField>
+                <FormField label="Mobile Phone">
+                  <input className={`${inputCls} bg-slate-50 text-slate-500 cursor-not-allowed`} readOnly value={form.mobilePhone} />
                 </FormField>
                 <FormField label="Email">
                   <input className={`${inputCls} bg-slate-50 text-slate-500 cursor-not-allowed`} readOnly value={form.email} />

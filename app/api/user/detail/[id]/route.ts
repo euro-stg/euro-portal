@@ -25,6 +25,9 @@ export async function GET(
         branchId: true,
         branchName: true,
         age: true,
+        phone: true,
+        mobilePhone: true,
+        email: true,
         userRoles: {
           select: { role: { select: { name: true, appId: true } } },
           orderBy: { createdAt: "asc" },
