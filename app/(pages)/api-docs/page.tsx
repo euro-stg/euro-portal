@@ -182,7 +182,7 @@ window.location.href = redirectUrl;
       </Section>
 
       {/* 1. Login */}
-      <Section id="login" icon={ShieldCheck} title="2. Login API (Untuk Development / Testing)" open={openSections.has("login")} onToggle={() => toggle("login")}>
+      <Section id="login" icon={ShieldCheck} title="2. Login API" open={openSections.has("login")} onToggle={() => toggle("login")}>
         <div className="flex items-center gap-3">
           <Badge method="POST" />
           <code className="text-sm font-mono text-slate-700 bg-slate-100 px-3 py-1 rounded">/api/sso/login</code>

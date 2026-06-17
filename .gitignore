@@ -30,8 +30,9 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -51,7 +52,8 @@ CLAUDE.md
 AGENTS.md
 .claude/
 
-# docker
+# docker & deploy (buat manual di server)
 .dockerignore
 Dockerfile*
 docker-compose*
+deploy.sh
