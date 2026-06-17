@@ -26,6 +26,7 @@ model User {
   age              Int?
   image            String?
   phone            String?
+  mobilePhone      String?
   email            String?
 
   accounts             Account[]
@@ -45,6 +46,7 @@ model User {
   appTokensCreated     AppToken[]            @relation("AppTokenCreator")
   ssoSessions          SsoSession[]          @relation("SsoSessionUser")
   ssoRedirectTokens    SsoRedirectToken[]    @relation("SsoRedirectUser")
+  passwordResetTokens  PasswordResetToken[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -445,6 +447,19 @@ model SsoActivityLog {
   createdAt  DateTime @default(now())
 
   appToken AppToken? @relation(fields: [appTokenId], references: [id])
+}
+
+// ===================== PASSWORD RESET =====================
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 // Token redirect short-lived untuk SSO Option A (deep link dari portal)

@@ -3,6 +3,7 @@
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useState, useRef } from "react";
+import Link from "next/link";
 import { Layers } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
@@ -98,7 +99,13 @@ export default function SignInPage() {
           </Button>
         </form>
 
-        <p className="text-center text-xs text-slate-400 mt-8">
+        <div className="text-center mt-5">
+          <Link href="/forgot-password" className="text-sm text-blue-600 hover:text-blue-700 font-medium">
+            Lupa password?
+          </Link>
+        </div>
+
+        <p className="text-center text-xs text-slate-400 mt-4">
           © {new Date().getFullYear()} Euromedica Group
         </p>
       </div>

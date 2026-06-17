@@ -19,6 +19,7 @@ type TalentaEmployee = {
   branch_id: number | null;
   branch: string | null;
   phone: string | null;
+  mobile_phone: string | null;
   email: string | null;
 };
 
@@ -174,10 +175,6 @@ export async function POST() {
     /* ✅ load job position */
     const jobPositionMap = await fetchJobPositions();
 
-    /* ✅ password */
-    const rawPassword = process.env.USER_PASSWORD || "123456";
-    const hashedPassword = await bcrypt.hash(rawPassword, 10);
-
     /* ✅ first page */
     const firstPage = await fetchEmployees(1);
     const totalPage = firstPage.pagination.last_page;
@@ -236,6 +233,7 @@ export async function POST() {
           jobPositionId: emp.job_position_id ? String(emp.job_position_id) : null,
           jobPositionName: emp.job_position_id ? jobPositionMap[String(emp.job_position_id)] ?? null : null,
           phone: emp.phone ?? null,
+          mobilePhone: emp.mobile_phone ?? null,
           email: emp.email ?? null,
           status: "active",
         };
@@ -245,6 +243,7 @@ export async function POST() {
         }
 
         if (!existing) {
+          const hashedPassword = await bcrypt.hash(crypto.randomBytes(16).toString("hex"), 10);
           await prisma.user.create({ data: { ...payload, password: hashedPassword } });
           created++;
         } else {
