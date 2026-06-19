@@ -15,9 +15,12 @@ export async function POST(req: NextRequest) {
 
     const user = await prisma.user.findUnique({ where: { employeeId: employeeId.trim() } });
 
-    if (!user || !user.email) {
-      // Generik agar tidak mengekspos apakah employeeId terdaftar
-      return NextResponse.json({ message: "Jika akun ditemukan, link reset akan dikirim ke email terdaftar." });
+    if (!user) {
+      return NextResponse.json({ message: "NIK tidak ditemukan." }, { status: 404 });
+    }
+
+    if (!user.email) {
+      return NextResponse.json({ message: "Akun ini belum memiliki email terdaftar, hubungi HR." }, { status: 422 });
     }
 
     // Cooldown per user: cegah spam email ke satu orang
