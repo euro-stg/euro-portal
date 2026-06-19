@@ -449,6 +449,20 @@ model SsoActivityLog {
   appToken AppToken? @relation(fields: [appTokenId], references: [id])
 }
 
+// ===================== SYNC LOG =====================
+
+model SyncLog {
+  id          String    @id @default(cuid())
+  trigger     String    // "manual" | "scheduled"
+  status      String    // "running" | "success" | "error"
+  processed   Int?
+  created     Int?
+  updated     Int?
+  error       String?   @db.Text
+  startedAt   DateTime  @default(now())
+  finishedAt  DateTime?
+}
+
 // ===================== PASSWORD RESET =====================
 
 model PasswordResetToken {

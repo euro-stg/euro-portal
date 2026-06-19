@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db/db";
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
+import { auth } from "@/lib/auth";
 
 export const maxDuration = 300; // 5 menit
 
@@ -172,9 +173,26 @@ async function fetchJobPositions(): Promise<Record<string, string>> {
 ========================= */
 const BATCH_SIZE = 20;
 
-export async function POST() {
+export async function POST(req: NextRequest) {
+  // Izinkan dari session login (manual) atau SYNC_SECRET header (scheduled)
+  const secret = req.headers.get("x-sync-secret");
+  const isScheduled = secret && secret === process.env.SYNC_SECRET;
+
+  if (!isScheduled) {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    }
+  }
+
+  const trigger = isScheduled ? "scheduled" : "manual";
+
+  const log = await prisma.syncLog.create({
+    data: { trigger, status: "running" },
+  });
+
   try {
-    console.log("🔥 START SYNC TALENTA");
+    console.log(`🔥 START SYNC TALENTA [${trigger}]`);
 
     const jobPositionMap = await fetchJobPositions();
 
@@ -271,6 +289,11 @@ export async function POST() {
 
     console.log("✅ SYNC DONE");
 
+    await prisma.syncLog.update({
+      where: { id: log.id },
+      data: { status: "success", processed, created, updated, finishedAt: new Date() },
+    });
+
     return NextResponse.json({
       success: true,
       message: "✅ Sync Talenta berhasil",
@@ -281,15 +304,13 @@ export async function POST() {
   } catch (error: unknown) {
     console.error("❌ SYNC ERROR:", error);
 
-    return NextResponse.json(
-      {
-        success: false,
-        message:
-          error instanceof Error
-            ? error.message
-            : "Unknown error",
-      },
-      { status: 500 },
-    );
+    const errMsg = error instanceof Error ? error.message : "Unknown error";
+
+    await prisma.syncLog.update({
+      where: { id: log.id },
+      data: { status: "error", error: errMsg, finishedAt: new Date() },
+    }).catch(() => null);
+
+    return NextResponse.json({ success: false, message: errMsg }, { status: 500 });
   }
 }

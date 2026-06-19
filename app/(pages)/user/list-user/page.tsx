@@ -8,7 +8,7 @@ import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { Pagination } from "@/components/ui/pagination";
 import Link from "next/link";
-import { RefreshCw, Users, CloudDownload, UserCheck, List, Layers, X } from "lucide-react";
+import { RefreshCw, Users, CloudDownload, UserCheck, List, Layers, X, History, CheckCircle, AlertCircle, Clock } from "lucide-react";
 
 type RoleEntry = { name: string; appId: string | null };
 
@@ -141,6 +141,11 @@ export default function ListUserPage() {
   const [assignAppId, setAssignAppId] = useState<string | null>(null);
   const [assigning, setAssigning] = useState(false);
   const [assignError, setAssignError] = useState<string | null>(null);
+
+  // Sync log
+  type SyncLog = { id: string; trigger: string; status: string; processed: number | null; created: number | null; updated: number | null; error: string | null; startedAt: string; finishedAt: string | null };
+  const [syncLogs, setSyncLogs] = useState<SyncLog[]>([]);
+  const [logOpen, setLogOpen] = useState(false);
 
   const emptyForm: FormState = {
     id: "", employeeId: "", name: "", status: "", joinDate: "", resignDate: "",
@@ -388,6 +393,14 @@ export default function ListUserPage() {
     }
   };
 
+  const fetchSyncLogs = async () => {
+    const res = await fetch("/api/talenta/sync-logs");
+    if (res.ok) {
+      const json = await res.json();
+      setSyncLogs(json.data ?? []);
+    }
+  };
+
   const handleSyncTalenta = async () => {
     setLoading(true);
     try {
@@ -398,13 +411,18 @@ export default function ListUserPage() {
       const json = await res.json();
       if (!res.ok) { showToast("error", json.message || "Sync gagal"); return; }
       showToast("success", `Sync berhasil — Dibuat: ${json.created}, Diperbarui: ${json.updated}`);
-      await refreshList(currentPage, filters, showAll);
+      await Promise.all([refreshList(currentPage, filters, showAll), fetchSyncLogs()]);
     } catch (err) {
       console.error(err);
       showToast("error", "Network error");
     } finally {
       setLoading(false);
     }
+  };
+
+  const openSyncLog = async () => {
+    await fetchSyncLogs();
+    setLogOpen(true);
   };
 
   // Roles filtered by selected scope for assign modal
@@ -459,6 +477,10 @@ export default function ListUserPage() {
           <Button variant="success" size="sm" onClick={handleSyncTalenta} disabled={loading}>
             <CloudDownload className="w-3.5 h-3.5" />
             Sync Talenta
+          </Button>
+          <Button variant="secondary" size="sm" onClick={openSyncLog}>
+            <History className="w-3.5 h-3.5" />
+            Log Sync
           </Button>
         </div>
       </div>
@@ -745,6 +767,46 @@ export default function ListUserPage() {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* Sync Log Modal */}
+      <Modal open={logOpen} title="Log Sync Talenta" onClose={() => setLogOpen(false)} boxClassName="w-11/12 max-w-2xl">
+        <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
+          {syncLogs.length === 0 ? (
+            <p className="text-sm text-slate-400 text-center py-8">Belum ada log sync.</p>
+          ) : syncLogs.map((log) => (
+            <div key={log.id} className="flex items-start gap-3 p-3 rounded-lg border border-slate-100 bg-slate-50">
+              <div className="mt-0.5 shrink-0">
+                {log.status === "success" && <CheckCircle className="w-4 h-4 text-green-500" />}
+                {log.status === "error"   && <AlertCircle className="w-4 h-4 text-red-500" />}
+                {log.status === "running" && <Clock className="w-4 h-4 text-amber-500" />}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${log.trigger === "scheduled" ? "bg-blue-100 text-blue-700" : "bg-slate-200 text-slate-600"}`}>
+                    {log.trigger}
+                  </span>
+                  <span className="text-xs text-slate-500">
+                    {new Date(log.startedAt).toLocaleString("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                  </span>
+                  {log.finishedAt && (
+                    <span className="text-xs text-slate-400">
+                      ({Math.round((new Date(log.finishedAt).getTime() - new Date(log.startedAt).getTime()) / 1000)}d)
+                    </span>
+                  )}
+                </div>
+                {log.status === "success" && (
+                  <p className="text-xs text-slate-600 mt-1">
+                    Processed: <b>{log.processed}</b> — Dibuat: <b>{log.created}</b> — Diperbarui: <b>{log.updated}</b>
+                  </p>
+                )}
+                {log.status === "error" && (
+                  <p className="text-xs text-red-600 mt-1 truncate">{log.error}</p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
       </Modal>
     </div>
   );
