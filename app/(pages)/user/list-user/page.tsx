@@ -391,7 +391,10 @@ export default function ListUserPage() {
   const handleSyncTalenta = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/talenta/sync", { method: "POST" });
+      const res = await fetch("/api/talenta/sync", {
+        method: "POST",
+        signal: AbortSignal.timeout(5 * 60 * 1000), // 5 menit
+      });
       const json = await res.json();
       if (!res.ok) { showToast("error", json.message || "Sync gagal"); return; }
       showToast("success", `Sync berhasil — Dibuat: ${json.created}, Diperbarui: ${json.updated}`);

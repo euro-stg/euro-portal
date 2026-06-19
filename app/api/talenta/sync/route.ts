@@ -3,6 +3,8 @@ import prisma from "@/lib/db/db";
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
 
+export const maxDuration = 300; // 5 menit
+
 const BASE_URL = "https://api.mekari.com";
 
 /* =========================
@@ -168,92 +170,103 @@ async function fetchJobPositions(): Promise<Record<string, string>> {
 /* =========================
    ✅ MAIN SYNC
 ========================= */
+const BATCH_SIZE = 20;
+
 export async function POST() {
   try {
     console.log("🔥 START SYNC TALENTA");
 
-    /* ✅ load job position */
     const jobPositionMap = await fetchJobPositions();
 
-    /* ✅ first page */
     const firstPage = await fetchEmployees(1);
     const totalPage = firstPage.pagination.last_page;
+
+    // Kumpulkan semua employee dari semua page dulu
+    const allEmployees: TalentaEmployee[] = [...firstPage.employees];
+    for (let page = 2; page <= totalPage; page++) {
+      console.log(`📄 Fetch page ${page}/${totalPage}`);
+      const data = await fetchEmployees(page);
+      allEmployees.push(...data.employees);
+    }
+
+    console.log(`📊 Total employee dari Talenta: ${allEmployees.length}`);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Ambil semua employeeId yang sudah ada di DB sekaligus
+    const existingIds = new Set(
+      (await prisma.user.findMany({ select: { employeeId: true } }))
+        .map((u) => u.employeeId),
+    );
 
     let processed = 0;
     let created = 0;
     let updated = 0;
 
-    for (let page = 1; page <= totalPage; page++) {
-      console.log(`📄 PAGE ${page}/${totalPage}`);
+    // Proses dalam batch paralel
+    for (let i = 0; i < allEmployees.length; i += BATCH_SIZE) {
+      const batch = allEmployees.slice(i, i + BATCH_SIZE);
 
-      const data =
-        page === 1 ? firstPage : await fetchEmployees(page);
+      await Promise.all(
+        batch.map(async (emp) => {
+          if (!emp.employee_id) return;
 
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+          const isExisting = existingIds.has(emp.employee_id);
 
-      for (const emp of data.employees) {
-        if (!emp.employee_id) continue;
+          // Resign handling
+          if (emp.resign_date) {
+            const resignEffective = new Date(emp.resign_date);
+            resignEffective.setHours(0, 0, 0, 0);
+            const isEffective = resignEffective <= today;
 
-        const existing = await prisma.user.findUnique({
-          where: { employeeId: emp.employee_id },
-        });
-
-        // Jika sudah resign
-        if (emp.resign_date) {
-          const resignEffective = new Date(emp.resign_date);
-          resignEffective.setHours(0, 0, 0, 0);
-          const isEffective = resignEffective <= today;
-
-          if (existing) {
-            // Update resign date dan nonaktifkan jika tanggal efektif sudah lewat
-            await prisma.user.update({
-              where: { employeeId: emp.employee_id },
-              data: {
-                resignDate: new Date(emp.resign_date),
-                status: isEffective ? "inactive" : existing.status ?? "active",
-              },
-            });
-            updated++;
-            processed++;
+            if (isExisting) {
+              await prisma.user.update({
+                where: { employeeId: emp.employee_id },
+                data: {
+                  resignDate: new Date(emp.resign_date),
+                  status: isEffective ? "inactive" : "active",
+                },
+              });
+              updated++;
+              processed++;
+            }
+            return;
           }
-          // Jika belum ada di DB dan sudah resign, skip
-          continue;
-        }
 
-        const payload = {
-          employeeId: emp.employee_id,
-          name: emp.first_name ?? null,
-          joinDate: emp.join_date ? new Date(emp.join_date) : null,
-          resignDate: null,
-          organizationId: emp.organization_id ? String(emp.organization_id) : null,
-          organizationName: emp.organization_name ?? null,
-          branchId: emp.branch_id ? String(emp.branch_id) : null,
-          branchName: emp.branch ?? null,
-          jobPositionId: emp.job_position_id ? String(emp.job_position_id) : null,
-          jobPositionName: emp.job_position_id ? jobPositionMap[String(emp.job_position_id)] ?? null : null,
-          phone: emp.phone ?? null,
-          mobilePhone: emp.mobile_phone ?? null,
-          email: emp.email ?? null,
-          status: "active",
-        };
+          const payload = {
+            employeeId: emp.employee_id,
+            name: emp.first_name ?? null,
+            joinDate: emp.join_date ? new Date(emp.join_date) : null,
+            resignDate: null,
+            organizationId: emp.organization_id ? String(emp.organization_id) : null,
+            organizationName: emp.organization_name ?? null,
+            branchId: emp.branch_id ? String(emp.branch_id) : null,
+            branchName: emp.branch ?? null,
+            jobPositionId: emp.job_position_id ? String(emp.job_position_id) : null,
+            jobPositionName: emp.job_position_id ? jobPositionMap[String(emp.job_position_id)] ?? null : null,
+            phone: emp.phone ?? null,
+            mobilePhone: emp.mobile_phone ?? null,
+            email: emp.email ?? null,
+            status: "active",
+          };
 
-        if (!payload.jobPositionName) {
-          console.log("⚠️ Missing job name:", emp.job_position_id);
-        }
+          if (!isExisting) {
+            // Cost 8 cukup untuk random password sementara (4x lebih cepat dari 10)
+            const hashedPassword = await bcrypt.hash(crypto.randomBytes(16).toString("hex"), 8);
+            await prisma.user.create({ data: { ...payload, password: hashedPassword } });
+            existingIds.add(emp.employee_id);
+            created++;
+          } else {
+            await prisma.user.update({ where: { employeeId: emp.employee_id }, data: payload });
+            updated++;
+          }
 
-        if (!existing) {
-          const hashedPassword = await bcrypt.hash(crypto.randomBytes(16).toString("hex"), 10);
-          await prisma.user.create({ data: { ...payload, password: hashedPassword } });
-          created++;
-        } else {
-          await prisma.user.update({ where: { employeeId: emp.employee_id }, data: payload });
-          updated++;
-        }
+          processed++;
+        }),
+      );
 
-        processed++;
-        if (processed % 100 === 0) console.log(`✅ Processed: ${processed}`);
-      }
+      console.log(`✅ Processed: ${Math.min(i + BATCH_SIZE, allEmployees.length)}/${allEmployees.length}`);
     }
 
     console.log("✅ SYNC DONE");
