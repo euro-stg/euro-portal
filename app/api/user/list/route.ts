@@ -114,7 +114,7 @@ export async function GET(request: Request) {
           createdAt: true,
           updatedAt: true,
         },
-        orderBy: { createdAt: "desc" },
+        orderBy: { name: "asc" },
         ...(all ? {} : { skip: (page - 1) * PAGE_SIZE, take: PAGE_SIZE }),
       }),
       prisma.user.count({ where }),
