@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Clinic Grading",
-  description: "Clinic Grading - Euromedica Group",
+  title: "Euro Portal",
+  description: "Euro Portal - Euromedica Group",
 };
 
 export default function RootLayout({
