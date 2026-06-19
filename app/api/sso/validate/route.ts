@@ -1,40 +1,27 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db/db";
+import { writeApiLog, getClientIp } from "@/lib/api-logger";
 
-function getClientInfo(request: Request) {
-  const ip        = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
-                 ?? request.headers.get("x-real-ip")
-                 ?? null;
-  const userAgent = request.headers.get("user-agent") ?? null;
-  return { ip, userAgent };
-}
+const ENDPOINT = "/api/sso/validate";
 
-async function writeLog(data: {
-  appTokenId: string | null;
-  userId: string | null;
-  event: string;
-  status: "SUCCESS" | "FAILED";
-  reason?: string;
-  mode?: string;
-  ip: string | null;
-  userAgent: string | null;
-}) {
-  await db.ssoActivityLog.create({ data }).catch(() => {}); // fire-and-forget, jangan gagalkan request
-}
-
-// Support 2 mode:
-// 1. sso_token (query param) — dari redirect portal, single-use, 5 menit
-// 2. Authorization: Bearer <token> — dari login API, 24 jam, bisa dipakai berulang
 export async function GET(request: Request) {
-  const { ip, userAgent } = getClientInfo(request);
+  const start = Date.now();
+  const ip    = getClientIp(request);
+
+  function log(status: "SUCCESS" | "FAILED", opts: { appTokenId?: string | null; userId?: string | null; statusCode: number; reason?: string }) {
+    writeApiLog({ method: "GET", endpoint: ENDPOINT, status, ip, duration: Date.now() - start, ...opts });
+  }
 
   try {
     const appToken = request.headers.get("x-app-token");
-    if (!appToken) return NextResponse.json({ error: "X-App-Token header diperlukan" }, { status: 401 });
+    if (!appToken) {
+      log("FAILED", { statusCode: 401, reason: "X-App-Token header diperlukan" });
+      return NextResponse.json({ error: "X-App-Token header diperlukan" }, { status: 401 });
+    }
 
     const appRecord = await db.appToken.findUnique({ where: { token: appToken } });
     if (!appRecord || !appRecord.active || appRecord.deletedAt) {
-      await writeLog({ appTokenId: null, userId: null, event: "SSO_VALIDATE", status: "FAILED", reason: "App token tidak valid atau tidak aktif", ip, userAgent });
+      log("FAILED", { appTokenId: null, statusCode: 401, reason: "App token tidak valid atau tidak aktif" });
       return NextResponse.json({ error: "App token tidak valid atau tidak aktif" }, { status: 401 });
     }
 
@@ -51,23 +38,23 @@ export async function GET(request: Request) {
       });
 
       if (!redirectToken) {
-        await writeLog({ appTokenId: appRecord.id, userId: null, event: "SSO_VALIDATE_REDIRECT", status: "FAILED", reason: "SSO token tidak ditemukan", mode: "redirect", ip, userAgent });
+        log("FAILED", { appTokenId: appRecord.id, statusCode: 401, reason: "SSO token tidak ditemukan" });
         return NextResponse.json({ valid: false, error: "SSO token tidak ditemukan" }, { status: 401 });
       }
       if (redirectToken.usedAt) {
-        await writeLog({ appTokenId: appRecord.id, userId: redirectToken.userId, event: "SSO_VALIDATE_REDIRECT", status: "FAILED", reason: "SSO token sudah digunakan", mode: "redirect", ip, userAgent });
+        log("FAILED", { appTokenId: appRecord.id, userId: redirectToken.userId, statusCode: 401, reason: "SSO token sudah digunakan" });
         return NextResponse.json({ valid: false, error: "SSO token sudah digunakan" }, { status: 401 });
       }
       if (redirectToken.expiresAt < new Date()) {
-        await writeLog({ appTokenId: appRecord.id, userId: redirectToken.userId, event: "SSO_VALIDATE_REDIRECT", status: "FAILED", reason: "SSO token sudah kadaluarsa", mode: "redirect", ip, userAgent });
+        log("FAILED", { appTokenId: appRecord.id, userId: redirectToken.userId, statusCode: 401, reason: "SSO token sudah kadaluarsa" });
         return NextResponse.json({ valid: false, error: "SSO token sudah kadaluarsa (5 menit)" }, { status: 401 });
       }
       if (redirectToken.appTokenId !== appRecord.id) {
-        await writeLog({ appTokenId: appRecord.id, userId: redirectToken.userId, event: "SSO_VALIDATE_REDIRECT", status: "FAILED", reason: "SSO token bukan untuk app ini", mode: "redirect", ip, userAgent });
+        log("FAILED", { appTokenId: appRecord.id, userId: redirectToken.userId, statusCode: 403, reason: "SSO token bukan untuk app ini" });
         return NextResponse.json({ valid: false, error: "SSO token bukan untuk app ini" }, { status: 403 });
       }
       if (redirectToken.user.status === "inactive") {
-        await writeLog({ appTokenId: appRecord.id, userId: redirectToken.userId, event: "SSO_VALIDATE_REDIRECT", status: "FAILED", reason: "Akun tidak aktif", mode: "redirect", ip, userAgent });
+        log("FAILED", { appTokenId: appRecord.id, userId: redirectToken.userId, statusCode: 403, reason: "Akun tidak aktif" });
         return NextResponse.json({ valid: false, error: "Akun tidak aktif" }, { status: 403 });
       }
 
@@ -81,10 +68,9 @@ export async function GET(request: Request) {
         data: { userId: redirectToken.userId, appTokenId: appRecord.id, token: sessionToken, expiresAt },
       });
 
-      await writeLog({ appTokenId: appRecord.id, userId: redirectToken.userId, event: "SSO_VALIDATE_REDIRECT", status: "SUCCESS", mode: "redirect", ip, userAgent });
+      log("SUCCESS", { appTokenId: appRecord.id, userId: redirectToken.userId, statusCode: 200 });
 
       const { password: _, ...userFields } = redirectToken.user as typeof redirectToken.user & { password?: string };
-
       return NextResponse.json({ valid: true, mode: "redirect", sessionToken, expiresAt, user: userFields });
     }
 
@@ -96,29 +82,29 @@ export async function GET(request: Request) {
       });
 
       if (!session) {
-        await writeLog({ appTokenId: appRecord.id, userId: null, event: "SSO_VALIDATE_SESSION", status: "FAILED", reason: "Token tidak ditemukan", mode: "session", ip, userAgent });
+        log("FAILED", { appTokenId: appRecord.id, statusCode: 401, reason: "Token tidak ditemukan" });
         return NextResponse.json({ valid: false, error: "Token tidak ditemukan" }, { status: 401 });
       }
       if (session.appTokenId !== appRecord.id) {
-        await writeLog({ appTokenId: appRecord.id, userId: session.userId, event: "SSO_VALIDATE_SESSION", status: "FAILED", reason: "Token bukan milik app ini", mode: "session", ip, userAgent });
+        log("FAILED", { appTokenId: appRecord.id, userId: session.userId, statusCode: 403, reason: "Token bukan milik app ini" });
         return NextResponse.json({ valid: false, error: "Token bukan milik app ini" }, { status: 403 });
       }
       if (session.expiresAt < new Date()) {
-        await writeLog({ appTokenId: appRecord.id, userId: session.userId, event: "SSO_VALIDATE_SESSION", status: "FAILED", reason: "Token sudah kadaluarsa", mode: "session", ip, userAgent });
+        log("FAILED", { appTokenId: appRecord.id, userId: session.userId, statusCode: 401, reason: "Token sudah kadaluarsa" });
         return NextResponse.json({ valid: false, error: "Token sudah kadaluarsa" }, { status: 401 });
       }
       if (session.user.status === "inactive") {
-        await writeLog({ appTokenId: appRecord.id, userId: session.userId, event: "SSO_VALIDATE_SESSION", status: "FAILED", reason: "Akun tidak aktif", mode: "session", ip, userAgent });
+        log("FAILED", { appTokenId: appRecord.id, userId: session.userId, statusCode: 403, reason: "Akun tidak aktif" });
         return NextResponse.json({ valid: false, error: "Akun tidak aktif" }, { status: 403 });
       }
 
-      await writeLog({ appTokenId: appRecord.id, userId: session.userId, event: "SSO_VALIDATE_SESSION", status: "SUCCESS", mode: "session", ip, userAgent });
+      log("SUCCESS", { appTokenId: appRecord.id, userId: session.userId, statusCode: 200 });
 
       const { password: _, ...userFields } = session.user as typeof session.user & { password?: string };
-
       return NextResponse.json({ valid: true, mode: "session", expiresAt: session.expiresAt, user: userFields });
     }
 
+    log("FAILED", { appTokenId: appRecord.id, statusCode: 400, reason: "sso_token atau Authorization header diperlukan" });
     return NextResponse.json({ error: "sso_token query param atau Authorization header diperlukan" }, { status: 400 });
   } catch (err) {
     console.error("[SSO Validate]", err);

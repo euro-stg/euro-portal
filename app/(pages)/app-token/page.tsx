@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Plus, RefreshCw, Trash2, Copy, Check, Eye, EyeOff, Loader2, ToggleLeft, ToggleRight, Activity, Key } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -7,19 +8,6 @@ import { Modal } from "@/components/ui/modal";
 import { Alert } from "@/components/ui/alert";
 
 type ExternalApp = { id: string; name: string; externalUrl: string | null };
-
-type LogRow = {
-  id: string;
-  event: string;
-  status: string;
-  reason: string | null;
-  mode: string | null;
-  ip: string | null;
-  userAgent: string | null;
-  createdAt: string;
-  appToken: { id: string; name: string; module: { name: string } | null } | null;
-  user: { id: string; name: string | null; employeeId: string } | null;
-};
 
 type AppTokenRow = {
   id: string;
@@ -38,8 +26,6 @@ const inputCls  = "w-full h-10 border border-slate-200 rounded-md px-3 text-sm f
 const selectCls = "w-full h-10 border border-slate-200 rounded-md px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 bg-white";
 
 export default function AppTokenPage() {
-  const [activeTab, setActiveTab] = useState<"tokens" | "logs">("tokens");
-
   const [rows, setRows]         = useState<AppTokenRow[]>([]);
   const [loading, setLoading]   = useState(true);
   const [alert, setAlert]       = useState<{ variant: "success" | "error"; message: string } | null>(null);
@@ -60,13 +46,6 @@ export default function AppTokenPage() {
 
   const [visibleTokens, setVisibleTokens] = useState<Set<string>>(new Set());
   const [copied, setCopied]               = useState<string | null>(null);
-
-  const [logs, setLogs]             = useState<LogRow[]>([]);
-  const [logsLoading, setLogsLoading] = useState(false);
-  const [logsPage, setLogsPage]     = useState(1);
-  const [logsTotalPages, setLogsTotalPages] = useState(1);
-  const [logsTotal, setLogsTotal]   = useState(0);
-  const [logsFilter, setLogsFilter] = useState({ appTokenId: "", status: "" });
 
   const alertTimer = useRef<NodeJS.Timeout | null>(null);
 
@@ -94,30 +73,7 @@ export default function AppTokenPage() {
     }
   }, []);
 
-  const loadLogs = useCallback(async (page = 1, filter = logsFilter) => {
-    setLogsLoading(true);
-    try {
-      const p = new URLSearchParams({ page: String(page) });
-      if (filter.appTokenId) p.set("appTokenId", filter.appTokenId);
-      if (filter.status)     p.set("status", filter.status);
-      const r = await fetch(`/api/sso/logs?${p}`);
-      if (r.ok) {
-        const j = await r.json();
-        setLogs(j.data ?? []);
-        setLogsTotal(j.total ?? 0);
-        setLogsTotalPages(j.totalPages ?? 1);
-        setLogsPage(page);
-      }
-    } finally { setLogsLoading(false); }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   useEffect(() => { load(); loadExternalApps(); }, [load, loadExternalApps]);
-
-  useEffect(() => {
-    if (activeTab === "logs") loadLogs(1, logsFilter);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab]);
 
   // Apps yang belum punya token (atau yang sudah di-delete)
   const usedModuleIds = new Set(rows.filter((r) => r.moduleId).map((r) => r.moduleId!));
@@ -187,142 +143,32 @@ export default function AppTokenPage() {
 
   const maskToken = (token: string) => token.slice(0, 8) + "••••••••••••••••••••••••" + token.slice(-4);
 
-  const EVENT_LABEL: Record<string, string> = {
-    SSO_VALIDATE_REDIRECT: "Login SSO",
-    SSO_VALIDATE_SESSION:  "Validasi Session",
-    SSO_VALIDATE:          "Validate",
-  };
-
   return (
     <div>
       <div className="flex items-center justify-between mb-5">
-        <div>
-          <h1 className="text-lg font-bold text-slate-800">App Token</h1>
-          <p className="text-xs text-slate-400 mt-0.5">Token autentikasi untuk aplikasi eksternal yang menggunakan SSO API</p>
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
+            <Key className="w-4 h-4 text-blue-600" />
+          </div>
+          <div>
+            <h1 className="text-lg font-bold text-slate-800">App Token</h1>
+            <p className="text-xs text-slate-400 mt-0.5">Token autentikasi untuk aplikasi eksternal yang menggunakan SSO API</p>
+          </div>
         </div>
-        {activeTab === "tokens" && (
+        <div className="flex items-center gap-2">
+          <Link href="/api-logs" className="flex items-center gap-1.5 px-3 py-2 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
+            <Activity className="w-3.5 h-3.5" /> API Logs
+          </Link>
           <Button onClick={() => { setCreateOpen(true); setNewToken(null); setCreateModuleId(""); setCreateDesc(""); }}
             className="flex items-center gap-2" disabled={availableApps.length === 0}>
             <Plus className="w-4 h-4" /> Buat Token
           </Button>
-        )}
-      </div>
-
-      {/* Tabs */}
-      <div className="flex gap-1 mb-5 border-b border-slate-200">
-        {([["tokens", Key, "App Token"], ["logs", Activity, "SSO Logs"]] as const).map(([tab, Icon, label]) => (
-          <button key={tab} onClick={() => setActiveTab(tab)}
-            className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
-              activeTab === tab ? "border-blue-500 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-700"
-            }`}>
-            <Icon className="w-3.5 h-3.5" />{label}
-          </button>
-        ))}
+        </div>
       </div>
 
       {alert && <div className="mb-4"><Alert variant={alert.variant} message={alert.message} /></div>}
 
-      {/* ── Tab: SSO Logs ── */}
-      {activeTab === "logs" && (
-        <div>
-          {/* Filter */}
-          <div className="flex gap-3 mb-4">
-            <select className="border border-slate-200 rounded-md px-3 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 bg-white"
-              value={logsFilter.appTokenId}
-              onChange={(e) => { const f = { ...logsFilter, appTokenId: e.target.value }; setLogsFilter(f); loadLogs(1, f); }}>
-              <option value="">Semua Aplikasi</option>
-              {rows.map((r) => <option key={r.id} value={r.id}>{r.module?.name ?? r.name}</option>)}
-            </select>
-            <select className="border border-slate-200 rounded-md px-3 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 bg-white"
-              value={logsFilter.status}
-              onChange={(e) => { const f = { ...logsFilter, status: e.target.value }; setLogsFilter(f); loadLogs(1, f); }}>
-              <option value="">Semua Status</option>
-              <option value="SUCCESS">Success</option>
-              <option value="FAILED">Failed</option>
-            </select>
-            <button onClick={() => loadLogs(logsPage, logsFilter)} className="p-1.5 text-slate-400 hover:text-slate-700">
-              <RefreshCw className={`w-4 h-4 ${logsLoading ? "animate-spin" : ""}`} />
-            </button>
-            <span className="ml-auto text-xs text-slate-400 self-center">{logsTotal} log ditemukan</span>
-          </div>
-
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            {logsLoading ? (
-              <div className="flex items-center justify-center py-12"><Loader2 className="w-5 h-5 animate-spin text-slate-400" /></div>
-            ) : logs.length === 0 ? (
-              <p className="text-sm text-slate-400 text-center py-12">Belum ada log</p>
-            ) : (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-100 bg-slate-50">
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Waktu</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Aplikasi</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">User</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Event</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Keterangan</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">IP</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {logs.map((log) => (
-                    <tr key={log.id} className="border-b border-slate-50 hover:bg-slate-50/50">
-                      <td className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">
-                        {new Date(log.createdAt).toLocaleString("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-                      </td>
-                      <td className="px-4 py-3 text-xs text-slate-700">
-                        {log.appToken?.module?.name ?? log.appToken?.name ?? <span className="text-slate-400">—</span>}
-                      </td>
-                      <td className="px-4 py-3 text-xs">
-                        {log.user ? (
-                          <div>
-                            <p className="font-medium text-slate-700">{log.user.name ?? "—"}</p>
-                            <p className="text-slate-400">{log.user.employeeId}</p>
-                          </div>
-                        ) : <span className="text-slate-400">—</span>}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                          log.mode === "redirect" ? "bg-blue-50 text-blue-700" : "bg-slate-100 text-slate-600"
-                        }`}>
-                          {EVENT_LABEL[log.event] ?? log.event}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${
-                          log.status === "SUCCESS" ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-600"
-                        }`}>
-                          {log.status === "SUCCESS" ? "Berhasil" : "Gagal"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-xs text-slate-500 max-w-48 truncate" title={log.reason ?? ""}>
-                        {log.reason ?? <span className="text-slate-300">—</span>}
-                      </td>
-                      <td className="px-4 py-3 text-xs font-mono text-slate-400">
-                        {log.ip ?? "—"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-
-          {/* Pagination logs */}
-          {logsTotalPages > 1 && (
-            <div className="flex items-center justify-center gap-2 mt-4">
-              <button disabled={logsPage <= 1} onClick={() => loadLogs(logsPage - 1, logsFilter)}
-                className="px-3 py-1.5 text-xs rounded border border-slate-200 disabled:opacity-40 hover:bg-slate-50">← Prev</button>
-              <span className="text-xs text-slate-500">{logsPage} / {logsTotalPages}</span>
-              <button disabled={logsPage >= logsTotalPages} onClick={() => loadLogs(logsPage + 1, logsFilter)}
-                className="px-3 py-1.5 text-xs rounded border border-slate-200 disabled:opacity-40 hover:bg-slate-50">Next →</button>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── Tab: App Token ── */}
-      {activeTab === "tokens" && <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-slate-400" /></div>
         ) : rows.length === 0 ? (
@@ -398,7 +244,7 @@ export default function AppTokenPage() {
             </tbody>
           </table>
         )}
-      </div>}
+      </div>
 
       {/* Modal: Buat Token */}
       <Modal open={createOpen} onClose={() => { setCreateOpen(false); setNewToken(null); }} title="Buat App Token">

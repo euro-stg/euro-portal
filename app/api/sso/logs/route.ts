@@ -23,19 +23,18 @@ export async function GET(request: Request) {
   };
 
   const [rows, total] = await Promise.all([
-    db.ssoActivityLog.findMany({
+    db.apiLog.findMany({
       where,
       orderBy: { createdAt: "desc" },
       skip: (page - 1) * limit,
       take: limit,
       include: {
-        appToken: { select: { id: true, name: true, module: { select: { name: true } } } },
+        appToken: { select: { id: true, name: true } },
       },
     }),
-    db.ssoActivityLog.count({ where }),
+    db.apiLog.count({ where }),
   ]);
 
-  // Ambil nama user secara batch
   const userIds = [...new Set(rows.map((r) => r.userId).filter(Boolean))] as string[];
   const users   = userIds.length > 0
     ? await db.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true, employeeId: true } })

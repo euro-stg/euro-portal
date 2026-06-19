@@ -429,7 +429,7 @@ model AppToken {
   module           Module?            @relation(fields: [moduleId], references: [id])
   ssoSessions      SsoSession[]
   redirectTokens   SsoRedirectToken[]
-  activityLogs     SsoActivityLog[]
+  apiLogs          ApiLog[]
 }
 
 // Session user setelah login SSO — flag ke AppToken (apps mana yang buat)
@@ -445,18 +445,19 @@ model SsoSession {
   appToken AppToken @relation(fields: [appTokenId], references: [id], onDelete: Cascade)
 }
 
-// Log aktivitas validate SSO — untuk audit trail & monitoring
-model SsoActivityLog {
-  id         String   @id @default(cuid())
-  appTokenId String?
-  userId     String?
-  event      String   // "SSO_VALIDATE_REDIRECT" | "SSO_VALIDATE_SESSION"
-  status     String   // "SUCCESS" | "FAILED"
-  reason     String?  // pesan error jika FAILED
-  mode       String?  // "redirect" | "session"
-  ip         String?
-  userAgent  String?
-  createdAt  DateTime @default(now())
+// Log semua aktivitas API eksternal (SSO login, validate, user info, dll)
+model ApiLog {
+  id          String   @id @default(cuid())
+  appTokenId  String?
+  userId      String?
+  method      String   // "GET" | "POST"
+  endpoint    String   // "/api/sso/login" | "/api/sso/validate" | "/api/sso/users"
+  status      String   // "SUCCESS" | "FAILED"
+  statusCode  Int?
+  reason      String?
+  ip          String?
+  duration    Int?     // ms
+  createdAt   DateTime @default(now())
 
   appToken AppToken? @relation(fields: [appTokenId], references: [id])
 }
