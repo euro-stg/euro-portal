@@ -11,6 +11,7 @@ type AppToken = { id: string; name: string; module: { name: string } | null };
 type LogRow = {
   id: string;
   appTokenId: string | null;
+  appName: string | null;
   userId: string | null;
   method: string;
   endpoint: string;
@@ -18,6 +19,7 @@ type LogRow = {
   statusCode: number | null;
   reason: string | null;
   ip: string | null;
+  userAgent: string | null;
   duration: number | null;
   createdAt: string;
   appToken: { id: string; name: string } | null;
@@ -261,7 +263,7 @@ export default function ApiLogsPage() {
                   <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Endpoint</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Keterangan</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">IP</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">IP / Device</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">ms</th>
                 </tr>
               </thead>
@@ -275,7 +277,7 @@ export default function ApiLogsPage() {
                       })}
                     </td>
                     <td className="px-4 py-3 text-xs text-slate-700 whitespace-nowrap">
-                      {log.appToken?.name ?? <span className="text-slate-400">—</span>}
+                      {log.appName ?? log.appToken?.name ?? <span className="text-slate-400">—</span>}
                     </td>
                     <td className="px-4 py-3 text-xs">
                       {log.user ? (
@@ -304,8 +306,11 @@ export default function ApiLogsPage() {
                     <td className="px-4 py-3 text-xs text-slate-500 max-w-48 truncate" title={log.reason ?? ""}>
                       {log.reason ?? <span className="text-slate-300">—</span>}
                     </td>
-                    <td className="px-4 py-3 text-xs font-mono text-slate-400 whitespace-nowrap">
-                      {log.ip ?? "—"}
+                    <td className="px-4 py-3 text-xs text-slate-400">
+                      <p className="font-mono whitespace-nowrap">{log.ip ?? "—"}</p>
+                      {log.userAgent && (
+                        <p className="text-[10px] text-slate-300 max-w-40 truncate" title={log.userAgent}>{log.userAgent}</p>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-xs text-right text-slate-400 font-mono whitespace-nowrap">
                       {log.duration != null ? log.duration : "—"}

@@ -449,13 +449,15 @@ model SsoSession {
 model ApiLog {
   id          String   @id @default(cuid())
   appTokenId  String?
+  appName     String?  // snapshot nama app saat log dibuat
   userId      String?
   method      String   // "GET" | "POST"
-  endpoint    String   // "/api/sso/login" | "/api/sso/validate" | "/api/sso/users"
+  endpoint    String   // "/api/sso/login" | "/api/sso/validate"
   status      String   // "SUCCESS" | "FAILED"
   statusCode  Int?
   reason      String?
   ip          String?
+  userAgent   String?
   duration    Int?     // ms
   createdAt   DateTime @default(now())
 
