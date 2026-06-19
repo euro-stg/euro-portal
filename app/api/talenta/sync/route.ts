@@ -14,16 +14,29 @@ const BASE_URL = "https://api.mekari.com";
 type TalentaEmployee = {
   employee_id: string;
   first_name: string | null;
+  last_name: string | null;
   join_date: string | null;
   resign_date: string | null;
   organization_id: number | null;
   organization_name: string | null;
   job_position_id: number | null;
+  job_level: string | null;
+  employment_status: string | null;
   branch_id: number | null;
   branch: string | null;
   phone: string | null;
   mobile_phone: string | null;
   email: string | null;
+  avatar: string | null;
+  gender: string | null;
+  birth_place: string | null;
+  birth_date: string | null;
+  address: string | null;
+  religion: string | null;
+  blood_type: string | null;
+  marital_status: string | null;
+  identity_type: string | null;
+  identity_number: string | null;
 };
 
 type TalentaEmployeeResponse = {
@@ -252,9 +265,13 @@ export async function POST(req: NextRequest) {
             return;
           }
 
+          // Avatar: simpan URL asli — direfresh tiap sync, expiry ~1 tahun
+          const avatar = emp.avatar?.trim() || null;
+
           const payload = {
             employeeId: emp.employee_id,
             name: emp.first_name ?? null,
+            lastName: emp.last_name || null,
             joinDate: emp.join_date ? new Date(emp.join_date) : null,
             resignDate: null,
             organizationId: emp.organization_id ? String(emp.organization_id) : null,
@@ -263,9 +280,21 @@ export async function POST(req: NextRequest) {
             branchName: emp.branch ?? null,
             jobPositionId: emp.job_position_id ? String(emp.job_position_id) : null,
             jobPositionName: emp.job_position_id ? jobPositionMap[String(emp.job_position_id)] ?? null : null,
-            phone: emp.phone ?? null,
-            mobilePhone: emp.mobile_phone ?? null,
-            email: emp.email ?? null,
+            jobLevel: emp.job_level ?? null,
+            employmentStatus: emp.employment_status ?? null,
+            phone: emp.phone && emp.phone !== "0" ? emp.phone : null,
+            mobilePhone: emp.mobile_phone && !emp.mobile_phone.includes("*") ? emp.mobile_phone : null,
+            email: emp.email && !emp.email.includes("*") ? emp.email : null,
+            image: avatar,
+            gender: emp.gender ?? null,
+            birthPlace: emp.birth_place ?? null,
+            birthDate: emp.birth_date ? new Date(emp.birth_date) : null,
+            address: emp.address ?? null,
+            religion: emp.religion ?? null,
+            bloodType: emp.blood_type ?? null,
+            maritalStatus: emp.marital_status ?? null,
+            identityType: emp.identity_type ?? null,
+            identityNumber: emp.identity_number ?? null,
             status: "active",
           };
 

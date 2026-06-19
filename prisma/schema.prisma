@@ -28,6 +28,18 @@ model User {
   phone            String?
   mobilePhone      String?
   email            String?
+  lastName         String?
+  gender           String?
+  birthPlace       String?
+  birthDate        DateTime?
+  address          String?
+  religion         String?
+  bloodType        String?
+  maritalStatus    String?
+  identityType     String?
+  identityNumber   String?
+  jobLevel         String?
+  employmentStatus String?
 
   accounts             Account[]
   sessions             Session[]

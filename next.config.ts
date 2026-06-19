@@ -5,6 +5,14 @@ const nextConfig: NextConfig = {
   watchOptions: {
     pollIntervalMs: 1000,
   },
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "talenta.oss-ap-southeast-5.aliyuncs.com",
+      },
+    ],
+  },
 };
 
 export default nextConfig;

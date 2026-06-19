@@ -8,6 +8,7 @@ import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { Pagination } from "@/components/ui/pagination";
 import Link from "next/link";
+import Image from "next/image";
 import { RefreshCw, Users, CloudDownload, UserCheck, List, Layers, X, History, CheckCircle, AlertCircle, Clock } from "lucide-react";
 
 type RoleEntry = { name: string; appId: string | null };
@@ -35,6 +36,18 @@ type UserDetail = UserRow & {
   jobPositionId: string | null;
   branchId: string | null;
   image: string | null;
+  lastName: string | null;
+  gender: string | null;
+  birthPlace: string | null;
+  birthDate: string | null;
+  address: string | null;
+  religion: string | null;
+  bloodType: string | null;
+  maritalStatus: string | null;
+  identityType: string | null;
+  identityNumber: string | null;
+  jobLevel: string | null;
+  employmentStatus: string | null;
 };
 
 type FormState = {
@@ -57,6 +70,18 @@ type FormState = {
   phone: string;
   mobilePhone: string;
   email: string;
+  lastName: string;
+  gender: string;
+  birthPlace: string;
+  birthDate: string;
+  address: string;
+  religion: string;
+  bloodType: string;
+  maritalStatus: string;
+  identityType: string;
+  identityNumber: string;
+  jobLevel: string;
+  employmentStatus: string;
   newPassword: string;
 };
 
@@ -142,6 +167,9 @@ export default function ListUserPage() {
   const [assigning, setAssigning] = useState(false);
   const [assignError, setAssignError] = useState<string | null>(null);
 
+  // Avatar preview
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+
   // Sync log
   type SyncLog = { id: string; trigger: string; status: string; processed: number | null; created: number | null; updated: number | null; error: string | null; startedAt: string; finishedAt: string | null };
   const [syncLogs, setSyncLogs] = useState<SyncLog[]>([]);
@@ -151,7 +179,10 @@ export default function ListUserPage() {
     id: "", employeeId: "", name: "", status: "", joinDate: "", resignDate: "",
     organizationId: "", organizationName: "", jobPositionId: "", jobPositionName: "",
     branchId: "", branchName: "", age: "", role: "", roles: [], image: null,
-    phone: "", mobilePhone: "", email: "", newPassword: "",
+    phone: "", mobilePhone: "", email: "",
+    lastName: "", gender: "", birthPlace: "", birthDate: "", address: "",
+    religion: "", bloodType: "", maritalStatus: "", identityType: "",
+    identityNumber: "", jobLevel: "", employmentStatus: "", newPassword: "",
   };
 
   const [form, setForm] = useState<FormState>(emptyForm);
@@ -333,7 +364,12 @@ export default function ListUserPage() {
         branchId: d.branchId ?? "", branchName: d.branchName ?? "",
         age: d.age != null ? String(d.age) : "", role: d.role?.toLowerCase() ?? "",
         roles: d.roles ?? [], image: d.image ?? null,
-        phone: d.phone ?? "", mobilePhone: d.mobilePhone ?? "", email: d.email ?? "", newPassword: "",
+        phone: d.phone ?? "", mobilePhone: d.mobilePhone ?? "", email: d.email ?? "",
+        lastName: d.lastName ?? "", gender: d.gender ?? "", birthPlace: d.birthPlace ?? "",
+        birthDate: d.birthDate ? d.birthDate.slice(0, 10) : "", address: d.address ?? "",
+        religion: d.religion ?? "", bloodType: d.bloodType ?? "", maritalStatus: d.maritalStatus ?? "",
+        identityType: d.identityType ?? "", identityNumber: d.identityNumber ?? "",
+        jobLevel: d.jobLevel ?? "", employmentStatus: d.employmentStatus ?? "", newPassword: "",
       });
     } catch (err) {
       console.error(err);
@@ -663,13 +699,53 @@ export default function ListUserPage() {
 
             {/* Info dari Talenta — readonly */}
             <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Data Talenta (read-only)</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Data Talenta (read-only)</p>
+
+              {/* Avatar */}
+              {form.image && (
+                <div className="flex justify-center mb-4">
+                  <button type="button" onClick={() => setAvatarPreview(form.image)} className="group relative w-20 h-20 rounded-full overflow-hidden border-2 border-slate-200 hover:border-blue-400 transition-colors">
+                    <Image src={form.image} alt={form.name} fill className="object-cover" unoptimized />
+                    <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <span className="text-white text-xs font-medium">Lihat</span>
+                    </div>
+                  </button>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <FormField label="Employee ID">
                   <input className={`${inputCls} bg-slate-50 text-slate-500 cursor-not-allowed`} readOnly value={form.employeeId} />
                 </FormField>
-                <FormField label="Name">
+                <FormField label="Nama Depan">
                   <input className={`${inputCls} bg-slate-50 text-slate-500 cursor-not-allowed`} readOnly value={form.name} />
+                </FormField>
+                <FormField label="Nama Belakang">
+                  <input className={`${inputCls} bg-slate-50 text-slate-500 cursor-not-allowed`} readOnly value={form.lastName} />
+                </FormField>
+                <FormField label="Gender">
+                  <input className={`${inputCls} bg-slate-50 text-slate-500 cursor-not-allowed`} readOnly value={form.gender} />
+                </FormField>
+                <FormField label="Tempat Lahir">
+                  <input className={`${inputCls} bg-slate-50 text-slate-500 cursor-not-allowed`} readOnly value={form.birthPlace} />
+                </FormField>
+                <FormField label="Tanggal Lahir">
+                  <input className={`${inputCls} bg-slate-50 text-slate-500 cursor-not-allowed`} readOnly value={form.birthDate} />
+                </FormField>
+                <FormField label="Agama">
+                  <input className={`${inputCls} bg-slate-50 text-slate-500 cursor-not-allowed`} readOnly value={form.religion} />
+                </FormField>
+                <FormField label="Status Pernikahan">
+                  <input className={`${inputCls} bg-slate-50 text-slate-500 cursor-not-allowed`} readOnly value={form.maritalStatus} />
+                </FormField>
+                <FormField label="Golongan Darah">
+                  <input className={`${inputCls} bg-slate-50 text-slate-500 cursor-not-allowed`} readOnly value={form.bloodType} />
+                </FormField>
+                <FormField label="Jenis Identitas">
+                  <input className={`${inputCls} bg-slate-50 text-slate-500 cursor-not-allowed`} readOnly value={form.identityType} />
+                </FormField>
+                <FormField label="Nomor Identitas">
+                  <input className={`${inputCls} bg-slate-50 text-slate-500 cursor-not-allowed`} readOnly value={form.identityNumber} />
                 </FormField>
                 <FormField label="Organization">
                   <input className={`${inputCls} bg-slate-50 text-slate-500 cursor-not-allowed`} readOnly value={form.organizationName} />
@@ -680,8 +756,11 @@ export default function ListUserPage() {
                 <FormField label="Job Position">
                   <input className={`${inputCls} bg-slate-50 text-slate-500 cursor-not-allowed`} readOnly value={form.jobPositionName} />
                 </FormField>
-                <FormField label="Age">
-                  <input className={`${inputCls} bg-slate-50 text-slate-500 cursor-not-allowed`} readOnly value={form.age} />
+                <FormField label="Job Level">
+                  <input className={`${inputCls} bg-slate-50 text-slate-500 cursor-not-allowed`} readOnly value={form.jobLevel} />
+                </FormField>
+                <FormField label="Status Kepegawaian">
+                  <input className={`${inputCls} bg-slate-50 text-slate-500 cursor-not-allowed`} readOnly value={form.employmentStatus} />
                 </FormField>
                 <FormField label="Join Date">
                   <input className={`${inputCls} bg-slate-50 text-slate-500 cursor-not-allowed`} readOnly value={form.joinDate} />
@@ -701,6 +780,11 @@ export default function ListUserPage() {
                 <FormField label="Status">
                   <input className={`${inputCls} bg-slate-50 text-slate-500 cursor-not-allowed capitalize`} readOnly value={form.status} />
                 </FormField>
+                <div className="md:col-span-2">
+                  <FormField label="Alamat">
+                    <input className={`${inputCls} bg-slate-50 text-slate-500 cursor-not-allowed`} readOnly value={form.address} />
+                  </FormField>
+                </div>
               </div>
             </div>
 
@@ -768,6 +852,18 @@ export default function ListUserPage() {
           </div>
         )}
       </Modal>
+
+      {/* Avatar Lightbox */}
+      {avatarPreview && (
+        <div className="fixed inset-0 z-[999] bg-black/70 flex items-center justify-center" onClick={() => setAvatarPreview(null)}>
+          <div className="relative w-72 h-72 rounded-2xl overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <Image src={avatarPreview} alt="Avatar" fill className="object-cover" unoptimized />
+          </div>
+          <button type="button" onClick={() => setAvatarPreview(null)} className="absolute top-4 right-4 text-white bg-black/40 hover:bg-black/60 rounded-full p-2 transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+      )}
 
       {/* Sync Log Modal */}
       <Modal open={logOpen} title="Log Sync Talenta" onClose={() => setLogOpen(false)} boxClassName="w-11/12 max-w-2xl">
