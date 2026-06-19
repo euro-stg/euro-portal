@@ -27,8 +27,7 @@ export function Pagination({ currentPage, totalPages, onPageChange }: Pagination
   const btnNav = `${btnBase} border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed`;
 
   return (
-    <div className="flex items-center justify-between mt-4 px-1">
-      <p className="text-xs text-slate-400">Halaman {currentPage} dari {totalPages}</p>
+    <div className="flex flex-col items-center gap-2 mt-4">
       <div className="flex items-center gap-1">
         <button
           onClick={() => onPageChange(currentPage - 1)}
@@ -62,6 +61,7 @@ export function Pagination({ currentPage, totalPages, onPageChange }: Pagination
           <ChevronRight className="w-4 h-4" />
         </button>
       </div>
+      <p className="text-xs text-slate-400">Halaman {currentPage} dari {totalPages}</p>
     </div>
   );
 }

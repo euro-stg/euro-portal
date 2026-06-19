@@ -159,7 +159,8 @@ export default function ListModulePage() {
       const json = await res.json().catch(() => null);
       if (!res.ok) { setData([]); setListError(json?.message ?? "Gagal memuat"); return; }
       const rows: ModuleRow[] = json?.data ?? [];
-      setData(rows);
+      const start = (page - 1) * PAGE_SIZE;
+      setData(rows.slice(start, start + PAGE_SIZE));
       setTotalPages(Math.ceil(rows.length / PAGE_SIZE) || 1);
       setCurrentPage(page);
     } catch (err) {
