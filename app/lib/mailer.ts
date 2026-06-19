@@ -10,6 +10,22 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+export async function sendNotificationEmail(to: string, title: string, body: string) {
+  await transporter.sendMail({
+    from: `"EuroPortal" <${process.env.SMTP_FROM}>`,
+    to,
+    subject: `[EuroPortal] ${title}`,
+    html: `
+      <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;">
+        <h2 style="margin:0 0 16px;color:#1e293b;font-size:18px;">${title}</h2>
+        <p style="color:#475569;font-size:14px;line-height:1.6;margin:0 0 24px;">${body}</p>
+        <hr style="border:none;border-top:1px solid #f1f5f9;margin:24px 0;"/>
+        <p style="color:#cbd5e1;font-size:11px;margin:0;">© ${new Date().getFullYear()} Euromedica Group — EuroPortal</p>
+      </div>
+    `,
+  });
+}
+
 export async function sendPasswordResetEmail(to: string, name: string, resetUrl: string) {
   await transporter.sendMail({
     from: `"EuroPortal" <${process.env.SMTP_FROM}>`,

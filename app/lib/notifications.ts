@@ -1,4 +1,5 @@
 import db from "@/lib/db/db";
+import { sendNotificationEmail } from "@/lib/mailer";
 
 export async function createNotification(
   userId: string,
@@ -8,7 +9,16 @@ export async function createNotification(
   refId?: string,
   appType?: string,
 ) {
-  return db.notification.create({ data: { userId, title, body, type, refId: refId ?? null, appType: appType ?? null } });
+  const [notification, user] = await Promise.all([
+    db.notification.create({ data: { userId, title, body, type, refId: refId ?? null, appType: appType ?? null } }),
+    db.user.findUnique({ where: { id: userId }, select: { email: true } }),
+  ]);
+
+  if (user?.email) {
+    sendNotificationEmail(user.email, title, body).catch(() => null);
+  }
+
+  return notification;
 }
 
 export async function notifyMany(
@@ -21,9 +31,22 @@ export async function notifyMany(
 ) {
   const unique = [...new Set(userIds)].filter(Boolean);
   if (unique.length === 0) return;
-  return db.notification.createMany({
-    data: unique.map((userId) => ({ userId, title, body, type, refId: refId ?? null, appType: appType ?? null })),
-  });
+
+  const [, users] = await Promise.all([
+    db.notification.createMany({
+      data: unique.map((userId) => ({ userId, title, body, type, refId: refId ?? null, appType: appType ?? null })),
+    }),
+    db.user.findMany({
+      where: { id: { in: unique }, email: { not: null } },
+      select: { email: true },
+    }),
+  ]);
+
+  for (const user of users) {
+    if (user.email) {
+      sendNotificationEmail(user.email, title, body).catch(() => null);
+    }
+  }
 }
 
 // Cari user yang cocok dengan kriteria step approval
