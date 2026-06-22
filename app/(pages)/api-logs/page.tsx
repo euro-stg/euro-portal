@@ -177,6 +177,7 @@ export default function ApiLogsPage() {
             <option value="">Semua Endpoint</option>
             <option value="/api/sso/login">/api/sso/login</option>
             <option value="/api/sso/validate">/api/sso/validate</option>
+            <option value="/api/sso/users">/api/sso/users</option>
           </select>
 
           <select
