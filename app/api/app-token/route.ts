@@ -44,8 +44,26 @@ export async function POST(request: Request) {
 
   // Satu apps = satu token
   const existing = await db.appToken.findUnique({ where: { moduleId } });
-  if (existing && !existing.deletedAt)
-    return NextResponse.json({ message: `Apps "${mod.name}" sudah memiliki token aktif` }, { status: 409 });
+  if (existing) {
+    if (!existing.deletedAt)
+      return NextResponse.json({ message: `Apps "${mod.name}" sudah memiliki token aktif` }, { status: 409 });
+
+    // Restore token yang sudah di-delete
+    const token = randomBytes(32).toString("hex");
+    const appToken = await db.appToken.update({
+      where: { id: existing.id },
+      data: {
+        name: mod.name,
+        description: description?.trim() || null,
+        token,
+        active: true,
+        deletedAt: null,
+        createdBy: session.user.id,
+      },
+      include: { module: { select: { id: true, name: true, externalUrl: true } } },
+    });
+    return NextResponse.json({ data: appToken }, { status: 201 });
+  }
 
   const token = randomBytes(32).toString("hex");
 
