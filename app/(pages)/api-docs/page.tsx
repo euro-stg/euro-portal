@@ -226,20 +226,33 @@ window.location.href = redirectUrl;
   "user": {
     "id": "clxyz123",
     "employeeId": "EMP001",
-    "name": "Budi Santoso",
+    "name": "Budi",
+    "lastName": "Santoso",
     "email": "budi@euromedica.co.id",
-    "phone": "081234567890",
+    "phone": "0211234567",
+    "mobilePhone": "081234567890",
+    "gender": "male",
+    "birthPlace": "Jakarta",
+    "birthDate": "1996-03-15T00:00:00.000Z",
+    "address": "Jl. Sudirman No.1, Jakarta",
+    "religion": "Islam",
+    "bloodType": "O",
+    "maritalStatus": "single",
+    "identityType": "ktp",
+    "identityNumber": "3171234567890001",
     "jobPositionId": "JP001",
     "jobPositionName": "Software Engineer",
+    "jobLevel": "Staff",
     "organizationId": "ORG001",
     "organizationName": "IT Department",
     "branchId": "BR001",
     "branchName": "Jakarta Pusat",
+    "employmentStatus": "permanent",
     "age": 28,
     "joinDate": "2022-01-15T00:00:00.000Z",
     "resignDate": null,
     "status": "active",
-    "image": "https://..."
+    "image": "https://talenta.oss-ap-southeast-5.aliyuncs.com/..."
   }
 }`} />
         </div>
@@ -302,16 +315,16 @@ curl -X GET "${BASE_URL}/api/sso/validate" \\
 
         <div>
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Response Sukses <span className="text-emerald-500 font-mono">200</span></p>
-          <CodeBlock code={`// Mode 1 (sso_token) — termasuk sessionToken untuk disimpan apps
+          <CodeBlock code={`// Mode 1 (sso_token) — sessionToken untuk disimpan apps
 {
   "valid": true,
   "mode": "redirect",
-  "sessionToken": "f9e2a1b3...",   // simpan ini untuk request berikutnya
+  "sessionToken": "f9e2a1b3...",   // simpan untuk request berikutnya
   "expiresAt": "2026-06-12T10:00:00.000Z",
-  "user": { ... }
+  "user": { /* sama dengan struktur di bawah */ }
 }
 
-// Mode 2 (Bearer)
+// Mode 2 (Bearer) — user object lengkap
 {
   "valid": true,
   "mode": "session",
@@ -319,20 +332,33 @@ curl -X GET "${BASE_URL}/api/sso/validate" \\
   "user": {
     "id": "clxyz123",
     "employeeId": "EMP001",
-    "name": "Budi Santoso",
+    "name": "Budi",
+    "lastName": "Santoso",
     "email": "budi@euromedica.co.id",
-    "phone": "081234567890",
+    "phone": "0211234567",
+    "mobilePhone": "081234567890",
+    "gender": "male",
+    "birthPlace": "Jakarta",
+    "birthDate": "1996-03-15T00:00:00.000Z",
+    "address": "Jl. Sudirman No.1, Jakarta",
+    "religion": "Islam",
+    "bloodType": "O",
+    "maritalStatus": "single",
+    "identityType": "ktp",
+    "identityNumber": "3171234567890001",
     "jobPositionId": "JP001",
     "jobPositionName": "Software Engineer",
+    "jobLevel": "Staff",
     "organizationId": "ORG001",
     "organizationName": "IT Department",
     "branchId": "BR001",
     "branchName": "Jakarta Pusat",
+    "employmentStatus": "permanent",
     "age": 28,
     "joinDate": "2022-01-15T00:00:00.000Z",
     "resignDate": null,
     "status": "active",
-    "image": "https://..."
+    "image": "https://talenta.oss-ap-southeast-5.aliyuncs.com/..."
   }
 }`} />
         </div>
@@ -388,20 +414,33 @@ curl -X GET "${BASE_URL}/api/sso/users?search=budi&page=1" \\
     {
       "id": "clxyz123",
       "employeeId": "EMP001",
-      "name": "Budi Santoso",
+      "name": "Budi",
+      "lastName": "Santoso",
       "email": "budi@euromedica.co.id",
-      "phone": "081234567890",
+      "phone": "0211234567",
+      "mobilePhone": "081234567890",
+      "gender": "male",
+      "birthPlace": "Jakarta",
+      "birthDate": "1996-03-15T00:00:00.000Z",
+      "address": "Jl. Sudirman No.1, Jakarta",
+      "religion": "Islam",
+      "bloodType": "O",
+      "maritalStatus": "single",
+      "identityType": "ktp",
+      "identityNumber": "3171234567890001",
       "jobPositionId": "JP001",
       "jobPositionName": "Software Engineer",
+      "jobLevel": "Staff",
       "organizationId": "ORG001",
       "organizationName": "IT Department",
       "branchId": "BR001",
       "branchName": "Jakarta Pusat",
+      "employmentStatus": "permanent",
       "age": 28,
       "joinDate": "2022-01-15T00:00:00.000Z",
       "resignDate": null,
       "status": "active",
-      "image": "https://..."
+      "image": "https://talenta.oss-ap-southeast-5.aliyuncs.com/..."
     }
   ],
   "total": 142,
