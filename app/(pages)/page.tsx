@@ -5,6 +5,7 @@ import {
   Lock, type LucideIcon,
 } from "lucide-react";
 
+import Image from "next/image";
 import prisma from "@/lib/db/db";
 import { auth } from "@/lib/auth";
 import { ExternalAppCard } from "@/components/ui/external-app-card";
@@ -48,6 +49,7 @@ const Home = async () => {
         where: { id: userId },
         select: {
           name: true,
+          image: true,
           jobPositionName: true,
           organizationName: true,
           branchName: true,
@@ -85,8 +87,14 @@ const Home = async () => {
     <div>
       {/* Welcome */}
       <div className="mb-6 bg-white rounded-2xl border border-slate-100 shadow-sm px-4 sm:px-6 py-4 sm:py-5 flex items-center gap-3 sm:gap-4">
-        <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-lg sm:text-xl flex-shrink-0 shadow-sm">
-          {fullName.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
+        <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl overflow-hidden flex-shrink-0 shadow-sm bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+          {dbUser?.image ? (
+            <Image src={dbUser.image} alt={fullName} width={56} height={56} className="object-cover w-full h-full" />
+          ) : (
+            <span className="text-white font-bold text-lg sm:text-xl">
+              {fullName.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
+            </span>
+          )}
         </div>
         <div className="min-w-0">
           <p className="text-slate-400 text-xs">{greeting},</p>
