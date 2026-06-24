@@ -31,6 +31,7 @@ export default async function AppLayout({
     where: { id: userId },
     select: {
       name: true,
+      image: true,
       userRoles: {
         select: {
           appId: true,
@@ -84,7 +85,7 @@ export default async function AppLayout({
 
   return (
     <AppShell
-      user={{ name: dbUser.name, role: portalRole }}
+      user={{ name: dbUser.name, image: dbUser.image, role: portalRole }}
       modules={modules}
       backHref="/"
       appName={appModule.name}
