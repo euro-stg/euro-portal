@@ -18,12 +18,16 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ path: string[] }> }
 ) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-  }
-
   const segments = (await params).path;
+
+  // Avatar Talenta dapat diakses publik (dipakai oleh SSO apps)
+  const isTalentaAvatar = segments[0] === "talenta";
+  if (!isTalentaAvatar) {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    }
+  }
 
   // Cegah path traversal
   const sanitized = segments.map((s) => s.replace(/\.\./g, "")).filter(Boolean);
@@ -41,7 +45,8 @@ export async function GET(
       headers: {
         "Content-Type": contentType,
         "Content-Disposition": `inline; filename="${sanitized.at(-1)}"`,
-        "Cache-Control": "private, max-age=3600",
+        // Avatar talenta publik, bisa di-cache lebih lama
+        "Cache-Control": isTalentaAvatar ? "public, max-age=86400" : "private, max-age=3600",
       },
     });
   } catch {

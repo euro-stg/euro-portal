@@ -3,6 +3,8 @@ import prisma from "@/lib/db/db";
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import { auth } from "@/lib/auth";
+import { writeFile, mkdir } from "fs/promises";
+import path from "path";
 
 export const maxDuration = 300; // 5 menit
 
@@ -79,6 +81,35 @@ function generateHmacHeader(path: string) {
   const authHeader = `hmac username="${username}", algorithm="hmac-sha256", headers="date request-line", signature="${signature}"`;
 
   return { authHeader, date };
+}
+
+/* =========================
+   ✅ AVATAR HELPERS
+========================= */
+
+// Extract path dari URL Talenta tanpa query params → identifier perubahan
+function extractImageKey(avatarUrl: string): string | null {
+  try {
+    const url = new URL(avatarUrl);
+    return decodeURIComponent(url.pathname.slice(1)); // "avatar/filename.jpg"
+  } catch {
+    return null;
+  }
+}
+
+// Download avatar dari Talenta, simpan ke uploads/talenta/{employeeId}.jpg
+async function downloadAvatar(avatarUrl: string, employeeId: string): Promise<string | null> {
+  try {
+    const res = await fetch(avatarUrl, { signal: AbortSignal.timeout(15_000) });
+    if (!res.ok) return null;
+    const buffer = Buffer.from(await res.arrayBuffer());
+    const dir = path.join(process.cwd(), "uploads", "talenta");
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, `${employeeId}.jpg`), buffer);
+    return `/api/files/talenta/${employeeId}.jpg`;
+  } catch {
+    return null;
+  }
 }
 
 /* =========================
@@ -225,10 +256,10 @@ export async function POST(req: NextRequest) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // Ambil semua employeeId yang sudah ada di DB sekaligus
-    const existingIds = new Set(
-      (await prisma.user.findMany({ select: { employeeId: true } }))
-        .map((u) => u.employeeId),
+    // Ambil semua user yang sudah ada beserta talentaImageKey untuk cek perubahan avatar
+    const existingUsers = new Map(
+      (await prisma.user.findMany({ select: { employeeId: true, talentaImageKey: true } }))
+        .map((u) => [u.employeeId, u.talentaImageKey]),
     );
 
     let processed = 0;
@@ -243,7 +274,7 @@ export async function POST(req: NextRequest) {
         batch.map(async (emp) => {
           if (!emp.employee_id) return;
 
-          const isExisting = existingIds.has(emp.employee_id);
+          const isExisting = existingUsers.has(emp.employee_id);
 
           // Resign handling
           if (emp.resign_date) {
@@ -265,8 +296,31 @@ export async function POST(req: NextRequest) {
             return;
           }
 
-          // Avatar: simpan URL asli — direfresh tiap sync, expiry ~1 tahun
-          const avatar = emp.avatar?.trim() || null;
+          // Avatar: download ke lokal jika berubah, identifikasi via key tanpa query params
+          const avatarUrl = emp.avatar?.trim() || null;
+          const newImageKey = avatarUrl ? extractImageKey(avatarUrl) : null;
+          const storedImageKey = existingUsers.get(emp.employee_id) ?? null;
+          const avatarChanged = newImageKey !== storedImageKey;
+
+          let image: string | null = null;
+          let talentaImageKey: string | null = null;
+
+          if (avatarUrl && newImageKey) {
+            if (!isExisting || avatarChanged) {
+              // Download baru atau update
+              const localUrl = await downloadAvatar(avatarUrl, emp.employee_id);
+              image = localUrl ?? avatarUrl; // fallback ke Talenta URL jika download gagal
+              talentaImageKey = newImageKey;
+            } else {
+              // Tidak berubah — abaikan image dari payload (handled via spread below)
+              image = undefined as unknown as string; // marker: skip
+              talentaImageKey = undefined as unknown as string;
+            }
+          }
+
+          const imageFields = image === (undefined as unknown as string)
+            ? {} // tidak ada perubahan avatar
+            : { image: image || null, talentaImageKey: talentaImageKey || null };
 
           const payload = {
             employeeId: emp.employee_id,
@@ -285,7 +339,6 @@ export async function POST(req: NextRequest) {
             phone: emp.phone && emp.phone !== "0" ? emp.phone : null,
             mobilePhone: emp.mobile_phone && !emp.mobile_phone.includes("*") ? emp.mobile_phone : null,
             email: emp.email && !emp.email.includes("*") ? emp.email : null,
-            image: avatar,
             gender: emp.gender ?? null,
             birthPlace: emp.birth_place ?? null,
             birthDate: emp.birth_date ? new Date(emp.birth_date) : null,
@@ -296,13 +349,13 @@ export async function POST(req: NextRequest) {
             identityType: emp.identity_type ?? null,
             identityNumber: emp.identity_number ?? null,
             status: "active",
+            ...imageFields,
           };
 
           if (!isExisting) {
-            // Cost 8 cukup untuk random password sementara (4x lebih cepat dari 10)
             const hashedPassword = await bcrypt.hash(crypto.randomBytes(16).toString("hex"), 8);
             await prisma.user.create({ data: { ...payload, password: hashedPassword } });
-            existingIds.add(emp.employee_id);
+            existingUsers.set(emp.employee_id, talentaImageKey);
             created++;
           } else {
             await prisma.user.update({ where: { employeeId: emp.employee_id }, data: payload });

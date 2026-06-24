@@ -25,6 +25,7 @@ model User {
   branchName       String?
   age              Int?
   image            String?
+  talentaImageKey  String?  // path dari URL Talenta tanpa query params, untuk deteksi perubahan avatar
   phone            String?
   mobilePhone      String?
   email            String?
