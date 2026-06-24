@@ -15,6 +15,7 @@ type NavbarProps = {
 
 const Navbar = ({ onMenuToggle, userName, userImage }: NavbarProps) => {
   const [open, setOpen] = useState(false);
+  const [imgError, setImgError] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const initials = userName
@@ -66,8 +67,8 @@ const Navbar = ({ onMenuToggle, userName, userImage }: NavbarProps) => {
             className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-slate-100 transition-colors"
           >
             <div className="w-7 h-7 rounded-full overflow-hidden flex-shrink-0 bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
-              {userImage ? (
-                <Image src={userImage} alt={userName ?? "avatar"} width={28} height={28} className="object-cover w-full h-full" />
+              {userImage && !imgError ? (
+                <Image src={userImage} alt={userName ?? "avatar"} width={28} height={28} className="object-cover w-full h-full" onError={() => setImgError(true)} />
               ) : (
                 <span className="text-white text-xs font-bold">{initials}</span>
               )}

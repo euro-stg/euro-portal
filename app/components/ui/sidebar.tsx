@@ -76,6 +76,7 @@ const Sidebar = ({
   appName?: string;
 }) => {
   const pathname = usePathname();
+  const [imgError, setImgError] = useState(false);
 
   // Badge count untuk approval paths
   const [approvalBadge, setApprovalBadge] = useState<number>(0);
@@ -162,19 +163,23 @@ const Sidebar = ({
       <div className="px-5 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 flex-shrink-0">
         {appName ? (
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0 ring-2 ring-white/30">
-              <Layers className="w-5 h-5 text-white" />
+            <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 ring-2 ring-white/30 bg-white/20 flex items-center justify-center">
+              {user?.image && !imgError ? (
+                <Image src={user.image} alt={user.name ?? "avatar"} width={40} height={40} className="object-cover w-full h-full" onError={() => setImgError(true)} />
+              ) : (
+                <span className="text-white font-bold text-sm">{initials}</span>
+              )}
             </div>
             <div className="overflow-hidden">
-              <p className="text-white font-semibold text-sm leading-snug truncate">{appName}</p>
-              <p className="text-blue-100 text-xs mt-0.5 truncate">{user?.name ?? "—"}</p>
+              <p className="text-white font-semibold text-sm leading-snug truncate">{user?.name ?? "—"}</p>
+              <p className="text-blue-100 text-xs mt-0.5 truncate">{appName}</p>
             </div>
           </div>
         ) : (
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 ring-2 ring-white/30 bg-white/20 flex items-center justify-center">
-              {user?.image ? (
-                <Image src={user.image} alt={user.name ?? "avatar"} width={40} height={40} className="object-cover w-full h-full" />
+              {user?.image && !imgError ? (
+                <Image src={user.image} alt={user.name ?? "avatar"} width={40} height={40} className="object-cover w-full h-full" onError={() => setImgError(true)} />
               ) : (
                 <span className="text-white font-bold text-sm">{initials}</span>
               )}

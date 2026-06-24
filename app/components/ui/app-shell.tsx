@@ -72,7 +72,7 @@ export function AppShell({ children, user, modules = [], backHref, appName, nest
 
   return (
     <>
-      <Navbar onMenuToggle={() => setSidebarOpen((v) => !v)} userName={user?.name} />
+      <Navbar onMenuToggle={() => setSidebarOpen((v) => !v)} userName={user?.name} userImage={user?.image} />
       {sidebar}
       {backdrop}
       <div
