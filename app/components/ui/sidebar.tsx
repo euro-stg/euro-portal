@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
@@ -14,6 +15,7 @@ import type { SidebarModule } from "@/types/sidebar";
 
 type SidebarUser = {
   name?: string | null;
+  image?: string | null;
   role?: string | null;
 };
 
@@ -170,8 +172,12 @@ const Sidebar = ({
           </div>
         ) : (
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-white font-bold text-sm flex-shrink-0 ring-2 ring-white/30">
-              {initials}
+            <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 ring-2 ring-white/30 bg-white/20 flex items-center justify-center">
+              {user?.image ? (
+                <Image src={user.image} alt={user.name ?? "avatar"} width={40} height={40} className="object-cover w-full h-full" />
+              ) : (
+                <span className="text-white font-bold text-sm">{initials}</span>
+              )}
             </div>
             <div className="overflow-hidden">
               <p className="text-white font-semibold text-sm leading-snug truncate">

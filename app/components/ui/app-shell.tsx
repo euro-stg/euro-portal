@@ -8,7 +8,7 @@ import type { SidebarModule } from "@/types/sidebar";
 
 type AppShellProps = {
   children: React.ReactNode;
-  user?: { name?: string | null; role?: string | null };
+  user?: { name?: string | null; image?: string | null; role?: string | null };
   modules?: SidebarModule[];
   backHref?: string;
   appName?: string;
@@ -57,7 +57,7 @@ export function AppShell({ children, user, modules = [], backHref, appName, nest
   if (nested) {
     return (
       <>
-        <Navbar onMenuToggle={() => setSidebarOpen((v) => !v)} userName={user?.name} />
+        <Navbar onMenuToggle={() => setSidebarOpen((v) => !v)} userName={user?.name} userImage={user?.image} />
         {sidebar}
         {backdrop}
         <div

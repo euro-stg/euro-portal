@@ -22,6 +22,7 @@ export default async function ProtectedLayout({
     where: { id: userId },
     select: {
       name: true,
+      image: true,
       userRoles: {
         where: { role: { appId: null, status: "active", deletedAt: null } },
         select: { role: { select: { name: true } } },
@@ -63,7 +64,7 @@ export default async function ProtectedLayout({
 
   return (
     <>
-      <AppShell user={{ name: dbUser.name, role: portalRole }} modules={modules}>
+      <AppShell user={{ name: dbUser.name, image: dbUser.image, role: portalRole }} modules={modules}>
         {children}
       </AppShell>
       <ChatWidget />
