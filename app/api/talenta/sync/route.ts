@@ -3,7 +3,7 @@ import prisma from "@/lib/db/db";
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import { auth } from "@/lib/auth";
-import { writeFile, mkdir } from "fs/promises";
+import { writeFile, mkdir, unlink } from "fs/promises";
 import path from "path";
 
 export const maxDuration = 300; // 5 menit
@@ -97,16 +97,31 @@ function extractImageKey(avatarUrl: string): string | null {
   }
 }
 
-// Download avatar dari Talenta, simpan ke uploads/talenta/{employeeId}.jpg
-async function downloadAvatar(avatarUrl: string, employeeId: string): Promise<string | null> {
+// Hash dari imageKey → filename tidak bisa ditebak dari employeeId
+function imageKeyToFilename(imageKey: string): string {
+  return crypto.createHash("sha256").update(imageKey).digest("hex").slice(0, 32) + ".jpg";
+}
+
+// Hapus file lokal lama jika ada (saat avatar berubah)
+async function deleteLocalAvatar(oldImageUrl: string | null) {
+  if (!oldImageUrl?.startsWith("/api/files/talenta/")) return;
+  const filename = oldImageUrl.split("/").pop();
+  if (!filename) return;
+  const filePath = path.join(process.cwd(), "uploads", "talenta", filename);
+  await unlink(filePath).catch(() => null); // abaikan jika file tidak ada
+}
+
+// Download avatar dari Talenta, simpan ke uploads/talenta/{hash}.jpg
+async function downloadAvatar(avatarUrl: string, imageKey: string): Promise<string | null> {
   try {
     const res = await fetch(avatarUrl, { signal: AbortSignal.timeout(15_000) });
     if (!res.ok) return null;
     const buffer = Buffer.from(await res.arrayBuffer());
     const dir = path.join(process.cwd(), "uploads", "talenta");
     await mkdir(dir, { recursive: true });
-    await writeFile(path.join(dir, `${employeeId}.jpg`), buffer);
-    return `/api/files/talenta/${employeeId}.jpg`;
+    const filename = imageKeyToFilename(imageKey);
+    await writeFile(path.join(dir, filename), buffer);
+    return `/api/files/talenta/${filename}`;
   } catch {
     return null;
   }
@@ -256,10 +271,10 @@ export async function POST(req: NextRequest) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // Ambil semua user yang sudah ada beserta talentaImageKey untuk cek perubahan avatar
+    // Ambil semua user yang sudah ada beserta talentaImageKey + image untuk cek/hapus avatar lama
     const existingUsers = new Map(
-      (await prisma.user.findMany({ select: { employeeId: true, talentaImageKey: true } }))
-        .map((u) => [u.employeeId, u.talentaImageKey]),
+      (await prisma.user.findMany({ select: { employeeId: true, talentaImageKey: true, image: true } }))
+        .map((u) => [u.employeeId, { talentaImageKey: u.talentaImageKey, image: u.image }]),
     );
 
     let processed = 0;
@@ -274,7 +289,8 @@ export async function POST(req: NextRequest) {
         batch.map(async (emp) => {
           if (!emp.employee_id) return;
 
-          const isExisting = existingUsers.has(emp.employee_id);
+          const existingUser = existingUsers.get(emp.employee_id);
+          const isExisting = !!existingUser;
 
           // Resign handling
           if (emp.resign_date) {
@@ -296,31 +312,28 @@ export async function POST(req: NextRequest) {
             return;
           }
 
-          // Avatar: download ke lokal jika berubah, identifikasi via key tanpa query params
+          // Avatar: download ke lokal jika berubah, filename = hash(key) supaya tidak bisa ditebak
           const avatarUrl = emp.avatar?.trim() || null;
           const newImageKey = avatarUrl ? extractImageKey(avatarUrl) : null;
-          const storedImageKey = existingUsers.get(emp.employee_id) ?? null;
+          const storedImageKey = existingUser?.talentaImageKey ?? null;
           const avatarChanged = newImageKey !== storedImageKey;
 
-          let image: string | null = null;
-          let talentaImageKey: string | null = null;
+          let imageFields: { image?: string | null; talentaImageKey?: string | null } = {};
 
-          if (avatarUrl && newImageKey) {
-            if (!isExisting || avatarChanged) {
-              // Download baru atau update
-              const localUrl = await downloadAvatar(avatarUrl, emp.employee_id);
-              image = localUrl ?? avatarUrl; // fallback ke Talenta URL jika download gagal
-              talentaImageKey = newImageKey;
-            } else {
-              // Tidak berubah — abaikan image dari payload (handled via spread below)
-              image = undefined as unknown as string; // marker: skip
-              talentaImageKey = undefined as unknown as string;
-            }
+          if (!avatarUrl) {
+            // Talenta tidak punya avatar → clear
+            imageFields = { image: null, talentaImageKey: null };
+            if (isExisting) await deleteLocalAvatar(existingUser!.image);
+          } else if (newImageKey && (!isExisting || avatarChanged)) {
+            // Avatar baru atau berubah → hapus lama, download baru
+            if (isExisting && avatarChanged) await deleteLocalAvatar(existingUser!.image);
+            const localUrl = await downloadAvatar(avatarUrl, newImageKey);
+            imageFields = {
+              image: localUrl ?? avatarUrl, // fallback ke Talenta URL jika download gagal
+              talentaImageKey: newImageKey,
+            };
           }
-
-          const imageFields = image === (undefined as unknown as string)
-            ? {} // tidak ada perubahan avatar
-            : { image: image || null, talentaImageKey: talentaImageKey || null };
+          // else: avatar tidak berubah → tidak update image fields
 
           const payload = {
             employeeId: emp.employee_id,
@@ -355,7 +368,7 @@ export async function POST(req: NextRequest) {
           if (!isExisting) {
             const hashedPassword = await bcrypt.hash(crypto.randomBytes(16).toString("hex"), 8);
             await prisma.user.create({ data: { ...payload, password: hashedPassword } });
-            existingUsers.set(emp.employee_id, talentaImageKey);
+            existingUsers.set(emp.employee_id, { talentaImageKey: newImageKey, image: imageFields.image ?? null });
             created++;
           } else {
             await prisma.user.update({ where: { employeeId: emp.employee_id }, data: payload });
