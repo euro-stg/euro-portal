@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { randomBytes } from "crypto";
 import bcrypt from "bcryptjs";
 import db from "@/lib/db/db";
 import { writeApiLog, getClientIp, getUserAgent } from "@/lib/api-logger";
+import { verifyAppTokenJwt, hasPermission } from "@/lib/sso-jwt";
 
 const ENDPOINT = "/api/sso/login";
 
@@ -16,22 +16,33 @@ export async function POST(request: Request) {
   }
 
   try {
-    const appToken = request.headers.get("x-app-token");
-    if (!appToken) {
+    const rawToken = request.headers.get("x-app-token");
+    if (!rawToken) {
       log("FAILED", { statusCode: 401, reason: "X-App-Token header diperlukan" });
       return NextResponse.json({ error: "X-App-Token header diperlukan" }, { status: 401 });
     }
 
-    const appRecord = await db.appToken.findUnique({
-      where: { token: appToken },
-      include: { module: { select: { name: true } } },
-    });
+    // Verify JWT
+    const claims = await verifyAppTokenJwt(rawToken);
+    if (!claims) {
+      log("FAILED", { statusCode: 401, reason: "App token tidak valid" });
+      return NextResponse.json({ error: "App token tidak valid" }, { status: 401 });
+    }
+
+    // Check permission
+    if (!hasPermission(claims.permissions, "LOGIN")) {
+      log("FAILED", { appTokenId: claims.sub, appName: claims.name, statusCode: 403, reason: "Tidak memiliki akses ke endpoint ini" });
+      return NextResponse.json({ error: "Tidak memiliki akses ke endpoint ini" }, { status: 403 });
+    }
+
+    // Lookup app record — cek active & tidak di-delete, sekaligus revocation check
+    const appRecord = await db.appToken.findUnique({ where: { token: rawToken } });
     if (!appRecord || !appRecord.active || appRecord.deletedAt) {
-      log("FAILED", { statusCode: 401, reason: "App token tidak valid atau tidak aktif" });
+      log("FAILED", { appTokenId: claims.sub, appName: claims.name, statusCode: 401, reason: "App token tidak aktif atau sudah di-revoke" });
       return NextResponse.json({ error: "App token tidak valid atau tidak aktif" }, { status: 401 });
     }
 
-    const appName = appRecord.module?.name ?? appRecord.name;
+    const appName = claims.name;
 
     const body = await request.json().catch(() => ({}));
     const { employeeId, password } = body as { employeeId?: string; password?: string };
@@ -68,6 +79,7 @@ export async function POST(request: Request) {
 
     await db.ssoSession.deleteMany({ where: { userId: user.id, appTokenId: appRecord.id } });
 
+    const { randomBytes } = await import("crypto");
     const token = randomBytes(40).toString("hex");
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 

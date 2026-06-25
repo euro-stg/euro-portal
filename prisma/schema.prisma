@@ -413,7 +413,21 @@ model Notification {
 
 // ===================== SSO =====================
 
+// Role untuk app token — menentukan endpoint SSO mana yang boleh diakses
+model AppTokenRole {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  description String?
+  permissions String[]  // ["LOGIN", "VALIDATE", "GET_USERS"]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime?
+  deletedAt   DateTime?
+
+  appTokens AppToken[]
+}
+
 // Token per aplikasi eksternal yang boleh akses SSO API
+// token field menyimpan JWT yang berisi appTokenId + permissions
 model AppToken {
   id          String    @id @default(cuid())
   name        String
@@ -421,6 +435,7 @@ model AppToken {
   token       String    @unique
   active      Boolean   @default(true)
   moduleId    String?   @unique  // relasi ke Module (type="app", isExternal=true)
+  roleId      String?
   createdBy   String
   createdAt   DateTime  @default(now())
   updatedAt   DateTime?
@@ -428,6 +443,7 @@ model AppToken {
 
   creator          User               @relation("AppTokenCreator", fields: [createdBy], references: [id])
   module           Module?            @relation(fields: [moduleId], references: [id])
+  role             AppTokenRole?      @relation(fields: [roleId], references: [id])
   ssoSessions      SsoSession[]
   redirectTokens   SsoRedirectToken[]
   apiLogs          ApiLog[]
