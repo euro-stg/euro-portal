@@ -1,6 +1,6 @@
 import { SignJWT, jwtVerify } from "jose";
 
-export const SSO_PERMISSIONS = ["LOGIN", "VALIDATE", "GET_USERS"] as const;
+export const SSO_PERMISSIONS = ["LOGIN", "VALIDATE", "GET_USERS", "GET_BRANCHES", "GET_JOB_POSITIONS", "GET_COMPANIES"] as const;
 export type SsoPermission = typeof SSO_PERMISSIONS[number];
 
 export type AppTokenClaims = {

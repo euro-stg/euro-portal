@@ -7,12 +7,15 @@ import { Modal } from "@/components/ui/modal";
 import { Alert } from "@/components/ui/alert";
 
 const SSO_PERMISSIONS = [
-  { key: "LOGIN",     label: "Login",     desc: "POST /api/sso/login — autentikasi dengan employeeId & password" },
-  { key: "VALIDATE",  label: "Validate",  desc: "GET /api/sso/validate — validasi session / SSO redirect token" },
-  { key: "GET_USERS", label: "Get Users", desc: "GET /api/sso/users — ambil daftar user aktif" },
+  { key: "LOGIN",            label: "Login",        desc: "POST /api/sso/login — autentikasi dengan employeeId & password" },
+  { key: "VALIDATE",         label: "Validate",     desc: "GET /api/sso/validate — validasi session / SSO redirect token" },
+  { key: "GET_USERS",        label: "Get Users",    desc: "GET /api/sso/users — ambil daftar user aktif" },
+  { key: "GET_BRANCHES",     label: "Get Branches", desc: "GET /api/sso/branches — ambil daftar master branch" },
+  { key: "GET_JOB_POSITIONS",label: "Get Jabatan",  desc: "GET /api/sso/job-positions — ambil daftar master jabatan" },
+  { key: "GET_COMPANIES",    label: "Get Companies",desc: "GET /api/sso/companies — ambil daftar master perusahaan" },
 ] as const;
 
-type PermKey = typeof SSO_PERMISSIONS[number]["key"];
+type PermKey = (typeof SSO_PERMISSIONS)[number]["key"];
 
 type RoleRow = {
   id: string;

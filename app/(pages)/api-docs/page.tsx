@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Copy, Check, BookOpen, Lock, Users, ShieldCheck, ArrowRight, ChevronDown } from "lucide-react";
+import { Copy, Check, BookOpen, Lock, Users, ShieldCheck, ArrowRight, ChevronDown, GitBranch, Briefcase, Building2 } from "lucide-react";
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -448,6 +448,195 @@ curl -X GET "${BASE_URL}/api/sso/users?search=budi&page=1" \\
   "limit": 20,
   "totalPages": 8
 }`} />
+        </div>
+      </Section>
+
+      {/* 4. Branches */}
+      <Section id="branches" icon={GitBranch} title="5. Master Branch" open={openSections.has("branches")} onToggle={() => toggle("branches")}>
+        <div className="flex items-center gap-3">
+          <Badge method="GET" />
+          <code className="text-sm font-mono text-slate-700 bg-slate-100 px-3 py-1 rounded">/api/sso/branches</code>
+        </div>
+        <p className="text-sm text-slate-600">
+          Mengambil daftar seluruh branch (cabang) dari master data portal. Data disinkronisasi dari Talenta secara berkala.
+          Memerlukan permission <code className="font-mono bg-slate-100 px-1 rounded text-xs">GET_BRANCHES</code> pada App Token.
+        </p>
+
+        <div>
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Query Parameters</p>
+          <div className="border border-slate-100 rounded-lg overflow-hidden">
+            <Field name="search" type="string" desc="Cari berdasarkan nama branch, kota (regency), atau provinsi" />
+          </div>
+        </div>
+
+        <div>
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Contoh Request</p>
+          <CodeBlock lang="bash" code={`curl -X GET "${BASE_URL}/api/sso/branches" \\
+  -H "X-App-Token: your-app-token-here"
+
+# Dengan pencarian
+curl -X GET "${BASE_URL}/api/sso/branches?search=jakarta" \\
+  -H "X-App-Token: your-app-token-here"`} />
+        </div>
+
+        <div>
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Response Sukses <span className="text-emerald-500 font-mono">200</span></p>
+          <CodeBlock code={`{
+  "data": [
+    {
+      "id": "66384",
+      "name": "RS Puri Indah",
+      "parentBranchId": "0",
+      "address": "Jl. Puri Agung No.1, Jakarta Barat",
+      "regencyName": "Jakarta Barat",
+      "provinceName": "DKI Jakarta",
+      "postalCode": 11610,
+      "phone": "02156789012",
+      "faxNumber": null,
+      "kluCode": null,
+      "syncedAt": "2026-06-29T08:00:00.000Z"
+    }
+  ],
+  "total": 96
+}`} />
+        </div>
+
+        <div>
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Keterangan Field</p>
+          <div className="border border-slate-100 rounded-lg overflow-hidden">
+            <Field name="id" type="string" desc="ID branch dari Talenta (integer dalam bentuk string)" />
+            <Field name="name" type="string" desc="Nama cabang / unit" />
+            <Field name="parentBranchId" type="string | null" desc="ID branch induk. Nilai '0' berarti branch utama (tidak ada induk)" />
+            <Field name="regencyName" type="string | null" desc="Nama kota/kabupaten" />
+            <Field name="provinceName" type="string | null" desc="Nama provinsi" />
+            <Field name="postalCode" type="number | null" desc="Kode pos" />
+            <Field name="syncedAt" type="datetime" desc="Waktu terakhir data disinkronisasi dari Talenta" />
+          </div>
+        </div>
+      </Section>
+
+      {/* 5. Job Positions */}
+      <Section id="job-positions" icon={Briefcase} title="6. Master Jabatan" open={openSections.has("job-positions")} onToggle={() => toggle("job-positions")}>
+        <div className="flex items-center gap-3">
+          <Badge method="GET" />
+          <code className="text-sm font-mono text-slate-700 bg-slate-100 px-3 py-1 rounded">/api/sso/job-positions</code>
+        </div>
+        <p className="text-sm text-slate-600">
+          Mengambil daftar jabatan dari master data portal. Data disinkronisasi dari Talenta secara berkala.
+          Memerlukan permission <code className="font-mono bg-slate-100 px-1 rounded text-xs">GET_JOB_POSITIONS</code> pada App Token.
+        </p>
+
+        <div>
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Query Parameters</p>
+          <div className="border border-slate-100 rounded-lg overflow-hidden">
+            <Field name="search" type="string" desc="Cari berdasarkan nama jabatan" />
+            <Field name="branch_id" type="string" desc="Filter jabatan berdasarkan ID branch tertentu" />
+          </div>
+        </div>
+
+        <div>
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Contoh Request</p>
+          <CodeBlock lang="bash" code={`curl -X GET "${BASE_URL}/api/sso/job-positions" \\
+  -H "X-App-Token: your-app-token-here"
+
+# Filter per branch
+curl -X GET "${BASE_URL}/api/sso/job-positions?branch_id=66384" \\
+  -H "X-App-Token: your-app-token-here"
+
+# Pencarian nama jabatan
+curl -X GET "${BASE_URL}/api/sso/job-positions?search=dokter" \\
+  -H "X-App-Token: your-app-token-here"`} />
+        </div>
+
+        <div>
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Response Sukses <span className="text-emerald-500 font-mono">200</span></p>
+          <CodeBlock code={`{
+  "data": [
+    {
+      "id": "1042",
+      "name": "Dokter Umum",
+      "level": 3,
+      "description": null,
+      "parentJobId": "1001",
+      "branchId": "66384",
+      "syncedAt": "2026-06-29T08:00:00.000Z"
+    }
+  ],
+  "total": 415
+}`} />
+        </div>
+
+        <div>
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Keterangan Field</p>
+          <div className="border border-slate-100 rounded-lg overflow-hidden">
+            <Field name="id" type="string" desc="ID jabatan dari Talenta (integer dalam bentuk string). Nilai ini sama dengan jobPositionId pada data user" />
+            <Field name="name" type="string" desc="Nama jabatan" />
+            <Field name="level" type="number | null" desc="Level/grade jabatan" />
+            <Field name="parentJobId" type="string | null" desc="ID jabatan induk (untuk struktur hierarki jabatan)" />
+            <Field name="branchId" type="string | null" desc="ID branch yang terkait dengan jabatan ini. Cocokkan dengan branch.id" />
+            <Field name="syncedAt" type="datetime" desc="Waktu terakhir data disinkronisasi dari Talenta" />
+          </div>
+        </div>
+
+        <div className="bg-blue-50 border border-blue-100 rounded-lg p-3">
+          <p className="text-xs font-semibold text-blue-700 mb-1">Tip: Join dengan data user</p>
+          <p className="text-xs text-blue-600">
+            Field <code className="font-mono">user.jobPositionId</code> dari endpoint <code className="font-mono">/api/sso/users</code> berisi ID yang sama dengan
+            field <code className="font-mono">jobPosition.id</code> di sini, sehingga dapat langsung di-join tanpa transformasi.
+          </p>
+        </div>
+      </Section>
+
+      {/* 6. Companies */}
+      <Section id="companies" icon={Building2} title="7. Master Perusahaan" open={openSections.has("companies")} onToggle={() => toggle("companies")}>
+        <div className="flex items-center gap-3">
+          <Badge method="GET" />
+          <code className="text-sm font-mono text-slate-700 bg-slate-100 px-3 py-1 rounded">/api/sso/companies</code>
+        </div>
+        <p className="text-sm text-slate-600">
+          Mengambil daftar perusahaan dalam jaringan Euromedica. Data dikelola secara manual oleh administrator portal.
+          Memerlukan permission <code className="font-mono bg-slate-100 px-1 rounded text-xs">GET_COMPANIES</code> pada App Token.
+          Hanya perusahaan dengan status <code className="font-mono bg-slate-100 px-1 rounded text-xs">active</code> yang dikembalikan.
+        </p>
+
+        <div>
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Contoh Request</p>
+          <CodeBlock lang="bash" code={`curl -X GET "${BASE_URL}/api/sso/companies" \\
+  -H "X-App-Token: your-app-token-here"`} />
+        </div>
+
+        <div>
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Response Sukses <span className="text-emerald-500 font-mono">200</span></p>
+          <CodeBlock code={`{
+  "data": [
+    {
+      "id": "clxyz_company_1",
+      "code": "RSPURI",
+      "name": "RS Puri Indah",
+      "order": 1,
+      "status": "active"
+    },
+    {
+      "id": "clxyz_company_2",
+      "code": "EUROMEDICA",
+      "name": "PT Euromedica Internasional",
+      "order": 2,
+      "status": "active"
+    }
+  ],
+  "total": 8
+}`} />
+        </div>
+
+        <div>
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Keterangan Field</p>
+          <div className="border border-slate-100 rounded-lg overflow-hidden">
+            <Field name="id" type="string" desc="ID perusahaan (CUID, digunakan sebagai referensi internal)" />
+            <Field name="code" type="string" desc="Kode unik perusahaan dalam huruf kapital, contoh: EUROMEDICA, RSPURI" />
+            <Field name="name" type="string" desc="Nama lengkap perusahaan" />
+            <Field name="order" type="number" desc="Urutan tampil (ascending)" />
+            <Field name="status" type="string" desc="Status perusahaan. Endpoint ini hanya mengembalikan yang berstatus 'active'" />
+          </div>
         </div>
       </Section>
 

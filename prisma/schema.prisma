@@ -481,10 +481,50 @@ model ApiLog {
   appToken AppToken? @relation(fields: [appTokenId], references: [id])
 }
 
+// ===================== MASTER DATA (Talenta sync) =====================
+
+model Branch {
+  id             String   @id  // Talenta branch_id sebagai string
+  name           String
+  parentBranchId String?
+  address        String?
+  regencyName    String?
+  provinceName   String?
+  postalCode     Int?
+  phone          String?
+  faxNumber      String?
+  kluCode        String?
+  syncedAt       DateTime @default(now())
+}
+
+model JobPosition {
+  id          String   @id  // Talenta job_position_id sebagai string
+  name        String
+  level       Int?
+  description String?
+  parentJobId String?
+  branchId    String?
+  syncedAt    DateTime @default(now())
+}
+
+// ===================== MASTER DATA (manual CRUD) =====================
+
+model Company {
+  id        String    @id @default(cuid())
+  code      String    @unique
+  name      String
+  order     Int       @default(0)
+  status    String    @default("active")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime?
+  deletedAt DateTime?
+}
+
 // ===================== SYNC LOG =====================
 
 model SyncLog {
   id          String    @id @default(cuid())
+  type        String    @default("user") // "user" | "branch" | "job_position"
   trigger     String    // "manual" | "scheduled"
   status      String    // "running" | "success" | "error"
   processed   Int?

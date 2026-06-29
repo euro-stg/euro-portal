@@ -171,7 +171,7 @@ export default function ListUserPage() {
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
 
   // Sync log
-  type SyncLog = { id: string; trigger: string; status: string; processed: number | null; created: number | null; updated: number | null; error: string | null; startedAt: string; finishedAt: string | null };
+  type SyncLog = { id: string; type: string; trigger: string; status: string; processed: number | null; created: number | null; updated: number | null; error: string | null; startedAt: string; finishedAt: string | null };
   const [syncLogs, setSyncLogs] = useState<SyncLog[]>([]);
   const [logOpen, setLogOpen] = useState(false);
 
@@ -430,11 +430,8 @@ export default function ListUserPage() {
   };
 
   const fetchSyncLogs = async () => {
-    const res = await fetch("/api/talenta/sync-logs");
-    if (res.ok) {
-      const json = await res.json();
-      setSyncLogs(json.data ?? []);
-    }
+    const res = await fetch("/api/talenta/sync-logs?type=user");
+    if (res.ok) { const json = await res.json(); setSyncLogs(json.data ?? []); }
   };
 
   const handleSyncTalenta = async () => {
@@ -866,10 +863,10 @@ export default function ListUserPage() {
       )}
 
       {/* Sync Log Modal */}
-      <Modal open={logOpen} title="Log Sync Talenta" onClose={() => setLogOpen(false)} boxClassName="w-11/12 max-w-2xl">
+      <Modal open={logOpen} title="Log Sync User" onClose={() => setLogOpen(false)} boxClassName="w-11/12 max-w-2xl">
         <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
           {syncLogs.length === 0 ? (
-            <p className="text-sm text-slate-400 text-center py-8">Belum ada log sync.</p>
+            <p className="text-sm text-slate-400 text-center py-8">Belum ada log sync user.</p>
           ) : syncLogs.map((log) => (
             <div key={log.id} className="flex items-start gap-3 p-3 rounded-lg border border-slate-100 bg-slate-50">
               <div className="mt-0.5 shrink-0">

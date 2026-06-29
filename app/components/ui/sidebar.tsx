@@ -9,6 +9,8 @@ import {
   Settings, Database, Shield, Package, X, Bell, Layers,
   FileText, Ticket, Workflow, BookOpen, FolderKanban, ArrowLeft,
   Settings2, Key, Link2,
+  GitBranch, Briefcase, Building2, ShieldCheck,
+  Code2, Scale, FolderOpen, BarChart2, Globe, Lock, Cpu,
   type LucideIcon,
 } from "lucide-react";
 import type { SidebarModule } from "@/types/sidebar";
@@ -23,6 +25,12 @@ const iconRegistry: Record<string, LucideIcon> = {
   LayoutDashboard, Users, Tag, Shield, Package, Settings, Settings2,
   Database, Bell, Layers, FileText, Ticket, Workflow, BookOpen, FolderKanban,
   Key, Link2,
+  // Master data
+  GitBranch, Briefcase, Building2,
+  // Integrasi / SSO
+  ShieldCheck,
+  // Apps & misc
+  Code2, Scale, FolderOpen, BarChart2, Globe, Lock, Cpu,
 };
 
 const iconColorRegistry: Record<string, string> = {
@@ -43,12 +51,27 @@ const iconColorRegistry: Record<string, string> = {
   FolderKanban:    "text-pink-500",
   Key:             "text-amber-500",
   Link2:           "text-teal-500",
+  // Master data
+  GitBranch:       "text-teal-500",
+  Briefcase:       "text-indigo-500",
+  Building2:       "text-emerald-500",
+  // Integrasi / SSO
+  ShieldCheck:     "text-violet-500",
+  // Apps & misc
+  Code2:           "text-blue-500",
+  Scale:           "text-orange-500",
+  FolderOpen:      "text-amber-500",
+  BarChart2:       "text-cyan-500",
+  Globe:           "text-sky-500",
+  Lock:            "text-rose-500",
+  Cpu:             "text-slate-500",
 };
 
 const groupColorRegistry: Record<string, string> = {
   "Data Master": "text-cyan-500",
   "Pengaturan":  "text-slate-400",
-  "Approval":    "text-violet-500",
+  "Integrasi":   "text-violet-500",
+  "Approval":    "text-amber-500",
   "Transaksi":   "text-blue-500",
 };
 

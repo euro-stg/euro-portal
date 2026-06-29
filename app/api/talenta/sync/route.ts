@@ -247,7 +247,7 @@ export async function POST(req: NextRequest) {
   const trigger = isScheduled ? "scheduled" : "manual";
 
   const log = await prisma.syncLog.create({
-    data: { trigger, status: "running" },
+    data: { type: "user", trigger, status: "running" },
   });
 
   try {
