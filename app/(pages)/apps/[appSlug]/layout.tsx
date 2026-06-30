@@ -88,6 +88,7 @@ export default async function AppLayout({
       user={{ name: dbUser.name, image: dbUser.image, role: portalRole }}
       modules={modules}
       backHref="/"
+      appHref={appPath}
       appName={appModule.name}
       nested
     >

@@ -60,6 +60,10 @@ model User {
   ssoSessions          SsoSession[]          @relation("SsoSessionUser")
   ssoRedirectTokens    SsoRedirectToken[]    @relation("SsoRedirectUser")
   passwordResetTokens  PasswordResetToken[]
+  ssdLetters           SsdLetter[]           @relation("SsdRequester")
+  ssdApprovalSubmitted SsdApproval[]         @relation("SsdApprovalSubmitter")
+  ssdApprovalActions   SsdApprovalStep[]     @relation("SsdApprovalActor")
+  ssdActivities        SsdActivity[]         @relation("SsdActivityActor")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -518,6 +522,8 @@ model Company {
   createdAt DateTime  @default(now())
   updatedAt DateTime?
   deletedAt DateTime?
+
+  ssdLetters SsdLetter[]
 }
 
 // ===================== SYNC LOG =====================
@@ -535,8 +541,6 @@ model SyncLog {
   finishedAt  DateTime?
 }
 
-// ===================== PASSWORD RESET =====================
-
 model PasswordResetToken {
   id        String    @id @default(cuid())
   userId    String
@@ -547,6 +551,179 @@ model PasswordResetToken {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
+
+// ===================== SYSTEM CONFIG =====================
+
+model SystemConfig {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+}
+
+// ===================== SSD - SENTRALISASI SURAT DOKUMEN =====================
+
+model SsdCategory {
+  id        String    @id @default(cuid())
+  code      String    @unique
+  name      String
+  hasDraft  Boolean   @default(false)
+  order     Int       @default(0)
+  status    String    @default("active")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime?
+  deletedAt DateTime?
+
+  letters SsdLetter[]
+}
+
+model SsdDepartment {
+  id        String    @id @default(cuid())
+  code      String    @unique
+  name      String
+  order     Int       @default(0)
+  status    String    @default("active")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime?
+  deletedAt DateTime?
+
+  letters SsdLetter[]
+}
+
+model SsdCounter {
+  id           String   @id @default(cuid())
+  categoryCode String
+  companyCode  String
+  year         Int
+  seq          Int      @default(0)
+  updatedAt    DateTime @updatedAt
+
+  @@unique([categoryCode, companyCode, year])
+}
+
+// Status: DRAFT → SUBMITTED → APPROVED (nomor surat ditetapkan) → DONE (file final diupload) | REJECTED
+model SsdLetter {
+  id           String    @id @default(cuid())
+  letterNo     String?   @unique
+  title        String
+  content      String    @db.Text
+  categoryId   String
+  departmentId String
+  companyId    String
+  requestedBy  String
+  fileDraft    String?   // Nextcloud path — untuk kategori dengan hasDraft=true
+  fileFinal    String?   // Nextcloud path — setelah approved
+  status       String    @default("DRAFT")
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime?
+  deletedAt    DateTime?
+
+  category   SsdCategory   @relation(fields: [categoryId], references: [id])
+  department SsdDepartment @relation(fields: [departmentId], references: [id])
+  company    Company       @relation(fields: [companyId], references: [id])
+  requester  User          @relation("SsdRequester", fields: [requestedBy], references: [id])
+  approval   SsdApproval?
+  activities SsdActivity[]
+}
+
+model SsdApprovalTemplate {
+  id        String    @id @default(cuid())
+  name      String
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime?
+  deletedAt DateTime?
+
+  steps     SsdApprovalTemplateStep[]
+  approvals SsdApproval[]
+}
+
+model SsdApprovalTemplateStep {
+  id               String  @id @default(cuid())
+  templateId       String
+  step             Int
+  label            String
+  jobPositionId    String?
+  jobPositionName  String?
+  organizationId   String?
+  organizationName String?
+  branchId         String?
+  branchName       String?
+
+  template SsdApprovalTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, step])
+}
+
+model SsdApproval {
+  id          String    @id @default(cuid())
+  letterId    String    @unique
+  title       String
+  submittedBy String
+  currentStep Int       @default(1)
+  status      String    @default("PENDING")
+  templateId  String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime?
+
+  letter    SsdLetter           @relation(fields: [letterId], references: [id], onDelete: Cascade)
+  submitter User                @relation("SsdApprovalSubmitter", fields: [submittedBy], references: [id])
+  template  SsdApprovalTemplate @relation(fields: [templateId], references: [id])
+  steps     SsdApprovalStep[]
+}
+
+model SsdApprovalStep {
+  id               String    @id @default(cuid())
+  approvalId       String
+  step             Int
+  label            String
+  jobPositionId    String?
+  jobPositionName  String?
+  organizationId   String?
+  organizationName String?
+  branchId         String?
+  branchName       String?
+  status           String    @default("PENDING")
+  actorId          String?
+  note             String?   @db.Text
+  actedAt          DateTime?
+  createdAt        DateTime  @default(now())
+
+  approval SsdApproval @relation(fields: [approvalId], references: [id], onDelete: Cascade)
+  actor    User?       @relation("SsdApprovalActor", fields: [actorId], references: [id])
+
+  @@unique([approvalId, step])
+}
+
+model SsdActivity {
+  id        String   @id @default(cuid())
+  letterId  String
+  userId    String
+  action    String
+  note      String?  @db.Text
+  createdAt DateTime @default(now())
+
+  letter SsdLetter @relation(fields: [letterId], references: [id], onDelete: Cascade)
+  actor  User      @relation("SsdActivityActor", fields: [userId], references: [id])
+}
+
+// ===================== EMAIL LOG =====================
+
+model EmailLog {
+  id        String   @id @default(cuid())
+  to        String
+  subject   String
+  source    String   // ssd | sd | portal | system
+  status    String   // sent | failed
+  error     String?  @db.Text
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([status])
+  @@index([source])
+}
+
+// ===================== PASSWORD RESET & SSO REDIRECT =====================
 
 // Token redirect short-lived untuk SSO Option A (deep link dari portal)
 // Single-use: setelah divalidasi sekali langsung usedAt terisi

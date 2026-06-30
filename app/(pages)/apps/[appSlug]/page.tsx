@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { FileText, CheckCircle2, Clock, Loader2, ChevronRight, AlertCircle } from "lucide-react";
+import { FileText, CheckCircle2, Clock, Loader2, ChevronRight, AlertCircle, FileSignature, Send, XCircle } from "lucide-react";
 
 const STATUS_LABEL: Record<string, string> = {
   DRAFT: "Draft", SUBMITTED: "Diajukan", IT_REVIEW: "Review IT",
@@ -32,22 +32,77 @@ type RecentItem = {
 };
 
 type Stats = { total: number; done: number; inProgress: number; recent: RecentItem[] };
+type SsdStats = { total: number; draft: number; submitted: number; approved: number; rejected: number; done: number; mine: number };
 
 export default function AppDashboardPage() {
   const { appSlug } = useParams<{ appSlug: string }>();
   const router = useRouter();
 
   const [stats, setStats] = useState<Stats | null>(null);
+  const [ssdStats, setSsdStats] = useState<SsdStats | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (appSlug !== "software-development") { setLoading(false); return; }
-    fetch("/api/sd/stats")
-      .then((r) => r.json())
-      .then((j) => setStats(j))
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    if (appSlug === "software-development") {
+      fetch("/api/sd/stats")
+        .then((r) => r.json())
+        .then((j) => setStats(j))
+        .catch(() => {})
+        .finally(() => setLoading(false));
+    } else if (appSlug === "ssd") {
+      fetch("/api/ssd/stats")
+        .then((r) => r.json())
+        .then((j) => setSsdStats(j))
+        .catch(() => {})
+        .finally(() => setLoading(false));
+    } else {
+      setLoading(false);
+    }
   }, [appSlug]);
+
+  if (appSlug === "ssd") {
+    return (
+      <div>
+        {loading ? (
+          <div className="flex items-center justify-center py-16 text-slate-400">
+            <Loader2 className="w-6 h-6 animate-spin mr-2" /> Memuat...
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+              {[
+                { label: "Total Surat", value: ssdStats?.total ?? 0, icon: FileSignature, color: "blue" },
+                { label: "Menunggu Approval", value: ssdStats?.submitted ?? 0, icon: Send, color: "amber" },
+                { label: "Disetujui", value: ssdStats?.approved ?? 0, icon: CheckCircle2, color: "emerald" },
+                { label: "Ditolak", value: ssdStats?.rejected ?? 0, icon: XCircle, color: "red" },
+              ].map(({ label, value, icon: Icon, color }) => (
+                <div key={label} className="bg-white rounded-xl border border-slate-200 p-5 flex items-center gap-4">
+                  <div className={`w-11 h-11 rounded-xl bg-${color}-50 flex items-center justify-center shrink-0`}>
+                    <Icon className={`w-5 h-5 text-${color}-600`} />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-slate-800">{value}</p>
+                    <p className="text-xs text-slate-400 mt-0.5">{label}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="bg-white rounded-xl border border-slate-200 p-6 text-center">
+              <FileSignature className="w-8 h-8 text-slate-300 mx-auto mb-3" />
+              <p className="font-semibold text-slate-600">Sentralisasi Surat Dokumen</p>
+              <p className="text-sm text-slate-400 mt-1">Gunakan menu di sidebar untuk membuat dan mengelola surat.</p>
+              <button
+                onClick={() => router.push(`/apps/${appSlug}/letter`)}
+                className="mt-4 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium rounded-lg transition-colors"
+              >
+                Lihat Daftar Surat
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
 
   if (appSlug !== "software-development") {
     return (

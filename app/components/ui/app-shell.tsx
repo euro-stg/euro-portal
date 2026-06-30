@@ -11,11 +11,12 @@ type AppShellProps = {
   user?: { name?: string | null; image?: string | null; role?: string | null };
   modules?: SidebarModule[];
   backHref?: string;
+  appHref?: string;
   appName?: string;
   nested?: boolean;
 };
 
-export function AppShell({ children, user, modules = [], backHref, appName, nested = false }: AppShellProps) {
+export function AppShell({ children, user, modules = [], backHref, appHref, appName, nested = false }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(true);
 
@@ -50,6 +51,7 @@ export function AppShell({ children, user, modules = [], backHref, appName, nest
       user={user}
       modules={modules}
       backHref={backHref}
+      appHref={appHref}
       appName={appName}
     />
   );

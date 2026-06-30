@@ -13,8 +13,9 @@ type Submitter = {
 
 type PendingItem = {
   approvalId: string;
-  sdRequestId: string;
-  requestNo: string;
+  sdRequestId?: string;
+  letterId?: string;
+  requestNo?: string;
   title: string;
   submittedBy: Submitter;
   currentStep: number;
@@ -23,6 +24,8 @@ type PendingItem = {
   stepJobPositionName: string | null;
   stepOrganizationName: string | null;
   stepBranchName: string | null;
+  category?: { code: string; name: string };
+  company?: { code: string; name: string };
   createdAt: string;
 };
 
@@ -34,11 +37,14 @@ export default function ApprovalInboxPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const isSsd = appSlug === "ssd";
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/sd/approval/pending");
+      const api = isSsd ? "/api/ssd/approval/pending?detail=true" : "/api/sd/approval/pending";
+      const res = await fetch(api);
       const json = await res.json();
       if (!res.ok) throw new Error(json.message ?? "Gagal memuat");
       setItems(json.data ?? []);
@@ -47,7 +53,7 @@ export default function ApprovalInboxPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isSsd]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -95,7 +101,7 @@ export default function ApprovalInboxPage() {
           {items.map((item) => (
             <button
               key={item.approvalId}
-              onClick={() => router.push(`/apps/${appSlug}/requests/${item.sdRequestId}`)}
+              onClick={() => router.push(isSsd ? `/apps/${appSlug}/letter/${item.letterId}` : `/apps/${appSlug}/requests/${item.sdRequestId}`)}
               className="w-full bg-white rounded-xl border border-amber-100 p-4 hover:border-amber-300 hover:shadow-sm transition-all text-left group"
             >
               <div className="flex items-start justify-between gap-3">
@@ -105,7 +111,9 @@ export default function ApprovalInboxPage() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <span className="text-xs font-mono text-slate-400">{item.requestNo}</span>
+                      {item.requestNo && <span className="text-xs font-mono text-slate-400">{item.requestNo}</span>}
+                      {item.category && <span className="text-xs bg-violet-50 text-violet-600 px-1.5 py-0.5 rounded font-mono">{item.category.code}</span>}
+                      {item.company && <span className="text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">{item.company.code}</span>}
                       <span className="text-xs px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 font-medium">
                         Step {item.currentStep} / {item.totalSteps}
                       </span>

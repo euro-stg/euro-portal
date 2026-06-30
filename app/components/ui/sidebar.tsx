@@ -11,6 +11,7 @@ import {
   Settings2, Key, Link2,
   GitBranch, Briefcase, Building2, ShieldCheck,
   Code2, Scale, FolderOpen, BarChart2, Globe, Lock, Cpu,
+  FileSignature, Send, CheckSquare, PenLine, ListChecks, Mail,
   type LucideIcon,
 } from "lucide-react";
 import type { SidebarModule } from "@/types/sidebar";
@@ -31,6 +32,10 @@ const iconRegistry: Record<string, LucideIcon> = {
   ShieldCheck,
   // Apps & misc
   Code2, Scale, FolderOpen, BarChart2, Globe, Lock, Cpu,
+  // SSD
+  FileSignature, Send, CheckSquare, PenLine, ListChecks,
+  // Pengaturan
+  Mail,
 };
 
 const iconColorRegistry: Record<string, string> = {
@@ -65,6 +70,14 @@ const iconColorRegistry: Record<string, string> = {
   Globe:           "text-sky-500",
   Lock:            "text-rose-500",
   Cpu:             "text-slate-500",
+  // SSD
+  FileSignature:   "text-violet-500",
+  Send:            "text-blue-500",
+  CheckSquare:     "text-emerald-500",
+  PenLine:         "text-indigo-500",
+  ListChecks:      "text-teal-500",
+  // Pengaturan
+  Mail:            "text-violet-500",
 };
 
 const groupColorRegistry: Record<string, string> = {
@@ -89,6 +102,7 @@ const Sidebar = ({
   user,
   modules = [],
   backHref,
+  appHref,
   appName,
 }: {
   open: boolean;
@@ -96,6 +110,7 @@ const Sidebar = ({
   user?: SidebarUser;
   modules?: SidebarModule[];
   backHref?: string;
+  appHref?: string;
   appName?: string;
 }) => {
   const pathname = usePathname();
@@ -106,7 +121,9 @@ const Sidebar = ({
   useEffect(() => {
     const approvalModule = modules.find((m) => m.path.endsWith("/approval"));
     if (!approvalModule) return;
-    fetch("/api/sd/approval/pending")
+    const isSsd = approvalModule.path.includes("/ssd/");
+    const pendingApi = isSsd ? "/api/ssd/approval/pending" : "/api/sd/approval/pending";
+    fetch(pendingApi)
       .then((r) => r.json())
       .then((j) => { if (typeof j.total === "number") setApprovalBadge(j.total); })
       .catch(() => {});
@@ -225,12 +242,28 @@ const Sidebar = ({
           <Link
             href={backHref}
             onClick={onClose}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition-all mb-3 text-sm border border-slate-200"
+            className="flex items-center gap-2 px-3 py-2 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition-all mb-2 text-sm border border-slate-200"
           >
             <ArrowLeft className="w-4 h-4" />
             <span>Kembali ke Portal</span>
           </Link>
         )}
+        {appHref && !modules.some((m) => m.path === appHref) && (() => {
+          const active = pathname === appHref;
+          return (
+            <Link
+              href={appHref}
+              onClick={onClose}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 mb-2 ${
+                active ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+              }`}
+            >
+              <LayoutDashboard className={`w-4 h-4 flex-shrink-0 ${active ? "text-blue-600" : "text-blue-500"}`} />
+              <span className="flex-1">Beranda</span>
+              {active && <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />}
+            </Link>
+          );
+        })()}
 
         {/* Dashboard Portal — selalu tampil untuk semua user */}
         {!backHref && (() => {
@@ -244,7 +277,7 @@ const Sidebar = ({
               }`}
             >
               <LayoutDashboard className={`w-4 h-4 flex-shrink-0 ${active ? "text-blue-600" : "text-blue-500"}`} />
-              <span className="flex-1">Beranda Portal</span>
+              <span className="flex-1">Beranda</span>
               {active && <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />}
             </Link>
           );

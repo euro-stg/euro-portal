@@ -56,3 +56,6 @@ AGENTS.md
 Dockerfile*
 docker-compose*
 deploy.sh
+
+# starter sql — sensitif, simpan lokal saja
+/script/starter.sql
