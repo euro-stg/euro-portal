@@ -12,6 +12,7 @@ export async function GET() {
       id: true,
       jobPositionId: true,
       organizationId: true,
+      organizationName: true,
       branchId: true,
       userRoles: {
         select: {
@@ -31,6 +32,7 @@ export async function GET() {
     id: user.id,
     jobPositionId: user.jobPositionId,
     organizationId: user.organizationId,
+    organizationName: user.organizationName,
     branchId: user.branchId,
     role: portalRole,
     hasAnyAppRole,

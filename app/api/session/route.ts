@@ -18,6 +18,7 @@ export async function GET() {
       age: true,
       status: true,
       phone: true,
+      mobilePhone: true,
       email: true,
       organizationName: true,
       jobPositionName: true,

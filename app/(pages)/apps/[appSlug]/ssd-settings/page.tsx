@@ -310,22 +310,41 @@ function TemplateTab({ showToast }: { showToast: (v: "success" | "error", m: str
   const [modal, setModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [name, setName] = useState("");
-  const [steps, setSteps] = useState<Step[]>([{ step: 1, label: "" }]);
+  const [steps, setSteps] = useState<Step[]>([{ step: 1, label: "", jobPositionId: "", organizationId: "", branchId: "" }]);
+
+  const [orgs, setOrgs] = useState<{ id: string; name: string }[]>([]);
+  const [positions, setPositions] = useState<{ id: string; name: string }[]>([]);
+  const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
 
   const load = async () => {
     setLoading(true);
-    const res = await fetch("/api/ssd/approval-template");
-    const json = await res.json();
-    setData(json.data ?? []);
+    const [tRes, pRes] = await Promise.all([
+      fetch("/api/ssd/approval-template"),
+      fetch("/api/user/positions"),
+    ]);
+    const [tJson, pJson] = await Promise.all([tRes.json(), pRes.json()]);
+    setData(tJson.data ?? []);
+    setOrgs(pJson.organizations ?? []);
+    setPositions(pJson.positions ?? []);
+    setBranches(pJson.branches ?? []);
     setLoading(false);
   };
 
   useEffect(() => { void load(); }, []);
 
-  const addStep = () => setSteps((s) => [...s, { step: s.length + 1, label: "" }]);
+  const addStep = () => setSteps((s) => [...s, { step: s.length + 1, label: "", jobPositionId: "", organizationId: "", branchId: "" }]);
   const removeStep = (i: number) => setSteps((s) => s.filter((_, idx) => idx !== i).map((st, idx) => ({ ...st, step: idx + 1 })));
   const updateStep = (i: number, field: keyof Step, val: string) =>
-    setSteps((s) => s.map((st, idx) => idx === i ? { ...st, [field]: val } : st));
+    setSteps((s) =>
+      s.map((st, idx) => {
+        if (idx !== i) return st;
+        const updated = { ...st, [field]: val };
+        if (field === "jobPositionId") updated.jobPositionName = positions.find((p) => p.id === val)?.name ?? "";
+        if (field === "organizationId") updated.organizationName = orgs.find((o) => o.id === val)?.name ?? "";
+        if (field === "branchId") updated.branchName = branches.find((b) => b.id === val)?.name ?? "";
+        return updated;
+      })
+    );
 
   const handleCreate = async () => {
     if (!name.trim()) { showToast("error", "Nama template wajib diisi"); return; }
@@ -339,7 +358,7 @@ function TemplateTab({ showToast }: { showToast: (v: "success" | "error", m: str
     const json = await res.json();
     if (!res.ok) showToast("error", json.message || "Gagal"); else {
       showToast("success", "Template disimpan"); setModal(false);
-      setName(""); setSteps([{ step: 1, label: "" }]); void load();
+      setName(""); setSteps([{ step: 1, label: "", jobPositionId: "", organizationId: "", branchId: "" }]); void load();
     }
     setSaving(false);
   };
@@ -415,7 +434,7 @@ function TemplateTab({ showToast }: { showToast: (v: "success" | "error", m: str
         </div>
       )}
 
-      <Modal open={modal} title="Template Approval Baru" onClose={() => { setModal(false); setName(""); setSteps([{ step: 1, label: "" }]); }} boxClassName="max-w-lg">
+      <Modal open={modal} title="Template Approval Baru" onClose={() => { setModal(false); setName(""); setSteps([{ step: 1, label: "", jobPositionId: "", organizationId: "", branchId: "" }]); }} boxClassName="max-w-lg">
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">Nama Template <span className="text-red-500">*</span></label>
@@ -439,11 +458,31 @@ function TemplateTab({ showToast }: { showToast: (v: "success" | "error", m: str
                     <input className="w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-400"
                       placeholder="Label step..." value={step.label} onChange={(e) => updateStep(i, "label", e.target.value)} />
                     <div className="grid grid-cols-2 gap-2">
-                      <input className="border border-slate-200 rounded-md px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-400"
-                        placeholder="Nama jabatan (opsional)" value={step.jobPositionName ?? ""} onChange={(e) => updateStep(i, "jobPositionName", e.target.value)} />
-                      <input className="border border-slate-200 rounded-md px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-400"
-                        placeholder="Nama organisasi (opsional)" value={step.organizationName ?? ""} onChange={(e) => updateStep(i, "organizationName", e.target.value)} />
+                      <select
+                        className="border border-slate-200 rounded-md px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-400 bg-white"
+                        value={step.jobPositionId ?? ""}
+                        onChange={(e) => updateStep(i, "jobPositionId", e.target.value)}
+                      >
+                        <option value="">Semua jabatan</option>
+                        {positions.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      </select>
+                      <select
+                        className="border border-slate-200 rounded-md px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-400 bg-white"
+                        value={step.organizationId ?? ""}
+                        onChange={(e) => updateStep(i, "organizationId", e.target.value)}
+                      >
+                        <option value="">Semua departemen</option>
+                        {orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+                      </select>
                     </div>
+                    <select
+                      className="w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-400 bg-white"
+                      value={step.branchId ?? ""}
+                      onChange={(e) => updateStep(i, "branchId", e.target.value)}
+                    >
+                      <option value="">Semua cabang</option>
+                      {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                    </select>
                   </div>
                   {steps.length > 1 && (
                     <button onClick={() => removeStep(i)} className="p-1 text-slate-400 hover:text-red-500 mt-1">
@@ -459,7 +498,7 @@ function TemplateTab({ showToast }: { showToast: (v: "success" | "error", m: str
             <Button onClick={() => void handleCreate()} disabled={saving} className="flex-1 bg-violet-600 hover:bg-violet-700 text-white">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Simpan Template"}
             </Button>
-            <Button variant="outline" onClick={() => { setModal(false); setName(""); setSteps([{ step: 1, label: "" }]); }}>Batal</Button>
+            <Button variant="outline" onClick={() => { setModal(false); setName(""); setSteps([{ step: 1, label: "", jobPositionId: "", organizationId: "", branchId: "" }]); }}>Batal</Button>
           </div>
         </div>
       </Modal>

@@ -14,8 +14,8 @@ type UserOption = { id: string; name: string | null; employeeId: string; jobPosi
 const inputCls = "w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-400 bg-white transition-colors";
 const labelCls = "block text-sm font-medium text-slate-700 mb-1.5";
 
-export default function NewLetterPage() {
-  const { appSlug } = useParams<{ appSlug: string }>();
+export default function EditLetterPage() {
+  const { appSlug, id } = useParams<{ appSlug: string; id: string }>();
   const router = useRouter();
 
   const [categories,  setCategories]  = useState<Category[]>([]);
@@ -31,23 +31,40 @@ export default function NewLetterPage() {
   const [form, setForm] = useState({
     title: "", tujuan: "", categoryId: "", departmentId: "", companyId: "", picId: "", fileDraft: "",
   });
-  const [draftFile, setDraftFile] = useState<File | null>(null);
+  const [draftFile,     setDraftFile]     = useState<File | null>(null);
+  const [existingDraft, setExistingDraft] = useState<string | null>(null);
   const [picSearch, setPicSearch] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     Promise.all([
+      fetch(`/api/ssd/letter/${id}`).then((r) => r.json()),
       fetch("/api/ssd/category").then((r) => r.json()),
       fetch("/api/ssd/department").then((r) => r.json()),
       fetch("/api/company").then((r) => r.json()),
       fetch("/api/user/list?all=true&status=active").then((r) => r.json()),
-    ]).then(([cat, dept, comp, usr]) => {
+    ]).then(([letter, cat, dept, comp, usr]) => {
+      if (!letter.data || letter.data.status !== "DRAFT") {
+        router.replace(`/apps/${appSlug}/letter/${id}`);
+        return;
+      }
+      const l = letter.data;
+      setForm({
+        title:        l.title ?? "",
+        tujuan:       l.tujuan ?? "",
+        categoryId:   l.category?.id ?? "",
+        departmentId: l.department?.id ?? "",
+        companyId:    l.company?.id ?? "",
+        picId:        l.pic?.id ?? "",
+        fileDraft:    l.fileDraft ?? "",
+      });
+      setExistingDraft(l.fileDraft ?? null);
       setCategories(cat.data ?? []);
       setDepartments(dept.data ?? []);
       setCompanies((comp.data ?? []).filter((c: Company & { status: string }) => c.status === "active"));
       setUsers(usr.data ?? []);
     }).catch(() => {}).finally(() => setLoading(false));
-  }, []);
+  }, [id, appSlug, router]);
 
   const showToast = (variant: "success" | "error", message: string) => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -65,38 +82,7 @@ export default function NewLetterPage() {
       )
     : users;
 
-  const doSave = async (fileDraftPath: string) => {
-    const current = { ...form, fileDraft: fileDraftPath };
-    if (!current.title.trim())  { showToast("error", "Perihal wajib diisi"); return; }
-    if (!current.categoryId)    { showToast("error", "Pilih kategori"); return; }
-    if (!current.departmentId)  { showToast("error", "Pilih departemen"); return; }
-    if (!current.companyId)     { showToast("error", "Pilih perusahaan"); return; }
-    setSubmitting(true);
-    try {
-      const res = await fetch("/api/ssd/letter", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: current.title,
-          tujuan: current.tujuan || null,
-          picId: current.picId || null,
-          categoryId: current.categoryId,
-          departmentId: current.departmentId,
-          companyId: current.companyId,
-          fileDraft: fileDraftPath || null,
-        }),
-      });
-      const json = await res.json();
-      if (!res.ok) { showToast("error", json.message || "Gagal membuat surat"); return; }
-      router.push(`/apps/${appSlug}/letter/${json.data.id}`);
-    } finally { setSubmitting(false); }
-  };
-
   const handleFileSelect = async (file: File) => {
-    if (!form.title.trim())   { showToast("error", "Isi Perihal terlebih dahulu"); return; }
-    if (!form.categoryId)     { showToast("error", "Pilih kategori terlebih dahulu"); return; }
-    if (!form.departmentId)   { showToast("error", "Pilih departemen terlebih dahulu"); return; }
-    if (!form.companyId)      { showToast("error", "Pilih perusahaan terlebih dahulu"); return; }
     if (file.size > 10 * 1024 * 1024) { showToast("error", "File maksimal 10MB"); return; }
     setDraftFile(file);
     setUploading(true);
@@ -107,14 +93,48 @@ export default function NewLetterPage() {
       const res = await fetch("/api/ssd/upload", { method: "POST", body: fd });
       const json = await res.json();
       if (!res.ok) { showToast("error", json.message || "Upload gagal"); setDraftFile(null); return; }
-      await doSave(json.path);
+      setForm((f) => ({ ...f, fileDraft: json.path }));
     } finally { setUploading(false); }
+  };
+
+  const handleRemoveFile = async () => {
+    const path = form.fileDraft;
+    setDraftFile(null);
+    setExistingDraft(null);
+    setForm((f) => ({ ...f, fileDraft: "" }));
+    if (fileRef.current) fileRef.current.value = "";
+    if (path) {
+      await fetch(`/api/ssd/file?path=${encodeURIComponent(path)}`, { method: "DELETE" }).catch(() => {});
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (selectedCategory?.hasDraft) { showToast("error", "Upload file draft terlebih dahulu"); return; }
-    await doSave("");
+    if (!form.title.trim())    { showToast("error", "Perihal wajib diisi"); return; }
+    if (!form.categoryId)      { showToast("error", "Pilih kategori"); return; }
+    if (!form.departmentId)    { showToast("error", "Pilih departemen"); return; }
+    if (!form.companyId)       { showToast("error", "Pilih perusahaan"); return; }
+    if (selectedCategory?.hasDraft && !form.fileDraft) { showToast("error", "Upload file draft terlebih dahulu"); return; }
+
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/ssd/letter/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title:        form.title,
+          tujuan:       form.tujuan || null,
+          picId:        form.picId || null,
+          categoryId:   form.categoryId,
+          departmentId: form.departmentId,
+          companyId:    form.companyId,
+          fileDraft:    form.fileDraft || null,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) { showToast("error", json.message || "Gagal menyimpan"); return; }
+      router.push(`/apps/${appSlug}/letter/${id}`);
+    } finally { setSubmitting(false); }
   };
 
   if (loading) {
@@ -136,7 +156,7 @@ export default function NewLetterPage() {
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
         <button
-          onClick={() => router.back()}
+          onClick={() => router.push(`/apps/${appSlug}/letter/${id}`)}
           className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
@@ -146,8 +166,8 @@ export default function NewLetterPage() {
             <FileSignature className="w-5 h-5 text-violet-600" />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-slate-800">Buat Surat Baru</h1>
-            <p className="text-xs text-slate-400">Isi formulir dan simpan sebagai draft</p>
+            <h1 className="text-lg font-bold text-slate-800">Edit Surat</h1>
+            <p className="text-xs text-slate-400">Hanya surat berstatus Draft yang bisa diedit</p>
           </div>
         </div>
       </div>
@@ -159,15 +179,19 @@ export default function NewLetterPage() {
           <div>
             <label className={labelCls}>Kategori Surat <span className="text-red-500">*</span></label>
             <select
-              className={inputCls}
+              className={`${inputCls} disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed`}
               value={form.categoryId}
-              onChange={(e) => setForm((f) => ({ ...f, categoryId: e.target.value, fileDraft: "" }))}
+              onChange={(e) => setForm((f) => ({ ...f, categoryId: e.target.value }))}
+              disabled={!!form.fileDraft}
             >
               <option value="">Pilih kategori...</option>
               {categories.map((c) => (
                 <option key={c.id} value={c.id}>{c.code} — {c.name}</option>
               ))}
             </select>
+            {!!form.fileDraft && (
+              <p className="mt-1 text-xs text-amber-600">Hapus file draft terlebih dahulu untuk mengganti kategori</p>
+            )}
           </div>
           <div>
             <label className={labelCls}>Perusahaan <span className="text-red-500">*</span></label>
@@ -268,7 +292,7 @@ export default function NewLetterPage() {
           </div>
         </div>
 
-        {/* File Draft — hanya jika kategori hasDraft */}
+        {/* File Draft */}
         {selectedCategory?.hasDraft && (
           <div>
             <label className={labelCls}>
@@ -290,7 +314,7 @@ export default function NewLetterPage() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => { setDraftFile(null); setForm((f) => ({ ...f, fileDraft: "" })); if (fileRef.current) fileRef.current.value = ""; }}
+                  onClick={() => void handleRemoveFile()}
                   className="p-1 text-green-600 hover:text-red-500 transition-colors"
                 >
                   <X className="w-4 h-4" />
@@ -318,9 +342,9 @@ export default function NewLetterPage() {
             className="bg-violet-600 hover:bg-violet-700 text-white flex items-center gap-2"
           >
             {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
-            {submitting ? "Menyimpan..." : "Simpan sebagai Draft"}
+            {submitting ? "Menyimpan..." : "Simpan Perubahan"}
           </Button>
-          <Button type="button" variant="outline" onClick={() => router.back()}>
+          <Button type="button" variant="outline" onClick={() => router.push(`/apps/${appSlug}/letter/${id}`)}>
             Batal
           </Button>
         </div>

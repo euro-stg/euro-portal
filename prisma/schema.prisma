@@ -61,6 +61,7 @@ model User {
   ssoRedirectTokens    SsoRedirectToken[]    @relation("SsoRedirectUser")
   passwordResetTokens  PasswordResetToken[]
   ssdLetters           SsdLetter[]           @relation("SsdRequester")
+  ssdPicLetters        SsdLetter[]           @relation("SsdPic")
   ssdApprovalSubmitted SsdApproval[]         @relation("SsdApprovalSubmitter")
   ssdApprovalActions   SsdApprovalStep[]     @relation("SsdApprovalActor")
   ssdActivities        SsdActivity[]         @relation("SsdActivityActor")
@@ -606,13 +607,14 @@ model SsdLetter {
   id           String    @id @default(cuid())
   letterNo     String?   @unique
   title        String
-  content      String    @db.Text
+  tujuan       String?
+  picId        String?
   categoryId   String
   departmentId String
   companyId    String
   requestedBy  String
-  fileDraft    String?   // Nextcloud path — untuk kategori dengan hasDraft=true
-  fileFinal    String?   // Nextcloud path — setelah approved
+  fileDraft    String?
+  fileFinal    String?
   status       String    @default("DRAFT")
   createdAt    DateTime  @default(now())
   updatedAt    DateTime?
@@ -622,6 +624,7 @@ model SsdLetter {
   department SsdDepartment @relation(fields: [departmentId], references: [id])
   company    Company       @relation(fields: [companyId], references: [id])
   requester  User          @relation("SsdRequester", fields: [requestedBy], references: [id])
+  pic        User?         @relation("SsdPic", fields: [picId], references: [id])
   approval   SsdApproval?
   activities SsdActivity[]
 }

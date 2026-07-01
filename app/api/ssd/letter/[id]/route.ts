@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import db from "@/lib/db/db";
+import { deleteFromNextcloud } from "@/lib/nextcloud";
 
 export async function GET(
   _req: Request,
@@ -18,6 +19,7 @@ export async function GET(
         department: true,
         company: true,
         requester: { select: { id: true, name: true, jobPositionName: true, organizationName: true, branchName: true } },
+        pic: { select: { id: true, name: true, jobPositionName: true } },
         approval: {
           include: {
             steps: { orderBy: { step: "asc" }, include: { actor: { select: { id: true, name: true } } } },
@@ -25,14 +27,37 @@ export async function GET(
           },
         },
         activities: {
-          orderBy: { createdAt: "desc" },
+          orderBy: { createdAt: "asc" },
           include: { actor: { select: { id: true, name: true } } },
         },
       },
     });
 
     if (!letter) return NextResponse.json({ message: "Tidak ditemukan" }, { status: 404 });
-    return NextResponse.json({ data: letter });
+
+    const me = await db.user.findUnique({
+      where: { id: session.user.id },
+      select: { jobPositionId: true, organizationId: true, branchId: true },
+    });
+
+    const activeStep = letter.approval?.steps.find(
+      (s) => s.step === letter.approval?.currentStep && s.status === "PENDING"
+    );
+
+    const isApprover =
+      !!me &&
+      !!activeStep &&
+      letter.approval?.status === "PENDING" &&
+      letter.requestedBy !== session.user.id &&
+      (!activeStep.jobPositionId || activeStep.jobPositionId === me.jobPositionId) &&
+      (!activeStep.organizationId || activeStep.organizationId === me.organizationId) &&
+      (!activeStep.branchId || activeStep.branchId === me.branchId);
+
+    return NextResponse.json({
+      data: letter,
+      isOwner: letter.requestedBy === session.user.id,
+      isApprover,
+    });
   } catch (err) {
     console.error(err);
     return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
@@ -54,8 +79,8 @@ export async function PATCH(
       return NextResponse.json({ message: "Hanya surat berstatus DRAFT yang bisa diedit" }, { status: 400 });
 
     const body = await request.json().catch(() => ({}));
-    const { title, content, categoryId, departmentId, companyId, fileDraft } = body as {
-      title?: string; content?: string;
+    const { title, tujuan, picId, categoryId, departmentId, companyId, fileDraft } = body as {
+      title?: string; tujuan?: string; picId?: string;
       categoryId?: string; departmentId?: string; companyId?: string;
       fileDraft?: string;
     };
@@ -63,11 +88,12 @@ export async function PATCH(
     const data = await db.ssdLetter.update({
       where: { id },
       data: {
-        ...(title       ? { title: title.trim() }     : {}),
-        ...(content     ? { content: content.trim() } : {}),
-        ...(categoryId  ? { categoryId }  : {}),
+        ...(title        ? { title: title.trim() }         : {}),
+        ...(tujuan !== undefined ? { tujuan: tujuan?.trim() || null } : {}),
+        ...(picId  !== undefined ? { picId: picId || null }          : {}),
+        ...(categoryId   ? { categoryId }   : {}),
         ...(departmentId ? { departmentId } : {}),
-        ...(companyId   ? { companyId }   : {}),
+        ...(companyId    ? { companyId }    : {}),
         ...(fileDraft !== undefined ? { fileDraft: fileDraft || null } : {}),
         updatedAt: new Date(),
       },
@@ -90,10 +116,11 @@ export async function DELETE(
     const { id } = await params;
     const letter = await db.ssdLetter.findUnique({ where: { id, deletedAt: null } });
     if (!letter) return NextResponse.json({ message: "Tidak ditemukan" }, { status: 404 });
-    if (!["DRAFT", "REJECTED"].includes(letter.status))
-      return NextResponse.json({ message: "Hanya surat DRAFT atau REJECTED yang bisa dihapus" }, { status: 400 });
+    if (letter.status !== "DRAFT")
+      return NextResponse.json({ message: "Hanya surat berstatus DRAFT yang bisa dihapus" }, { status: 400 });
 
     await db.ssdLetter.update({ where: { id }, data: { deletedAt: new Date() } });
+    if (letter.fileDraft) await deleteFromNextcloud(letter.fileDraft).catch(() => {});
     return NextResponse.json({ message: "Dihapus" });
   } catch (err) {
     console.error(err);

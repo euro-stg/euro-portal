@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { AppShell } from "@/components/ui/app-shell";
 import db from "@/lib/db/db";
+import { isSsdApprover } from "@/lib/ssd";
 import type { SidebarModule } from "@/types/sidebar";
 
 export default async function AppLayout({
@@ -80,6 +81,14 @@ export default async function AppLayout({
         },
       });
       modules = role?.modules.map((rm) => rm.module) ?? [];
+    }
+  }
+
+  // SSD: sembunyikan "Approval Masuk" untuk user yang tidak match template approval aktif
+  if (appSlug === "ssd" && portalRole !== "superadmin") {
+    const approver = await isSsdApprover(userId);
+    if (!approver) {
+      modules = modules.filter((m) => !m.path.includes("/approval"));
     }
   }
 

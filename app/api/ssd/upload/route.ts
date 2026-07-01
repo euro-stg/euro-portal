@@ -15,7 +15,11 @@ export async function POST(request: Request) {
 
     if (!file) return NextResponse.json({ message: "File tidak ditemukan" }, { status: 400 });
 
-    const ext = file.name.split(".").pop() ?? "bin";
+    const ALLOWED = ["pdf","doc","docx","jpg","jpeg","png","gif","webp"];
+    const ext = (file.name.split(".").pop() ?? "").toLowerCase();
+    if (!ALLOWED.includes(ext))
+      return NextResponse.json({ message: `Tipe file tidak didukung. Gunakan: ${ALLOWED.join(", ")}` }, { status: 400 });
+
     const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "-").toLowerCase();
     const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
     const filename = `${prefix}-${ts}.${ext}`;

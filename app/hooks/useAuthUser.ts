@@ -9,6 +9,7 @@ export type AuthUser = {
   age?: number | null;
   status?: string | null;
   phone?: string | null;
+  mobilePhone?: string | null;
   email?: string | null;
   organizationName?: string | null;
   jobPositionName?: string | null;

@@ -130,16 +130,17 @@ export default function ProfilePage() {
           <div>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Data Talenta (read-only)</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <ReadonlyField label="Employee ID"   value={user?.employeeId} />
-              <ReadonlyField label="Nama"          value={user?.name} />
-              <ReadonlyField label="Email"         value={user?.email} />
-              <ReadonlyField label="No. Telepon"   value={user?.phone} />
-              <ReadonlyField label="Jabatan"       value={user?.jobPositionName} />
-              <ReadonlyField label="Departemen"    value={user?.organizationName} />
-              <ReadonlyField label="Cabang"        value={user?.branchName} />
-              <ReadonlyField label="Usia"          value={user?.age} />
+              <ReadonlyField label="Employee ID"  value={user?.employeeId} />
+              <ReadonlyField label="Nama"         value={user?.name} />
+              <ReadonlyField label="Email"        value={user?.email} />
+              <ReadonlyField label="No. Telepon"  value={user?.phone} />
+              <ReadonlyField label="No. HP / WA"  value={user?.mobilePhone} />
+              <ReadonlyField label="Jabatan"      value={user?.jobPositionName} />
+              <ReadonlyField label="Departemen"   value={user?.organizationName} />
+              <ReadonlyField label="Cabang"       value={user?.branchName} />
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+              <ReadonlyField label="Usia"              value={user?.age} />
               <ReadonlyField label="Tanggal Bergabung" value={formatDate(user?.joinDate)} />
               <ReadonlyField label="Tanggal Resign"    value={formatDate(user?.resignDate)} />
             </div>
