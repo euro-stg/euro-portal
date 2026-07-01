@@ -105,7 +105,23 @@ export default function SignInPage() {
           </Link>
         </div>
 
-        <p className="text-center text-xs text-slate-400 mt-4">
+        <div className="relative my-5">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-slate-100" />
+          </div>
+          <div className="relative flex justify-center">
+            <span className="bg-white px-3 text-xs text-slate-400">Pertama kali masuk?</span>
+          </div>
+        </div>
+
+        <Link
+          href="/forgot-password?mode=activate"
+          className="flex items-center justify-center w-full py-2.5 px-4 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-sm font-medium hover:bg-emerald-100 transition-colors"
+        >
+          Aktivasi Akun
+        </Link>
+
+        <p className="text-center text-xs text-slate-400 mt-5">
           © {new Date().getFullYear()} Euromedica Group
         </p>
       </div>
