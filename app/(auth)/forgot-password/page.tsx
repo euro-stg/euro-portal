@@ -45,7 +45,7 @@ function ForgotPasswordForm() {
       <div className="text-center mb-8">
         <div className={`w-14 h-14 rounded-2xl mx-auto mb-4 flex items-center justify-center shadow-lg ${
           isActivate
-            ? "bg-gradient-to-br from-emerald-500 to-teal-600 shadow-emerald-200"
+            ? "bg-gradient-to-br from-orange-500 to-orange-600 shadow-orange-200"
             : "bg-gradient-to-br from-blue-600 to-indigo-600 shadow-blue-200"
         }`}>
           <Layers className="w-7 h-7 text-white" />
@@ -67,8 +67,8 @@ function ForgotPasswordForm() {
           )}
 
           {isActivate && (
-            <div className="mb-5 p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl">
-              <p className="text-sm text-emerald-800 leading-relaxed">
+            <div className="mb-5 p-3.5 bg-orange-50 border border-orange-200 rounded-xl">
+              <p className="text-sm text-orange-800 leading-relaxed">
                 Selamat datang! Masukkan <strong>Employee ID</strong> kamu untuk mendapatkan link aktivasi ke email terdaftar.
               </p>
             </div>
@@ -95,7 +95,7 @@ function ForgotPasswordForm() {
             </div>
             <Button
               variant="primary"
-              className={`w-full mt-2 ${isActivate ? "bg-emerald-600 hover:bg-emerald-700 border-emerald-600" : ""}`}
+              className={`w-full mt-2 ${isActivate ? "bg-orange-600 hover:bg-orange-700 border-orange-600" : ""}`}
               type="submit"
               disabled={loading}
             >
@@ -112,8 +112,8 @@ function ForgotPasswordForm() {
               ? "bg-emerald-50 border-emerald-200"
               : "bg-green-50 border-green-200"
           }`}>
-            <CheckCircle className={`w-5 h-5 shrink-0 ${isActivate ? "text-emerald-600" : "text-green-600"}`} />
-            <p className={`text-sm font-medium ${isActivate ? "text-emerald-800" : "text-green-800"}`}>
+            <CheckCircle className={`w-5 h-5 shrink-0 ${isActivate ? "text-orange-600" : "text-green-600"}`} />
+            <p className={`text-sm font-medium ${isActivate ? "text-orange-800" : "text-green-800"}`}>
               {isActivate ? "Link aktivasi berhasil dikirim!" : "Link reset berhasil dikirim!"}
             </p>
           </div>

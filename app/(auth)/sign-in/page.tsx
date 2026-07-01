@@ -116,7 +116,7 @@ export default function SignInPage() {
 
         <Link
           href="/forgot-password?mode=activate"
-          className="flex items-center justify-center w-full py-2.5 px-4 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-sm font-medium hover:bg-emerald-100 transition-colors"
+          className="flex items-center justify-center w-full py-2.5 px-4 rounded-xl border border-orange-200 bg-orange-50 text-orange-700 text-sm font-medium hover:bg-orange-100 transition-colors"
         >
           Aktivasi Akun
         </Link>
