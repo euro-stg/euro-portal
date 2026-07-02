@@ -10,6 +10,7 @@ import prisma from "@/lib/db/db";
 import { auth } from "@/lib/auth";
 import { ExternalAppCard } from "@/components/ui/external-app-card";
 import { InternalAppCard } from "@/components/ui/internal-app-card";
+import { ChatWidget } from "@/components/ui/chat-widget";
 
 export const dynamic = "force-dynamic";
 
@@ -166,6 +167,7 @@ const Home = async () => {
         </div>
       )}
     </div>
+    <ChatWidget />
   );
 };
 
