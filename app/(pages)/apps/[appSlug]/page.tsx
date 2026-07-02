@@ -123,6 +123,7 @@ export default function AppDashboardPage() {
   };
 
   return (
+    <>
     <div>
       {/* Counter cards */}
       {loading ? (
@@ -220,5 +221,6 @@ export default function AppDashboardPage() {
       )}
     </div>
     <ChatWidget />
+    </>
   );
 }

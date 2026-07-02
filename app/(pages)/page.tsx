@@ -85,6 +85,7 @@ const Home = async () => {
   ].filter(Boolean).join(" · ");
 
   return (
+    <>
     <div>
       {/* Welcome */}
       <div className="mb-6 bg-white rounded-2xl border border-slate-100 shadow-sm px-4 sm:px-6 py-4 sm:py-5 flex items-center gap-3 sm:gap-4">
@@ -168,6 +169,7 @@ const Home = async () => {
       )}
     </div>
     <ChatWidget />
+    </>
   );
 };
 
