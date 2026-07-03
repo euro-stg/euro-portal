@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db/db";
+import { requireSession, unauthorized } from "@/lib/api-auth";
 
 export async function POST(request: Request) {
   try {
+    if (!await requireSession()) return unauthorized();
     const body = await request.json().catch(() => ({}));
     const { userIds, roleId, appId } = body as {
       userIds?: string[];

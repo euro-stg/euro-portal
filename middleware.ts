@@ -10,25 +10,31 @@ const REPLICA_WRITE_WHITELIST = [
 const WRITE_METHODS = ["POST", "PATCH", "PUT", "DELETE"];
 
 export function middleware(req: NextRequest) {
-  if ((process.env.ENV_MODE ?? "PRODUCTION") !== "REPLICA") return NextResponse.next();
-
   const { pathname } = req.nextUrl;
-  const method = req.method;
 
-  if (!WRITE_METHODS.includes(method)) return NextResponse.next();
+  // Inject pathname ke request headers agar bisa dibaca server components (layout)
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.set("x-pathname", pathname);
 
-  const isWhitelisted = REPLICA_WRITE_WHITELIST.some((pattern) => pattern.test(pathname));
-  if (isWhitelisted) return NextResponse.next();
+  // REPLICA: blokir semua write non-eksternal
+  if ((process.env.ENV_MODE ?? "PRODUCTION") === "REPLICA") {
+    if (WRITE_METHODS.includes(req.method)) {
+      const isWhitelisted = REPLICA_WRITE_WHITELIST.some((pattern) => pattern.test(pathname));
+      if (!isWhitelisted) {
+        return NextResponse.json(
+          {
+            message: "Server ini berjalan dalam mode REPLICA — operasional apps dinonaktifkan.",
+            mode: "REPLICA",
+          },
+          { status: 423 },
+        );
+      }
+    }
+  }
 
-  return NextResponse.json(
-    {
-      message: "Server ini berjalan dalam mode REPLICA — operasional apps dinonaktifkan.",
-      mode: "REPLICA",
-    },
-    { status: 423 },
-  );
+  return NextResponse.next({ request: { headers: requestHeaders } });
 }
 
 export const config = {
-  matcher: "/api/:path*",
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };

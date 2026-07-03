@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 
 import { auth } from "@/lib/auth";
 import { AppShell } from "@/components/ui/app-shell";
@@ -59,6 +60,22 @@ export default async function ProtectedLayout({
       },
     });
     modules = role?.modules.map((rm) => rm.module) ?? [];
+  }
+
+  // Cek akses modul berdasarkan path saat ini
+  const headersList = await headers();
+  const pathname = headersList.get("x-pathname") ?? "/";
+
+  // Halaman umum yang selalu boleh diakses
+  const isPublicPage = pathname === "/" || pathname.startsWith("/profile");
+
+  if (!isPublicPage) {
+    // superadmin boleh semua, role lain hanya boleh path yang ada di modules-nya
+    const hasAccess =
+      portalRole === "superadmin" ||
+      modules.some((m) => pathname === m.path || pathname.startsWith(m.path + "/"));
+
+    if (!hasAccess) redirect("/");
   }
 
   const envMode = process.env["ENV_MODE"] ?? "PRODUCTION";

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import prisma from "@/lib/db/db";
+import { requireSession, unauthorized } from "@/lib/api-auth";
 
 const PAGE_SIZE = 10;
 
@@ -36,6 +37,8 @@ function parseDateFilter(raw: string | null) {
 
 export async function GET(request: Request) {
   try {
+    if (!await requireSession()) return unauthorized();
+
     const { searchParams } = new URL(request.url);
 
     const all  = searchParams.get("all") === "true";

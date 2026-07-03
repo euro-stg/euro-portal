@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db/db";
+import { requireSession, unauthorized } from "@/lib/api-auth";
 
 // GET — ambil module yang sudah di-assign ke role ini
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    if (!await requireSession()) return unauthorized();
     const { id } = await params;
     const role = await prisma.role.findUnique({
       where: { id },
@@ -24,6 +26,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
 // POST — set module untuk role (replace all)
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    if (!await requireSession()) return unauthorized();
     const { id }    = await params;
     const body      = await request.json().catch(() => ({}));
     const moduleIds: string[] = Array.isArray(body.moduleIds) ? body.moduleIds : [];

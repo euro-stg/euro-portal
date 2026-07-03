@@ -315,7 +315,21 @@ const Sidebar = ({
         )}
       </nav>
 
-      <div className="px-5 py-3 border-t border-slate-100 flex-shrink-0">
+      <div className="px-3 py-3 border-t border-slate-100 flex-shrink-0 space-y-2">
+        {user?.role === "superadmin" && (
+          <Link
+            href="/dev-docs"
+            onClick={onClose}
+            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
+              pathname === "/dev-docs"
+                ? "bg-amber-50 text-amber-700"
+                : "text-amber-600 hover:bg-amber-50 hover:text-amber-700"
+            }`}
+          >
+            <BookOpen className="w-4 h-4 flex-shrink-0" />
+            <span className="flex-1">Developer Docs</span>
+          </Link>
+        )}
         <p className="text-slate-400 text-xs text-center">
           © {new Date().getFullYear()} Euromedica Group
         </p>

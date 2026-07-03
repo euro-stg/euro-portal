@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 
 import prisma from "@/lib/db/db";
+import { requireSession, unauthorized } from "@/lib/api-auth";
 
 export async function GET(
-  request: Request,
+  _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    if (!await requireSession()) return unauthorized();
     const { id } = await params;
 
     const row = await prisma.user.findUnique({

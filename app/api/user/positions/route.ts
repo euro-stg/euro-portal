@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db/db";
+import { requireSession, unauthorized } from "@/lib/api-auth";
 
 // Distinct job positions + orgs + branches from User table
 // Used for approval template step configuration
 export async function GET() {
   try {
+    if (!await requireSession()) return unauthorized();
     const users = await db.user.findMany({
       where: { status: "active" },
       select: {

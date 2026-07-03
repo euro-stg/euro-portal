@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 
 import prisma from "@/lib/db/db";
+import { requireSession, unauthorized } from "@/lib/api-auth";
 
 type UpdateBody = {
   name?: string;
@@ -23,6 +24,7 @@ export async function PATCH(
   context: { params: Promise<unknown> },
 ) {
   try {
+    if (!await requireSession()) return unauthorized();
     const rawParams = await context.params;
 
     const id =

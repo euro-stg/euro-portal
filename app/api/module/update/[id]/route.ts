@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db/db";
+import { requireSession, unauthorized } from "@/lib/api-auth";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    if (!await requireSession()) return unauthorized();
     const { id } = await params;
     const body   = await request.json().catch(() => ({}));
     const name       = String(body.name       ?? "").trim();
