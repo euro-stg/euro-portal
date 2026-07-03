@@ -22,6 +22,7 @@ type RoleRow = {
   defaultScope: string | null;
   defaultOrgId: string | null;
   defaultPositionId: string | null;
+  defaultBranchId: string | null;
   _count: { modules: number };
 };
 
