@@ -27,7 +27,12 @@ export async function sendNotificationEmail(to: string, title: string, body: str
       subject,
       html: `
         <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;">
-          <h2 style="margin:0 0 16px;color:#1e293b;font-size:18px;">${title}</h2>
+          <div style="margin:0 0 16px;">
+            <span style="display:inline-block;background:#eff6ff;color:#2563eb;font-size:11px;font-weight:600;padding:3px 10px;border-radius:99px;border:1px solid #bfdbfe;letter-spacing:0.04em;">
+              ${source}
+            </span>
+          </div>
+          <h2 style="margin:0 0 12px;color:#1e293b;font-size:18px;">${title}</h2>
           <p style="color:#475569;font-size:14px;line-height:1.6;margin:0 0 24px;">${body}</p>
           <hr style="border:none;border-top:1px solid #f1f5f9;margin:24px 0;"/>
           <p style="color:#cbd5e1;font-size:11px;margin:0;">© ${new Date().getFullYear()} Euromedica Group — EuroPortal</p>

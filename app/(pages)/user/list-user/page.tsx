@@ -89,7 +89,7 @@ type FilterState = {
   employeeId: string;
   name: string;
   status: string;
-  role: string;
+  roleId: string;
   organizationName: string;
   jobPositionName: string;
   branchName: string;
@@ -187,7 +187,7 @@ export default function ListUserPage() {
 
   const [form, setForm] = useState<FormState>(emptyForm);
   const [filters, setFilters] = useState<FilterState>({
-    employeeId: "", name: "", status: "", role: "", organizationName: "",
+    employeeId: "", name: "", status: "", roleId: "", organizationName: "",
     jobPositionName: "", branchName: "", age: "", joinDate: "", resignDate: "",
   });
 
@@ -218,7 +218,7 @@ export default function ListUserPage() {
     if (f.name.trim())             p.set("name", f.name.trim());
     if (f.employeeId.trim())       p.set("employeeId", f.employeeId.trim());
     if (f.status.trim())           p.set("status", f.status.trim());
-    if (f.role.trim())             p.set("role", f.role.trim());
+    if (f.roleId.trim())           p.set("roleId", f.roleId.trim());
     if (f.organizationName.trim()) p.set("organizationName", f.organizationName.trim());
     if (f.jobPositionName.trim())  p.set("jobPositionName", f.jobPositionName.trim());
     if (f.branchName.trim())       p.set("branchName", f.branchName.trim());
@@ -274,7 +274,7 @@ export default function ListUserPage() {
     const t = setTimeout(() => void refreshList(1, filters, showAll), 450);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.name, filters.employeeId, filters.status, filters.role,
+  }, [filters.name, filters.employeeId, filters.status, filters.roleId,
       filters.organizationName, filters.jobPositionName, filters.branchName,
       filters.age, filters.joinDate, filters.resignDate]);
 
@@ -340,7 +340,6 @@ export default function ListUserPage() {
   };
 
   const validateForm = (): string | null => {
-    if (!form.role.trim()) return "Role wajib dipilih";
     return null;
   };
 
@@ -407,7 +406,7 @@ export default function ListUserPage() {
     setSaving(true);
     setFormError(null);
     try {
-      const payload: Record<string, unknown> = { role: form.role.trim() };
+      const payload: Record<string, unknown> = {};
       if (form.newPassword.trim()) payload.password = form.newPassword.trim();
 
       const res = await fetch(`/api/user/update/${form.id}`, {
@@ -577,10 +576,10 @@ export default function ListUserPage() {
               <td className="px-3 py-2"><input className={inputSmCls} placeholder="Cari..." value={filters.jobPositionName} onChange={(e) => setFilters((p) => ({ ...p, jobPositionName: e.target.value }))} /></td>
               <td className="px-3 py-2"><input className={inputSmCls} placeholder="e.g. 25" value={filters.age} onChange={(e) => setFilters((p) => ({ ...p, age: e.target.value }))} /></td>
               <td className="px-3 py-2">
-                <select className={selectSmCls} value={filters.role} onChange={(e) => setFilters((p) => ({ ...p, role: e.target.value }))}>
+                <select className={selectSmCls} value={filters.roleId} onChange={(e) => setFilters((p) => ({ ...p, roleId: e.target.value }))}>
                   <option value="">Semua</option>
                   {roles.map((r) => (
-                    <option key={r.id} value={r.name}>{r.name}</option>
+                    <option key={r.id} value={r.id}>{r.name}</option>
                   ))}
                 </select>
               </td>
@@ -790,12 +789,14 @@ export default function ListUserPage() {
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Dapat Diubah</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <FormField label="Role Portal">
-                  <select className={selectCls} value={form.role} onChange={(e) => setForm((p) => ({ ...p, role: e.target.value }))}>
-                    <option value="">— Tanpa role —</option>
-                    {roles.map((r) => (
-                      <option key={r.id} value={r.name}>{r.name}</option>
-                    ))}
-                  </select>
+                  <div className="flex items-center gap-2 h-9 px-3 rounded-lg border border-slate-200 bg-slate-50">
+                    {form.role ? (
+                      <RoleBadge role={form.role} />
+                    ) : (
+                      <span className="text-xs text-slate-400 italic">Tanpa role</span>
+                    )}
+                    <span className="ml-auto text-[10px] text-slate-400">Kelola di Bulk Assign</span>
+                  </div>
                 </FormField>
                 <FormField label="Password Baru (kosong = tidak berubah)">
                   <input
@@ -818,20 +819,11 @@ export default function ListUserPage() {
                     const scopeLabel = r.appId === null
                       ? "Portal"
                       : (assignApps.find((a) => a.id === r.appId)?.name ?? "App");
-                    const isRemoving = removingAppId === r.appId;
                     return (
                       <div key={r.appId ?? "portal"} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-slate-200 bg-slate-50 text-xs">
                         <span className="font-medium text-slate-700 capitalize">{r.name}</span>
                         <span className="text-slate-400">·</span>
                         <span className="text-slate-400">{scopeLabel}</span>
-                        <button
-                          onClick={() => void handleRemoveRole(form.id, r.appId)}
-                          disabled={isRemoving}
-                          className="ml-1 text-slate-400 hover:text-red-500 transition-colors disabled:opacity-40"
-                          title="Hapus role ini"
-                        >
-                          {isRemoving ? <RefreshCw className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
-                        </button>
                       </div>
                     );
                   })}

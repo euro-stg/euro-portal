@@ -31,6 +31,7 @@ export default function BulkAssignPage() {
   // ── Target selection ─────────────────────────────────────────
   const [apps, setApps]               = useState<AppOption[]>([]);
   const [roles, setRoles]             = useState<RoleOption[]>([]);
+  const [filterRoles, setFilterRoles] = useState<RoleOption[]>([]);
   const [selectedAppId, setSelectedAppId] = useState<string>("portal");
   const [selectedRoleId, setSelectedRoleId] = useState<string>("");
 
@@ -41,7 +42,7 @@ export default function BulkAssignPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [listError, setListError]     = useState<string | null>(null);
-  const [filters, setFilters]         = useState({ name: "", branchName: "", organizationName: "" });
+  const [filters, setFilters]         = useState({ name: "", branchName: "", organizationName: "", roleId: "" });
 
   // ── Show All ──────────────────────────────────────────────────
   const [showAll, setShowAll]         = useState(false);
@@ -61,12 +62,16 @@ export default function BulkAssignPage() {
     toastRef.current = setTimeout(() => setToast(null), 4000);
   };
 
-  // Mark mounted + load apps
+  // Mark mounted + load apps + load all roles for filter
   useEffect(() => {
     setMounted(true);
     fetch("/api/module/list?type=app&status=active", { cache: "no-store" })
       .then((r) => r.json())
       .then((j) => setApps(j?.data ?? []))
+      .catch(() => {});
+    fetch("/api/role/list?status=active", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => setFilterRoles(j?.data ?? []))
       .catch(() => {});
     return () => { if (toastRef.current) clearTimeout(toastRef.current); };
   }, []);
@@ -100,6 +105,7 @@ export default function BulkAssignPage() {
       if (f.name.trim())             p.set("name", f.name.trim());
       if (f.branchName.trim())       p.set("branchName", f.branchName.trim());
       if (f.organizationName.trim()) p.set("organizationName", f.organizationName.trim());
+      if (f.roleId.trim())           p.set("roleId", f.roleId.trim());
       const res  = await fetch(`/api/user/list?${p}`, { cache: "no-store" });
       const json = await res.json().catch(() => null);
       if (!res.ok) { setUsers([]); setListError(json?.message ?? "Gagal memuat"); return; }
@@ -119,12 +125,12 @@ export default function BulkAssignPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Debounce filter changes
+  // Debounce filter changes — selection TIDAK direset agar tetap terpilih lintas halaman/search
   useEffect(() => {
-    const t = setTimeout(() => { void loadUsers(1, filters, showAll); setSelected(new Set()); }, 400);
+    const t = setTimeout(() => { void loadUsers(1, filters, showAll); }, 400);
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.name, filters.branchName, filters.organizationName]);
+  }, [filters.name, filters.branchName, filters.organizationName, filters.roleId]);
 
   const toggleShowAll = () => {
     const next = !showAll;
@@ -169,6 +175,29 @@ export default function BulkAssignPage() {
       });
       const json = await res.json().catch(() => null);
       if (!res.ok) { showToast("error", json?.message ?? "Gagal assign"); return; }
+      showToast("success", json?.message ?? "Berhasil");
+      setSelected(new Set());
+      void loadUsers(currentPage, filters);
+    } catch { showToast("error", "Network error"); }
+    finally { setSubmitting(false); }
+  };
+
+  const handleRemove = async () => {
+    if (submitting) return;
+    if (selected.size === 0) { showToast("error", "Pilih minimal 1 user"); return; }
+    if (!selectedRoleId) { showToast("error", "Pilih role yang ingin dihapus terlebih dahulu"); return; }
+    if (!confirm(`Hapus role "${selectedRoleName}" dari ${selected.size} user?`)) return;
+
+    setSubmitting(true);
+    try {
+      const appId = selectedAppId === "portal" ? null : selectedAppId;
+      const res   = await fetch("/api/user/bulk-remove-role", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userIds: Array.from(selected), appId, roleId: selectedRoleId }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) { showToast("error", json?.message ?? "Gagal hapus role"); return; }
       showToast("success", json?.message ?? "Berhasil");
       setSelected(new Set());
       void loadUsers(currentPage, filters);
@@ -307,6 +336,16 @@ export default function BulkAssignPage() {
             value={filters.organizationName}
             onChange={(e) => setFilters((p) => ({ ...p, organizationName: e.target.value }))}
           />
+          <select
+            className={inputCls + " flex-1 min-w-[140px]"}
+            value={filters.roleId}
+            onChange={(e) => setFilters((p) => ({ ...p, roleId: e.target.value }))}
+          >
+            <option value="">Semua Role</option>
+            {filterRoles.map((r) => (
+              <option key={r.id} value={r.id}>{r.name}</option>
+            ))}
+          </select>
           <p className="text-xs text-slate-400 whitespace-nowrap ml-auto">
             {total} user ditemukan
           </p>
@@ -455,6 +494,14 @@ export default function BulkAssignPage() {
             <div className="flex gap-2">
               <Button variant="ghost" onClick={() => setSelected(new Set())} disabled={submitting}>
                 Batalkan Pilihan
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => void handleRemove()}
+                disabled={submitting}
+                className="text-red-600 border-red-200 hover:bg-red-50"
+              >
+                {submitting ? "Memproses..." : `Hapus Role dari ${selected.size} User`}
               </Button>
               <Button
                 variant="primary"

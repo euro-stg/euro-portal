@@ -44,7 +44,7 @@ export async function GET(request: Request) {
     const name = searchParams.get("name");
     const employeeId = searchParams.get("employeeId");
     const status = searchParams.get("status");
-    const role = searchParams.get("role");
+    const roleId = searchParams.get("roleId");
     const organizationName = searchParams.get("organizationName");
     const jobPositionName = searchParams.get("jobPositionName");
     const branchName = searchParams.get("branchName");
@@ -62,7 +62,7 @@ export async function GET(request: Request) {
       ...(status
         ? { status: { contains: status, mode: "insensitive" as const } }
         : {}),
-      ...(role ? { userRoles: { some: { role: { name: role, appId: null } } } } : {}),
+      ...(roleId ? { userRoles: { some: { roleId } } } : {}),
       ...(organizationName
         ? {
             organizationName: {

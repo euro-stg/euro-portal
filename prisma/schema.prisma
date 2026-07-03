@@ -122,6 +122,17 @@ model Role {
   description String?
   isLocked    Boolean   @default(false)
   status      String    @default("active")
+
+  // Default role assignment rules
+  isDefault           Boolean @default(false)
+  // Scope: ALL | ORGANIZATION | POSITION | BRANCH
+  //        | ORGANIZATION_POSITION | ORGANIZATION_BRANCH | POSITION_BRANCH
+  //        | ORGANIZATION_POSITION_BRANCH
+  defaultScope        String?
+  defaultOrgId        String?
+  defaultPositionId   String?
+  defaultBranchId     String?
+
   createdAt   DateTime  @default(now())
   updatedAt   DateTime?
   deletedAt   DateTime?

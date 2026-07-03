@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Shield, Plus, RefreshCw, Lock } from "lucide-react";
+import { Shield, Plus, RefreshCw, Lock, Star } from "lucide-react";
 
 import { Table } from "@/components/ui/table";
 import { Alert } from "@/components/ui/alert";
@@ -18,7 +18,26 @@ type RoleRow = {
   isLocked: boolean;
   status: string;
   createdAt: string;
+  isDefault: boolean;
+  defaultScope: string | null;
+  defaultOrgId: string | null;
+  defaultPositionId: string | null;
   _count: { modules: number };
+};
+
+type OrgOption      = { id: string; name: string };
+type PositionOption = { id: string; name: string };
+type BranchOption   = { id: string; name: string };
+
+const SCOPE_LABELS: Record<string, string> = {
+  ALL:                        "Semua User",
+  ORGANIZATION:               "Organisasi",
+  POSITION:                   "Jabatan",
+  BRANCH:                     "Branch",
+  ORGANIZATION_POSITION:      "Organisasi + Jabatan",
+  ORGANIZATION_BRANCH:        "Organisasi + Branch",
+  POSITION_BRANCH:            "Jabatan + Branch",
+  ORGANIZATION_POSITION_BRANCH: "Organisasi + Jabatan + Branch",
 };
 
 type ModuleItem = {
@@ -48,7 +67,8 @@ function FormField({ label, children }: { label: string; children: React.ReactNo
   );
 }
 
-const emptyForm = { id: "", name: "", description: "", status: "active" };
+const emptyForm        = { id: "", name: "", description: "", status: "active" };
+const emptyDefaultForm = { isDefault: false, defaultScope: "ALL", defaultOrgId: "", defaultPositionId: "", defaultBranchId: "" };
 const PAGE_SIZE = 10;
 
 export default function ListRolePage() {
@@ -73,6 +93,16 @@ export default function ListRolePage() {
   const [deleting, setDeleting]     = useState(false);
   const [formError, setFormError]   = useState<string | null>(null);
   const [form, setForm]             = useState(emptyForm);
+
+  // Atur Default modal
+  const [defaultOpen, setDefaultOpen]           = useState(false);
+  const [defaultRole, setDefaultRole]           = useState<RoleRow | null>(null);
+  const [defaultForm, setDefaultForm]           = useState(emptyDefaultForm);
+  const [defaultSaving, setDefaultSaving]       = useState(false);
+  const [defaultError, setDefaultError]         = useState<string | null>(null);
+  const [orgs, setOrgs]                         = useState<OrgOption[]>([]);
+  const [positions, setPositions]               = useState<PositionOption[]>([]);
+  const [branches, setBranches]                 = useState<BranchOption[]>([]);
 
   // Atur Modul modal
   const [modulesOpen, setModulesOpen]           = useState(false);
@@ -126,6 +156,12 @@ export default function ListRolePage() {
     fetch("/api/module/list?type=app", { cache: "no-store" })
       .then((r) => r.json())
       .then((j) => setApps(j?.data ?? []))
+      .catch(() => {});
+
+    // Load orgs & positions for default role config
+    fetch("/api/user/positions", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => { setOrgs(j?.organizations ?? []); setPositions(j?.positions ?? []); setBranches(j?.branches ?? []); })
       .catch(() => {});
 
     void refreshList(1, filters, null);
@@ -194,6 +230,44 @@ export default function ListRolePage() {
       void refreshList(currentPage, filters, scopeAppId);
     } catch (err) { console.error(err); showToast("error", "Network error"); }
     finally { setDeleting(false); setDeleteId(null); }
+  };
+
+  const openDefault = (row: RoleRow) => {
+    setDefaultRole(row);
+    setDefaultError(null);
+    setDefaultForm({
+      isDefault:         row.isDefault ?? false,
+      defaultScope:      row.defaultScope ?? "ALL",
+      defaultOrgId:      row.defaultOrgId ?? "",
+      defaultPositionId: row.defaultPositionId ?? "",
+      defaultBranchId:   row.defaultBranchId ?? "",
+    });
+    setDefaultOpen(true);
+  };
+
+  const handleSaveDefault = async () => {
+    if (defaultSaving || !defaultRole) return;
+    setDefaultSaving(true);
+    setDefaultError(null);
+    try {
+      const res  = await fetch(`/api/role/${defaultRole.id}/default`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          isDefault:         defaultForm.isDefault,
+          defaultScope:      defaultForm.isDefault ? defaultForm.defaultScope : null,
+          defaultOrgId:      defaultForm.isDefault ? (defaultForm.defaultOrgId || null) : null,
+          defaultPositionId: defaultForm.isDefault ? (defaultForm.defaultPositionId || null) : null,
+          defaultBranchId:   defaultForm.isDefault ? (defaultForm.defaultBranchId || null) : null,
+        }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) { setDefaultError(json?.message ?? "Gagal menyimpan"); return; }
+      showToast("success", json?.message ?? "Default role disimpan");
+      setDefaultOpen(false);
+      void refreshList(currentPage, filters, scopeAppId);
+    } catch { setDefaultError("Network error"); }
+    finally { setDefaultSaving(false); }
   };
 
   const openModules = async (row: RoleRow) => {
@@ -324,18 +398,18 @@ export default function ListRolePage() {
         <Table>
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50">
-              {["No", "Name", "Deskripsi", "Scope", "Modul", "Status", "Dibuat", ""].map((h, i) => (
+              {["No", "Name", "Deskripsi", "Scope", "Modul", "Status", "Default", "Dibuat", ""].map((h, i) => (
                 <th key={i} className="px-3 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {loading ? (
-              <tr><td colSpan={8} className="text-center py-12 text-slate-400 text-sm">
+              <tr><td colSpan={9} className="text-center py-12 text-slate-400 text-sm">
                 <div className="flex items-center justify-center gap-2"><RefreshCw className="w-4 h-4 animate-spin" /> Memuat...</div>
               </td></tr>
             ) : data.length === 0 ? (
-              <tr><td colSpan={8} className="text-center py-12 text-slate-400 text-sm">Tidak ada data</td></tr>
+              <tr><td colSpan={9} className="text-center py-12 text-slate-400 text-sm">Tidak ada data</td></tr>
             ) : (
               data.map((row, i) => (
                 <tr key={row.id} className="hover:bg-slate-50/60 transition-colors">
@@ -366,10 +440,27 @@ export default function ListRolePage() {
                       row.status === "active" ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-600 border border-red-200"
                     }`}>{row.status}</span>
                   </td>
+                  <td className="px-3 py-3">
+                    {row.isDefault ? (
+                      <div className="flex flex-col gap-0.5">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200 w-fit">
+                          <Star className="w-3 h-3" /> Default
+                        </span>
+                        {row.defaultScope && (
+                          <span className="text-[10px] text-slate-400">{SCOPE_LABELS[row.defaultScope] ?? row.defaultScope}</span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-xs text-slate-300">—</span>
+                    )}
+                  </td>
                   <td className="px-3 py-3 text-xs text-slate-500 whitespace-nowrap">{formatDate(row.createdAt)}</td>
                   <td className="px-3 py-3">
                     <div className="flex items-center gap-1.5">
                       <Button variant="outline" size="sm" onClick={() => void openModules(row)}>Atur Modul</Button>
+                      <Button variant="outline" size="sm" onClick={() => openDefault(row)}>
+                        <Star className="w-3 h-3" /> Default
+                      </Button>
                       {!row.isLocked && (
                         <>
                           <Button variant="primary" size="sm" onClick={() => void openEdit(row)}>Edit</Button>
@@ -517,6 +608,108 @@ export default function ListRolePage() {
             )}
           </div>
         )}
+      </Modal>
+
+      {/* Modal Atur Default */}
+      <Modal open={defaultOpen} title={`Atur Default — ${defaultRole?.name ?? ""}`} onClose={() => setDefaultOpen(false)} boxClassName="w-full max-w-md">
+        <div className="space-y-4">
+          {defaultError && <Alert variant="error" message={defaultError} />}
+
+          {/* Toggle isDefault */}
+          <label className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-50 transition-colors">
+            <input
+              type="checkbox"
+              checked={defaultForm.isDefault}
+              onChange={(e) => setDefaultForm((p) => ({
+                ...p,
+                isDefault: e.target.checked,
+                defaultScope: e.target.checked ? p.defaultScope : "ALL",
+              }))}
+              className="w-4 h-4 rounded border-slate-300 text-amber-500 accent-amber-500"
+            />
+            <div>
+              <p className="text-sm font-medium text-slate-700">Jadikan Role Default</p>
+              <p className="text-xs text-slate-400">Role ini akan otomatis di-assign ke user yang memenuhi syarat saat sync</p>
+            </div>
+          </label>
+
+          {defaultForm.isDefault && (
+            <>
+              <FormField label="Scope / Syarat">
+                <select
+                  className={selectCls}
+                  value={defaultForm.defaultScope}
+                  onChange={(e) => setDefaultForm((p) => ({
+                    ...p,
+                    defaultScope: e.target.value,
+                    defaultOrgId: "", defaultPositionId: "", defaultBranchId: "",
+                  }))}
+                >
+                  <option value="ALL">Semua User</option>
+                  <optgroup label="1 Kondisi">
+                    <option value="ORGANIZATION">Organisasi</option>
+                    <option value="POSITION">Jabatan</option>
+                    <option value="BRANCH">Branch</option>
+                  </optgroup>
+                  <optgroup label="2 Kondisi">
+                    <option value="ORGANIZATION_POSITION">Organisasi + Jabatan</option>
+                    <option value="ORGANIZATION_BRANCH">Organisasi + Branch</option>
+                    <option value="POSITION_BRANCH">Jabatan + Branch</option>
+                  </optgroup>
+                  <optgroup label="3 Kondisi">
+                    <option value="ORGANIZATION_POSITION_BRANCH">Organisasi + Jabatan + Branch</option>
+                  </optgroup>
+                </select>
+              </FormField>
+
+              {defaultForm.defaultScope.includes("ORGANIZATION") && (
+                <FormField label="Organisasi">
+                  <select className={selectCls} value={defaultForm.defaultOrgId}
+                    onChange={(e) => setDefaultForm((p) => ({ ...p, defaultOrgId: e.target.value }))}>
+                    <option value="">— Pilih organisasi —</option>
+                    {orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+                  </select>
+                </FormField>
+              )}
+
+              {defaultForm.defaultScope.includes("POSITION") && (
+                <FormField label="Jabatan">
+                  <select className={selectCls} value={defaultForm.defaultPositionId}
+                    onChange={(e) => setDefaultForm((p) => ({ ...p, defaultPositionId: e.target.value }))}>
+                    <option value="">— Pilih jabatan —</option>
+                    {positions.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                </FormField>
+              )}
+
+              {defaultForm.defaultScope.includes("BRANCH") && (
+                <FormField label="Branch">
+                  <select className={selectCls} value={defaultForm.defaultBranchId}
+                    onChange={(e) => setDefaultForm((p) => ({ ...p, defaultBranchId: e.target.value }))}>
+                    <option value="">— Pilih branch —</option>
+                    {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                  </select>
+                </FormField>
+              )}
+
+              <div className="px-3 py-2 rounded-lg bg-amber-50 border border-amber-100 text-xs text-amber-700">
+                <p className="font-medium mb-1">Cara kerja:</p>
+                <p>User aktif yang {defaultForm.defaultScope === "ALL" ? "belum punya role di scope ini" : [
+                  defaultForm.defaultScope.includes("ORGANIZATION") && "organisasinya cocok",
+                  defaultForm.defaultScope.includes("POSITION") && "jabatannya cocok",
+                  defaultForm.defaultScope.includes("BRANCH") && "branch-nya cocok",
+                ].filter(Boolean).join(" DAN ")} akan mendapat role ini saat sync.</p>
+              </div>
+            </>
+          )}
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+            <Button variant="ghost" type="button" onClick={() => setDefaultOpen(false)}>Batal</Button>
+            <Button variant="primary" type="button" onClick={() => void handleSaveDefault()} disabled={defaultSaving}>
+              {defaultSaving ? "Menyimpan..." : "Simpan"}
+            </Button>
+          </div>
+        </div>
       </Modal>
 
       <ModalDelete open={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={handleDelete} loading={deleting} />

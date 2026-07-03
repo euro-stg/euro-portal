@@ -382,7 +382,57 @@ export async function POST(req: NextRequest) {
       console.log(`✅ Processed: ${Math.min(i + BATCH_SIZE, allEmployees.length)}/${allEmployees.length}`);
     }
 
-    console.log("✅ SYNC DONE");
+    console.log("✅ SYNC DONE — applying default roles...");
+
+    // Auto-assign default roles sesuai scope
+    const defaultRoles = await prisma.role.findMany({
+      where: { isDefault: true, status: "active", deletedAt: null },
+    });
+
+    let rolesAssigned = 0;
+
+    for (const role of defaultRoles) {
+      // Tentukan kondisi user berdasarkan scope
+      const scope = role.defaultScope ?? "ALL";
+      const userWhere: Record<string, unknown> = { status: "active" };
+      if (scope.includes("ORGANIZATION")) {
+        if (!role.defaultOrgId) continue;
+        userWhere.organizationId = role.defaultOrgId;
+      }
+      if (scope.includes("POSITION")) {
+        if (!role.defaultPositionId) continue;
+        userWhere.jobPositionId = role.defaultPositionId;
+      }
+      if (scope.includes("BRANCH")) {
+        if (!role.defaultBranchId) continue;
+        userWhere.branchId = role.defaultBranchId;
+      }
+
+      // Ambil user yang cocok dan belum punya role apapun di scope ini
+      // (satu user hanya bisa punya 1 role per scope/appId)
+      const eligibleUsers = await prisma.user.findMany({
+        where: {
+          ...userWhere,
+          userRoles: { none: { appId: role.appId } },
+        },
+        select: { id: true },
+      });
+
+      if (eligibleUsers.length === 0) continue;
+
+      await prisma.userRole.createMany({
+        data: eligibleUsers.map((u) => ({
+          userId: u.id,
+          roleId: role.id,
+          appId:  role.appId,
+        })),
+      });
+
+      rolesAssigned += eligibleUsers.length;
+      console.log(`✅ Default role "${role.name}" assigned to ${eligibleUsers.length} user(s)`);
+    }
+
+    console.log(`✅ Default roles done — ${rolesAssigned} assignment(s)`);
 
     await prisma.syncLog.update({
       where: { id: log.id },
@@ -395,6 +445,7 @@ export async function POST(req: NextRequest) {
       processed,
       created,
       updated,
+      rolesAssigned,
     });
   } catch (error: unknown) {
     console.error("❌ SYNC ERROR:", error);
