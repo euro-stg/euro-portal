@@ -92,6 +92,8 @@ export default async function AppLayout({
     }
   }
 
+  const envMode = process.env["ENV_MODE"] ?? "PRODUCTION";
+
   return (
     <AppShell
       user={{ name: dbUser.name, image: dbUser.image, role: portalRole }}
@@ -100,6 +102,7 @@ export default async function AppLayout({
       appHref={appPath}
       appName={appModule.name}
       nested
+      envMode={envMode}
     >
       {children}
     </AppShell>

@@ -7,13 +7,19 @@ import { Menu, ChevronDown, LogOut, User, Layers } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { NotificationBell } from "@/components/ui/notification-bell";
 
+const ENV_BANNER: Record<string, { bg: string; text: string; label: string }> = {
+  DEVELOPMENT: { bg: "bg-orange-500", text: "text-white",   label: "⚠ MODE DEVELOPMENT" },
+  REPLICA:     { bg: "bg-violet-600", text: "text-white",   label: "⚡ MODE REPLICA — Operasional Apps non-eksternal dinonaktifkan, login tetap berfungsi" },
+};
+
 type NavbarProps = {
   onMenuToggle: () => void;
   userName?: string | null;
   userImage?: string | null;
+  envMode?: string;
 };
 
-const Navbar = ({ onMenuToggle, userName, userImage }: NavbarProps) => {
+const Navbar = ({ onMenuToggle, userName, userImage, envMode }: NavbarProps) => {
   const [open, setOpen] = useState(false);
   const [imgError, setImgError] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -37,8 +43,16 @@ const Navbar = ({ onMenuToggle, userName, userImage }: NavbarProps) => {
     window.location.href = "/sign-in";
   };
 
+  const banner = envMode ? ENV_BANNER[envMode] : undefined;
+
   return (
-    <nav className="fixed top-0 left-0 right-0 h-14 z-40 flex items-center justify-between px-4 bg-white border-b border-slate-200 shadow-sm">
+    <nav className="fixed top-0 left-0 right-0 z-40 bg-white border-b border-slate-200 shadow-sm">
+      {banner && (
+        <div className={`w-full h-8 flex items-center justify-center text-xs font-semibold tracking-wide ${banner.bg} ${banner.text}`}>
+          {banner.label}
+        </div>
+      )}
+      <div className="h-14 flex items-center justify-between px-4">
       {/* Left: burger + brand */}
       <div className="flex items-center gap-3">
         <button
@@ -100,6 +114,7 @@ const Navbar = ({ onMenuToggle, userName, userImage }: NavbarProps) => {
             </div>
           )}
         </div>
+      </div>
       </div>
     </nav>
   );

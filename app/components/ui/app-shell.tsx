@@ -14,9 +14,12 @@ type AppShellProps = {
   appHref?: string;
   appName?: string;
   nested?: boolean;
+  envMode?: string;
 };
 
-export function AppShell({ children, user, modules = [], backHref, appHref, appName, nested = false }: AppShellProps) {
+const HAS_BANNER_MODES = new Set(["DEVELOPMENT", "REPLICA"]);
+
+export function AppShell({ children, user, modules = [], backHref, appHref, appName, nested = false, envMode }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(true);
 
@@ -39,6 +42,9 @@ export function AppShell({ children, user, modules = [], backHref, appHref, appN
 
   // Di mobile sidebar overlay tanpa menggeser konten
   const contentShift = !isMobile && sidebarOpen ? "260px" : "0";
+  const hasBanner = !!envMode && HAS_BANNER_MODES.has(envMode);
+  // h-14 (56px) navbar + h-8 (32px) banner = 88px
+  const mainPt = hasBanner ? "pt-[88px]" : "pt-14";
 
   const backdrop = sidebarOpen && (
     <div className="fixed inset-0 z-[55] bg-black/30 md:hidden" onClick={() => setSidebarOpen(false)} />
@@ -53,13 +59,14 @@ export function AppShell({ children, user, modules = [], backHref, appHref, appN
       backHref={backHref}
       appHref={appHref}
       appName={appName}
+      hasBanner={hasBanner}
     />
   );
 
   if (nested) {
     return (
       <>
-        <Navbar onMenuToggle={() => setSidebarOpen((v) => !v)} userName={user?.name} userImage={user?.image} />
+        <Navbar onMenuToggle={() => setSidebarOpen((v) => !v)} userName={user?.name} userImage={user?.image} envMode={envMode} />
         {sidebar}
         {backdrop}
         <div
@@ -74,14 +81,14 @@ export function AppShell({ children, user, modules = [], backHref, appHref, appN
 
   return (
     <>
-      <Navbar onMenuToggle={() => setSidebarOpen((v) => !v)} userName={user?.name} userImage={user?.image} />
+      <Navbar onMenuToggle={() => setSidebarOpen((v) => !v)} userName={user?.name} userImage={user?.image} envMode={envMode} />
       {sidebar}
       {backdrop}
       <div
         className="min-h-screen flex flex-col bg-white transition-[margin-left] duration-300"
         style={{ marginLeft: contentShift }}
       >
-        <main className="flex-1 pt-14">
+        <main className={`flex-1 ${mainPt}`}>
           <div className="px-4 sm:px-6 py-4">{children}</div>
         </main>
         <Footer />

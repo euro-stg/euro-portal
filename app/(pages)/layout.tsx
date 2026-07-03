@@ -61,9 +61,11 @@ export default async function ProtectedLayout({
     modules = role?.modules.map((rm) => rm.module) ?? [];
   }
 
+  const envMode = process.env["ENV_MODE"] ?? "PRODUCTION";
+
   return (
     <>
-      <AppShell user={{ name: dbUser.name, image: dbUser.image, role: portalRole }} modules={modules}>
+      <AppShell user={{ name: dbUser.name, image: dbUser.image, role: portalRole }} modules={modules} envMode={envMode}>
         {children}
       </AppShell>
     </>

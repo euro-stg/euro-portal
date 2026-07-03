@@ -104,6 +104,7 @@ const Sidebar = ({
   backHref,
   appHref,
   appName,
+  hasBanner = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -112,6 +113,7 @@ const Sidebar = ({
   backHref?: string;
   appHref?: string;
   appName?: string;
+  hasBanner?: boolean;
 }) => {
   const pathname = usePathname();
   const [imgError, setImgError] = useState(false);
@@ -182,12 +184,17 @@ const Sidebar = ({
     );
   };
 
+  // Navbar h-14 (56px/3.5rem) + optional banner h-8 (32px/2rem) = 88px/5.5rem
+  const sidebarTop = hasBanner ? "5.5rem" : "3.5rem";
+  const sidebarHeight = hasBanner ? "calc(100vh - 5.5rem)" : "calc(100vh - 3.5rem)";
+
   return (
     <aside
-      className="fixed top-14 left-0 flex flex-col bg-white border-r border-slate-200 shadow-sm z-[60] transition-transform duration-300"
+      className="fixed left-0 flex flex-col bg-white border-r border-slate-200 shadow-sm z-[60] transition-transform duration-300"
       style={{
+        top: sidebarTop,
         width: "260px",
-        height: "calc(100vh - 3.5rem)",
+        height: sidebarHeight,
         transform: open ? "translateX(0)" : "translateX(-100%)",
       }}
     >
