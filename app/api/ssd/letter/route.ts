@@ -22,18 +22,19 @@ export async function GET(request: Request) {
 
     const scopeFilter = await ssdLetterScopeFilter(userId);
 
+    const searchFilter = search ? [
+      { title:    { contains: search, mode: "insensitive" as const } },
+      { letterNo: { contains: search, mode: "insensitive" as const } },
+    ] : null;
+
     const where = {
       deletedAt: null,
-      ...scopeFilter,
-      ...(mine ? { requestedBy: userId } : {}),
-      ...(search ? { OR: [
-        { title: { contains: search, mode: "insensitive" as const } },
-        { letterNo: { contains: search, mode: "insensitive" as const } },
-      ]} : {}),
-      ...(status  ? { status }      : {}),
-      ...(catId   ? { categoryId: catId }   : {}),
-      ...(deptId  ? { departmentId: deptId } : {}),
-      ...(compId  ? { companyId: compId }   : {}),
+      ...(mine ? { requestedBy: userId } : scopeFilter),
+      ...(status  ? { status }                 : {}),
+      ...(catId   ? { categoryId: catId }      : {}),
+      ...(deptId  ? { departmentId: deptId }   : {}),
+      ...(compId  ? { companyId: compId }      : {}),
+      ...(searchFilter ? { AND: [{ OR: searchFilter }] } : {}),
     };
 
     const [rows, total] = await Promise.all([

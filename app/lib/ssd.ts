@@ -31,11 +31,8 @@ export async function isSsdApprover(userId: string): Promise<boolean> {
  * the given user is allowed to see:
  *   - superadmin → no restriction
  *   - approver (matches active template step) → no restriction
- *   - regular user with organizationId → own org's letters + own letters + letters they've acted on
- *   - regular user without organizationId → own letters + letters they've acted on
- *
- * Uses template-based check (stable) instead of real-time pending check,
- * so scope doesn't change after user acts on a letter.
+ *   - regular user with organizationId → own org's letters + own + PIC + acted
+ *   - regular user without organizationId → own letters + PIC + acted
  */
 export async function ssdLetterScopeFilter(userId: string): Promise<object> {
   const dbUser = await db.user.findUnique({
@@ -50,11 +47,11 @@ export async function ssdLetterScopeFilter(userId: string): Promise<object> {
 
   if (await isSsdApprover(userId)) return {};
 
-  // Non-approver: own org + own letters + any letter they've been an actor on
+  // Non-approver: own letters + PIC letters + same org + any letter they've acted on
   const acted = { approval: { steps: { some: { actorId: userId } } } };
   return dbUser?.organizationId
-    ? { OR: [{ requestedBy: userId }, { requester: { organizationId: dbUser.organizationId } }, acted] }
-    : { OR: [{ requestedBy: userId }, acted] };
+    ? { OR: [{ requestedBy: userId }, { picId: userId }, { requester: { organizationId: dbUser.organizationId } }, acted] }
+    : { OR: [{ requestedBy: userId }, { picId: userId }, acted] };
 }
 
 const ROMAN = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];

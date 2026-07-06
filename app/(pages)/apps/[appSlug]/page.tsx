@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { FileText, CheckCircle2, Clock, Loader2, ChevronRight, AlertCircle, FileSignature, Send, XCircle } from "lucide-react";
+import { FileText, CheckCircle2, Clock, Loader2, ChevronRight, AlertCircle, FileSignature, Send, XCircle, BadgeCheck } from "lucide-react";
 import { ChatWidget } from "@/components/ui/chat-widget";
 
 const STATUS_LABEL: Record<string, string> = {
@@ -70,11 +70,12 @@ export default function AppDashboardPage() {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
               {[
                 { label: "Total Surat", value: ssdStats?.total ?? 0, icon: FileSignature, color: "blue" },
                 { label: "Menunggu Approval", value: ssdStats?.submitted ?? 0, icon: Send, color: "amber" },
                 { label: "Disetujui", value: ssdStats?.approved ?? 0, icon: CheckCircle2, color: "emerald" },
+                { label: "Selesai", value: ssdStats?.done ?? 0, icon: BadgeCheck, color: "teal" },
                 { label: "Ditolak", value: ssdStats?.rejected ?? 0, icon: XCircle, color: "red" },
               ].map(({ label, value, icon: Icon, color }) => (
                 <div key={label} className="bg-white rounded-xl border border-slate-200 p-5 flex items-center gap-4">
