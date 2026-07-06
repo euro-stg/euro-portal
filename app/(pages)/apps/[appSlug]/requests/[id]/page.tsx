@@ -86,6 +86,7 @@ const ACTION_LABEL: Record<string, string> = {
   APPROVAL_CREATED: "Menunggu approval",
   IT_REVIEW: "IT mulai review",
   IT_DOC_SAVED: "Dokumen IT disimpan",
+  IT_DOC_REVISION: "Dokumen IT dikembalikan untuk revisi",
   USER_APPROVED_DOC: "User menyetujui dokumen IT",
   APPROVED_USER: "Pengajuan disetujui user",
   IN_PROGRESS: "Development dimulai",
@@ -233,6 +234,11 @@ export default function RequestDetailPage() {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelNote, setCancelNote] = useState("");
   const [cancelling, setCancelling] = useState(false);
+
+  // IT Doc Revision (requester)
+  const [itDocRevOpen, setItDocRevOpen] = useState(false);
+  const [itDocRevNote, setItDocRevNote] = useState("");
+  const [itDocRevSaving, setItDocRevSaving] = useState(false);
 
   // Reject (IT PIC)
   const [rejectOpen, setRejectOpen] = useState(false);
@@ -407,6 +413,23 @@ export default function RequestDetailPage() {
     finally { setUatApproving(false); }
   };
 
+  const handleItDocRevision = async () => {
+    setItDocRevSaving(true);
+    try {
+      const res = await fetch(`/api/sd/request/${id}/it-document/revise`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ note: itDocRevNote.trim() || null }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.message);
+      showToast("success", "Dokumen IT dikembalikan untuk revisi");
+      setItDocRevOpen(false);
+      setItDocRevNote("");
+      load();
+    } catch (e: unknown) { showToast("error", e instanceof Error ? e.message : "Gagal"); }
+    finally { setItDocRevSaving(false); }
+  };
+
   const handleUatRevision = async () => {
     setUatRevSaving(true);
     try {
@@ -540,8 +563,8 @@ export default function RequestDetailPage() {
   );
 
   const canCancel = isRequester && data.status === "SUBMITTED";
-  // Tolak hanya di step awal oleh PIC/superadmin, tidak di UAT/UAT_REVISION
-  const canReject = (isPic || isSuperadmin) &&
+  // Tolak hanya untuk superadmin atau approver, bukan PIC
+  const canReject = isSuperadmin &&
     ["SUBMITTED", "IT_REVIEW", "APPROVED_IT", "APPROVED_USER", "IN_PROGRESS"].includes(data.status);
   // Cek apakah user adalah approver di chain request ini (sudah act atau eligible di step manapun)
   const isApproverInChain = (() => {
@@ -626,6 +649,12 @@ export default function RequestDetailPage() {
           {isRequester && data.status === "APPROVED_IT" && (
             <Button onClick={() => setApproveDocOpen(true)} className="flex items-center gap-2">
               <CheckCheck className="w-4 h-4" /> Setujui Dokumen
+            </Button>
+          )}
+          {/* Requester: Revisi IT Doc */}
+          {isRequester && data.status === "APPROVED_IT" && (
+            <Button variant="outline" onClick={() => setItDocRevOpen(true)} className="flex items-center gap-2 text-orange-600 border-orange-200 hover:bg-orange-50">
+              <ChevronRight className="w-4 h-4" /> Perlu Revisi
             </Button>
           )}
           {/* Requester: Finish UAT */}
@@ -1241,6 +1270,23 @@ export default function RequestDetailPage() {
             <Button variant="outline" onClick={() => { setUatRevOpen(false); setUatRevNote(""); setUatRevFiles([]); }} disabled={uatRevSaving}>Batal</Button>
             <Button onClick={handleUatRevision} disabled={uatRevSaving} className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600">
               {uatRevSaving && <Loader2 className="w-4 h-4 animate-spin" />} Kirim Revisi
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Requester: Revisi Dokumen IT */}
+      <Modal open={itDocRevOpen} onClose={() => { setItDocRevOpen(false); setItDocRevNote(""); }} title="Perlu Revisi Dokumen IT">
+        <div className="space-y-4">
+          <p className="text-sm text-slate-500">Jelaskan catatan atau saran revisi untuk PIC. Status akan kembali ke <strong>IT Review</strong>.</p>
+          <div>
+            <label className={labelCls}>Catatan revisi (opsional)</label>
+            <textarea className={`${inputCls} resize-none`} rows={3} placeholder="Tuliskan catatan atau saran untuk PIC..." value={itDocRevNote} onChange={(e) => setItDocRevNote(e.target.value)} disabled={itDocRevSaving} />
+          </div>
+          <div className="flex gap-3 justify-end">
+            <Button variant="outline" onClick={() => { setItDocRevOpen(false); setItDocRevNote(""); }} disabled={itDocRevSaving}>Batal</Button>
+            <Button onClick={handleItDocRevision} disabled={itDocRevSaving} className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600">
+              {itDocRevSaving && <Loader2 className="w-4 h-4 animate-spin" />} Kembalikan untuk Revisi
             </Button>
           </div>
         </div>
