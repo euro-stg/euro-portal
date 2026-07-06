@@ -1,6 +1,7 @@
 import db from "@/lib/db/db";
 import { sendNotificationEmail } from "@/lib/mailer";
 import { getNotifConfig } from "@/lib/system-config";
+import { sseEmit } from "@/lib/sse-emitter";
 
 const APP_PATH_SUFFIX: Record<string, { modulePathSuffix: string; entityPath: string }> = {
   SD:  { modulePathSuffix: "/requests", entityPath: "requests" },
@@ -46,6 +47,8 @@ export async function createNotification(
     sendNotificationEmail(user.email, title, body, appType ?? "portal").catch(() => null);
   }
 
+  if (notification) sseEmit(userId, { type: "notification" });
+
   return notification;
 }
 
@@ -75,6 +78,8 @@ export async function notifyMany(
       ? db.user.findMany({ where: { id: { in: unique }, email: { not: null } }, select: { email: true } })
       : Promise.resolve([]),
   ]);
+
+  if (config.inapp) unique.forEach((uid) => sseEmit(uid, { type: "notification" }));
 
   if (config.email) {
     for (const user of (users ?? [])) {

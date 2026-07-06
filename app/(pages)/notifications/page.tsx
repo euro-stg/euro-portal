@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Bell, Check, CheckCheck, ExternalLink, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useRouter } from "next/navigation";
 
 
 type NotifItem = {
@@ -175,7 +175,7 @@ export default function NotificationsPage() {
               </button>
               {detail.refUrl && (
                 <button
-                  onClick={() => { setDetail(null); router.push(detail.refUrl!); }}
+                  onClick={() => { setDetail(null); router.push(`${detail.refUrl}?_r=${Date.now()}`); }}
                   className="flex items-center gap-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg transition-colors"
                 >
                   <ExternalLink className="w-3.5 h-3.5" /> Buka Detail

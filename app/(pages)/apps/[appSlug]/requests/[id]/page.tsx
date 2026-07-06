@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useNotifRefresh } from "@/hooks/use-notif-refresh";
 import {
   ArrowLeft, Loader2, FileText, Clock, CheckCircle2, XCircle, AlertCircle,
   Plus, Pencil, Globe, Calendar, CheckCheck, X, Send, Paperclip,
@@ -298,6 +299,7 @@ export default function RequestDetailPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  useNotifRefresh(load);
 
   // Load users for PIC selection
   const loadUsers = useCallback(async (q: string) => {

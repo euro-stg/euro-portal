@@ -79,6 +79,17 @@ const DOCS: AppDoc[] = [
         ],
       },
       {
+        heading: "Sistem Notifikasi",
+        items: [
+          { label: "In-App & Email", desc: "Setiap aksi penting (approval, assign PIC, UAT, revisi, dsb.) memicu notifikasi in-app dan/atau email sesuai konfigurasi di Pengaturan Sistem. Keduanya bisa diaktifkan/nonaktifkan secara independen." },
+          { label: "Real-Time via SSE", desc: "Portal menggunakan Server-Sent Events (SSE) — koneksi persisten ke /api/notifications/stream. Notifikasi muncul di bell icon tanpa perlu refresh halaman. In-memory emitter berbasis singleton aman untuk deployment Docker single-instance." },
+          { label: "Polling Fallback", desc: "Selain SSE, bell icon tetap polling count setiap 60 detik sebagai fallback jika koneksi SSE terputus." },
+          { label: "Direct Link ke Sumber", desc: "Setiap notifikasi menyimpan refUrl — URL langsung ke halaman yang relevan (misal: detail request SD atau surat SSD). Dibangun otomatis saat notifikasi dibuat via lookup Module table, tidak perlu diisi manual oleh caller." },
+          { label: "Auto Refresh Halaman", desc: "Tombol 'Buka Detail' menambahkan param ?_r=timestamp ke URL. Halaman tujuan mendeteksi perubahan param via useNotifRefresh(load) dan memanggil ulang data — menghindari tampilan stale jika user sudah berada di halaman yang sama." },
+          { label: "Manajemen Notifikasi", desc: "User bisa tandai semua dibaca, hapus notifikasi yang sudah dibaca, dan navigasi dengan pagination di halaman /notifications. Bell icon menampilkan badge unread count." },
+        ],
+      },
+      {
         heading: "Keamanan",
         items: [
           { label: "Autentikasi Portal", desc: "NextAuth dengan database sessions — token disimpan di tabel Session, bisa di-revoke kapan saja. Bukan JWT stateless yang tidak bisa dibatalkan sebelum expired." },

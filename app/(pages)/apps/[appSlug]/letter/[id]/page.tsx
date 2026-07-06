@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useNotifRefresh } from "@/hooks/use-notif-refresh";
 import {
   ArrowLeft, FileSignature, CheckCircle2, XCircle, Clock, Send,
   Upload, Loader2, ChevronRight, FileCheck, X, Activity,
@@ -91,6 +92,7 @@ export default function LetterDetailPage() {
   }, [id]);
 
   useEffect(() => { void load(); }, [load]);
+  useNotifRefresh(load);
 
   const handleSubmit = async () => {
     setSubmitting(true);

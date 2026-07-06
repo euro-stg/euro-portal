@@ -73,10 +73,26 @@ export function NotificationBell() {
     finally { setLoading(false); }
   }, []);
 
-  // Polling setiap 30 detik
+  // SSE: terima notifikasi real-time
+  useEffect(() => {
+    const es = new EventSource("/api/notifications/stream");
+    es.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        if (data.type === "notification") {
+          setUnread((p) => p + 1);
+          if (open) fetchNotifs();
+        }
+      } catch { /* ignore */ }
+    };
+    es.onerror = () => es.close();
+    return () => es.close();
+  }, [open, fetchNotifs]);
+
+  // Polling fallback setiap 60 detik
   useEffect(() => {
     fetchCount();
-    const id = setInterval(fetchCount, 30000);
+    const id = setInterval(fetchCount, 60000);
     return () => clearInterval(id);
   }, [fetchCount]);
 
@@ -218,7 +234,7 @@ export function NotificationBell() {
               </button>
               {detail.refUrl && (
                 <button
-                  onClick={() => { setDetail(null); setOpen(false); router.push(detail.refUrl!); }}
+                  onClick={() => { setDetail(null); setOpen(false); router.push(`${detail.refUrl}?_r=${Date.now()}`); }}
                   className="flex items-center gap-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg transition-colors"
                 >
                   <ExternalLink className="w-3.5 h-3.5" /> Buka Detail
