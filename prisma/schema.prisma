@@ -420,6 +420,7 @@ model Notification {
   type      String   // "APPROVAL_REQUEST" | "APPROVAL_ACTION" | "TICKET" | "GENERAL"
   refId     String?
   appType   String?
+  refUrl    String?
   read      Boolean   @default(false)
   createdAt DateTime  @default(now())
   deletedAt DateTime?

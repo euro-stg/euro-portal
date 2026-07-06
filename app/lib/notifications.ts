@@ -2,6 +2,24 @@ import db from "@/lib/db/db";
 import { sendNotificationEmail } from "@/lib/mailer";
 import { getNotifConfig } from "@/lib/system-config";
 
+const APP_PATH_SUFFIX: Record<string, { modulePathSuffix: string; entityPath: string }> = {
+  SD:  { modulePathSuffix: "/requests", entityPath: "requests" },
+  SSD: { modulePathSuffix: "/letter",   entityPath: "letter"   },
+};
+
+async function buildRefUrl(appType: string | undefined, refId: string | undefined): Promise<string | null> {
+  if (!appType || !refId) return null;
+  const conf = APP_PATH_SUFFIX[appType];
+  if (!conf) return null;
+  const mod = await db.module.findFirst({
+    where: { path: { endsWith: conf.modulePathSuffix }, deletedAt: null },
+    select: { path: true },
+  });
+  if (!mod) return null;
+  const appBase = mod.path.slice(0, mod.path.length - conf.modulePathSuffix.length);
+  return `${appBase}/${conf.entityPath}/${refId}`;
+}
+
 export async function createNotification(
   userId: string,
   title: string,
@@ -10,11 +28,14 @@ export async function createNotification(
   refId?: string,
   appType?: string,
 ) {
-  const config = await getNotifConfig();
+  const [config, refUrl] = await Promise.all([
+    getNotifConfig(),
+    buildRefUrl(appType, refId),
+  ]);
 
   const [notification, user] = await Promise.all([
     config.inapp
-      ? db.notification.create({ data: { userId, title, body, type, refId: refId ?? null, appType: appType ?? null } })
+      ? db.notification.create({ data: { userId, title, body, type, refId: refId ?? null, appType: appType ?? null, refUrl } })
       : Promise.resolve(null),
     config.email
       ? db.user.findUnique({ where: { id: userId }, select: { email: true } })
@@ -39,12 +60,15 @@ export async function notifyMany(
   const unique = [...new Set(userIds)].filter(Boolean);
   if (unique.length === 0) return;
 
-  const config = await getNotifConfig();
+  const [config, refUrl] = await Promise.all([
+    getNotifConfig(),
+    buildRefUrl(appType, refId),
+  ]);
 
   const [, users] = await Promise.all([
     config.inapp
       ? db.notification.createMany({
-          data: unique.map((userId) => ({ userId, title, body, type, refId: refId ?? null, appType: appType ?? null })),
+          data: unique.map((userId) => ({ userId, title, body, type, refId: refId ?? null, appType: appType ?? null, refUrl })),
         })
       : Promise.resolve(null),
     config.email

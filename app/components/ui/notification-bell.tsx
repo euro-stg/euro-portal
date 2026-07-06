@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Bell, Check, CheckCheck, X, Loader2, ExternalLink } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 type NotifItem = {
   id: string;
@@ -11,6 +12,7 @@ type NotifItem = {
   type: string;
   refId: string | null;
   appType: string | null;
+  refUrl: string | null;
   read: boolean;
   createdAt: string;
 };
@@ -53,6 +55,7 @@ export function NotificationBell() {
   const [loading, setLoading]     = useState(false);
   const [detail, setDetail]       = useState<NotifItem | null>(null);
   const dropRef                   = useRef<HTMLDivElement>(null);
+  const router                    = useRouter();
 
   const fetchCount = useCallback(async () => {
     try {
@@ -209,10 +212,18 @@ export function NotificationBell() {
             <h3 className="text-base font-semibold text-slate-800 mb-2">{detail.title}</h3>
             <p className="text-sm text-slate-600 leading-relaxed">{detail.body}</p>
             <p className="text-xs text-slate-400 mt-4">{timeAgo(detail.createdAt)}</p>
-            <div className="mt-4 pt-4 border-t border-slate-100 flex justify-end">
+            <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
               <button onClick={() => setDetail(null)} className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700">
                 <Check className="w-3.5 h-3.5" /> Tutup
               </button>
+              {detail.refUrl && (
+                <button
+                  onClick={() => { setDetail(null); setOpen(false); router.push(detail.refUrl!); }}
+                  className="flex items-center gap-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" /> Buka Detail
+                </button>
+              )}
             </div>
           </div>
         </div>

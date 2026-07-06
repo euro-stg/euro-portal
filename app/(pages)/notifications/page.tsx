@@ -1,12 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Bell, Check, CheckCheck, Loader2, X } from "lucide-react";
+import { Bell, Check, CheckCheck, ExternalLink, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useRouter } from "next/navigation";
+
 
 type NotifItem = {
   id: string; title: string; body: string;
-  type: string; refId: string | null; appType: string | null;
+  type: string; refId: string | null; appType: string | null; refUrl: string | null;
   read: boolean; createdAt: string;
 };
 
@@ -26,6 +28,7 @@ function appBadgeCls(appType: string | null) {
   return APP_BADGE[appType ?? ""] ?? "bg-slate-100 text-slate-500";
 }
 
+
 function timeAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
   const m = Math.floor(diff / 60000);
@@ -44,6 +47,7 @@ export default function NotificationsPage() {
   const [loading, setLoading] = useState(false);
   const [detail, setDetail]   = useState<NotifItem | null>(null);
   const limit = 20;
+  const router = useRouter();
 
   const load = useCallback(async (p: number) => {
     setLoading(true);
@@ -165,10 +169,18 @@ export default function NotificationsPage() {
             <h3 className="text-base font-semibold text-slate-800 mb-2">{detail.title}</h3>
             <p className="text-sm text-slate-600 leading-relaxed">{detail.body}</p>
             <p className="text-xs text-slate-400 mt-4">{timeAgo(detail.createdAt)}</p>
-            <div className="mt-4 pt-4 border-t border-slate-100 flex justify-end">
+            <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
               <button onClick={() => setDetail(null)} className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700">
                 <Check className="w-3.5 h-3.5" /> Tutup
               </button>
+              {detail.refUrl && (
+                <button
+                  onClick={() => { setDetail(null); router.push(detail.refUrl!); }}
+                  className="flex items-center gap-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" /> Buka Detail
+                </button>
+              )}
             </div>
           </div>
         </div>
