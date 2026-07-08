@@ -5,12 +5,14 @@ import {
   ArrowRight, ExternalLink, Loader2, Layers,
   LayoutDashboard, Users, Tag, Shield, Package, Settings, Database,
   Bell, FileText, Ticket, Workflow, BookOpen, FolderKanban,
+  Stethoscope, Terminal, ScrollText, Star,
   type LucideIcon,
 } from "lucide-react";
 
 const iconRegistry: Record<string, LucideIcon> = {
   LayoutDashboard, Users, Tag, Shield, Package, Settings, Database,
   Bell, FileText, Ticket, Workflow, BookOpen, FolderKanban, Layers,
+  Stethoscope, Terminal, ScrollText, Star,
 };
 
 type Props = {
