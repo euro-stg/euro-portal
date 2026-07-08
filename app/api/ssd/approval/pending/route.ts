@@ -24,8 +24,8 @@ export async function GET(request: Request) {
         letter: {
           include: {
             category: { select: { code: true, name: true } },
-            department: { select: { code: true, name: true } },
             company: { select: { code: true, name: true } },
+            organization: { select: { code: true, name: true } },
             requester: { select: { id: true, name: true, jobPositionName: true, organizationName: true } },
           },
         },
@@ -64,7 +64,7 @@ export async function GET(request: Request) {
         stepOrganizationName: activeStep.organizationName,
         stepBranchName: activeStep.branchName,
         category: approval.letter.category,
-        department: approval.letter.department,
+        organization: approval.letter.organization,
         company: approval.letter.company,
         createdAt: approval.createdAt,
       };
