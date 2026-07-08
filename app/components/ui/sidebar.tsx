@@ -12,7 +12,7 @@ import {
   GitBranch, Briefcase, Building2, Network, ShieldCheck,
   Code2, Scale, FolderOpen, BarChart2, Globe, Lock, Cpu,
   FileSignature, Send, CheckSquare, PenLine, ListChecks, Mail,
-  Stethoscope,
+  Stethoscope, Terminal, ScrollText, Star,
   type LucideIcon,
 } from "lucide-react";
 import type { SidebarModule } from "@/types/sidebar";
@@ -39,6 +39,8 @@ const iconRegistry: Record<string, LucideIcon> = {
   Mail,
   // Medis
   Stethoscope,
+  // Apps tambahan
+  Terminal, ScrollText, Star,
 };
 
 const iconColorRegistry: Record<string, string> = {
@@ -84,6 +86,10 @@ const iconColorRegistry: Record<string, string> = {
   Mail:            "text-violet-500",
   // Medis
   Stethoscope:     "text-rose-500",
+  // Apps tambahan
+  Terminal:        "text-slate-600",
+  ScrollText:      "text-blue-500",
+  Star:            "text-amber-500",
 };
 
 const groupColorRegistry: Record<string, string> = {
