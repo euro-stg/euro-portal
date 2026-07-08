@@ -77,6 +77,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Kredensial tidak valid" }, { status: 401 });
     }
 
+    // Cek akses user ke app ini (via UserRole.appId = AppToken.moduleId)
+    if (appRecord.moduleId) {
+      const hasAccess = await db.userRole.findFirst({
+        where: { userId: user.id, appId: appRecord.moduleId },
+      });
+      if (!hasAccess) {
+        log("FAILED", { appTokenId: appRecord.id, appName, userId: user.id, statusCode: 403, reason: "User tidak memiliki akses ke aplikasi ini" });
+        return NextResponse.json({ error: "Anda tidak memiliki akses ke aplikasi ini" }, { status: 403 });
+      }
+    }
+
     await db.ssoSession.deleteMany({ where: { userId: user.id, appTokenId: appRecord.id } });
 
     const { randomBytes } = await import("crypto");

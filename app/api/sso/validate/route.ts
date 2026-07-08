@@ -76,6 +76,17 @@ export async function GET(request: Request) {
         return NextResponse.json({ valid: false, error: "Akun tidak aktif" }, { status: 403 });
       }
 
+      // Cek akses user ke app ini
+      if (appRecord.moduleId) {
+        const hasAccess = await db.userRole.findFirst({
+          where: { userId: redirectToken.userId, appId: appRecord.moduleId },
+        });
+        if (!hasAccess) {
+          log("FAILED", { appTokenId: appRecord.id, appName, userId: redirectToken.userId, statusCode: 403, reason: "User tidak memiliki akses ke aplikasi ini" });
+          return NextResponse.json({ valid: false, error: "Anda tidak memiliki akses ke aplikasi ini" }, { status: 403 });
+        }
+      }
+
       await db.ssoRedirectToken.update({ where: { id: redirectToken.id }, data: { usedAt: new Date() } });
 
       const sessionToken = (await import("crypto")).randomBytes(40).toString("hex");
@@ -114,6 +125,17 @@ export async function GET(request: Request) {
       if (session.user.status === "inactive") {
         log("FAILED", { appTokenId: appRecord.id, appName, userId: session.userId, statusCode: 403, reason: "Akun tidak aktif" });
         return NextResponse.json({ valid: false, error: "Akun tidak aktif" }, { status: 403 });
+      }
+
+      // Cek akses user ke app ini (defense-in-depth — handle jika akses dicabut setelah login)
+      if (appRecord.moduleId) {
+        const hasAccess = await db.userRole.findFirst({
+          where: { userId: session.userId, appId: appRecord.moduleId },
+        });
+        if (!hasAccess) {
+          log("FAILED", { appTokenId: appRecord.id, appName, userId: session.userId, statusCode: 403, reason: "User tidak memiliki akses ke aplikasi ini" });
+          return NextResponse.json({ valid: false, error: "Anda tidak memiliki akses ke aplikasi ini" }, { status: 403 });
+        }
       }
 
       log("SUCCESS", { appTokenId: appRecord.id, appName, userId: session.userId, statusCode: 200 });
