@@ -1,24 +1,14 @@
 import { redirect } from "next/navigation";
-import {
-  LayoutDashboard, Users, Tag, Shield, Package, Settings, Database,
-  Bell, FileText, Ticket, Workflow, BookOpen, FolderKanban, Layers,
-  Lock, Stethoscope, Terminal, ScrollText, Star, type LucideIcon,
-} from "lucide-react";
-
+import { Lock } from "lucide-react";
 import Image from "next/image";
 import prisma from "@/lib/db/db";
 import { auth } from "@/lib/auth";
 import { ExternalAppCard } from "@/components/ui/external-app-card";
 import { InternalAppCard } from "@/components/ui/internal-app-card";
 import { ChatWidget } from "@/components/ui/chat-widget";
+import { getAppIcon } from "@/lib/icon-registry";
 
 export const dynamic = "force-dynamic";
-
-const iconRegistry: Record<string, LucideIcon> = {
-  LayoutDashboard, Users, Tag, Shield, Package, Settings, Database,
-  Bell, FileText, Ticket, Workflow, BookOpen, FolderKanban, Layers,
-  Stethoscope, Terminal, ScrollText, Star,
-};
 
 const colorMap: Record<string, { gradient: string; border: string }> = {
   blue:    { gradient: "from-blue-500 to-blue-600",      border: "border-blue-100"    },
@@ -37,9 +27,6 @@ function getColor(color: string | null) {
   return (color && colorMap[color]) ? colorMap[color] : colorMap.blue;
 }
 
-function getIcon(name: string | null): LucideIcon {
-  return (name && iconRegistry[name]) ? iconRegistry[name] : Layers;
-}
 
 const Home = async () => {
   const session = await auth();
@@ -115,7 +102,7 @@ const Home = async () => {
             {allApps.map((app) => {
               const hasAccess = accessibleAppIds.has(app.id);
               const c         = getColor(app.color);
-              const Icon      = getIcon(app.icon);
+              const Icon      = getAppIcon(app.icon);
 
               if (hasAccess) {
                 // Aplikasi eksternal — SSO redirect ke new tab

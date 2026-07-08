@@ -1,18 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import {
-  Layers, LayoutDashboard, Users, Tag, Shield, Package, Settings, Database,
-  Bell, FileText, Ticket, Workflow, BookOpen, FolderKanban,
-  Stethoscope, Terminal, ScrollText, Star,
-  type LucideIcon,
-} from "lucide-react";
-
-const iconRegistry: Record<string, LucideIcon> = {
-  LayoutDashboard, Users, Tag, Shield, Package, Settings, Database,
-  Bell, FileText, Ticket, Workflow, BookOpen, FolderKanban, Layers,
-  Stethoscope, Terminal, ScrollText, Star,
-};
+import { getAppIcon } from "@/lib/icon-registry";
 
 type Props = {
   app: { id: string; name: string; path: string; description: string | null };
@@ -21,7 +10,7 @@ type Props = {
 };
 
 export function InternalAppCard({ app, colorCls: c, iconName }: Props) {
-  const Icon = (iconName && iconRegistry[iconName]) ? iconRegistry[iconName] : Layers;
+  const Icon = getAppIcon(iconName);
 
   return (
     <Link

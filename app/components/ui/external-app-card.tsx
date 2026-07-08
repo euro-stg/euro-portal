@@ -2,18 +2,9 @@
 
 import { useState } from "react";
 import {
-  ArrowRight, ExternalLink, Loader2, Layers,
-  LayoutDashboard, Users, Tag, Shield, Package, Settings, Database,
-  Bell, FileText, Ticket, Workflow, BookOpen, FolderKanban,
-  Stethoscope, Terminal, ScrollText, Star,
-  type LucideIcon,
+  ArrowRight, ExternalLink, Loader2,
 } from "lucide-react";
-
-const iconRegistry: Record<string, LucideIcon> = {
-  LayoutDashboard, Users, Tag, Shield, Package, Settings, Database,
-  Bell, FileText, Ticket, Workflow, BookOpen, FolderKanban, Layers,
-  Stethoscope, Terminal, ScrollText, Star,
-};
+import { getAppIcon } from "@/lib/icon-registry";
 
 type Props = {
   app: {
@@ -26,7 +17,7 @@ type Props = {
 };
 
 export function ExternalAppCard({ app, colorCls: c, iconName }: Props) {
-  const Icon = (iconName && iconRegistry[iconName]) ? iconRegistry[iconName] : Layers;
+  const Icon = getAppIcon(iconName);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState<string | null>(null);
 

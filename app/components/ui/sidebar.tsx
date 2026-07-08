@@ -4,92 +4,14 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import {
-  LayoutDashboard, Users, Tag,
-  Settings, Database, Shield, Package, X, Bell, Layers,
-  FileText, Ticket, Workflow, BookOpen, FolderKanban, ArrowLeft,
-  Settings2, Key, Link2,
-  GitBranch, Briefcase, Building2, Network, ShieldCheck,
-  Code2, Scale, FolderOpen, BarChart2, Globe, Lock, Cpu,
-  FileSignature, Send, CheckSquare, PenLine, ListChecks, Mail,
-  Stethoscope, Terminal, ScrollText, Star,
-  type LucideIcon,
-} from "lucide-react";
+import { X, ArrowLeft } from "lucide-react";
+import { getSidebarIcon, getIconColor } from "@/lib/icon-registry";
 import type { SidebarModule } from "@/types/sidebar";
 
 type SidebarUser = {
   name?: string | null;
   image?: string | null;
   role?: string | null;
-};
-
-const iconRegistry: Record<string, LucideIcon> = {
-  LayoutDashboard, Users, Tag, Shield, Package, Settings, Settings2,
-  Database, Bell, Layers, FileText, Ticket, Workflow, BookOpen, FolderKanban,
-  Key, Link2,
-  // Master data
-  GitBranch, Briefcase, Building2, Network,
-  // Integrasi / SSO
-  ShieldCheck,
-  // Apps & misc
-  Code2, Scale, FolderOpen, BarChart2, Globe, Lock, Cpu,
-  // SSD
-  FileSignature, Send, CheckSquare, PenLine, ListChecks,
-  // Pengaturan
-  Mail,
-  // Medis
-  Stethoscope,
-  // Apps tambahan
-  Terminal, ScrollText, Star,
-};
-
-const iconColorRegistry: Record<string, string> = {
-  LayoutDashboard: "text-blue-500",
-  Users:           "text-indigo-500",
-  Tag:             "text-emerald-500",
-  Shield:          "text-violet-500",
-  Package:         "text-orange-500",
-  Database:        "text-cyan-500",
-  Settings:        "text-slate-400",
-  Settings2:       "text-slate-400",
-  Bell:            "text-amber-500",
-  Layers:          "text-blue-500",
-  FileText:        "text-rose-500",
-  Ticket:          "text-teal-500",
-  Workflow:        "text-purple-500",
-  BookOpen:        "text-sky-500",
-  FolderKanban:    "text-pink-500",
-  Key:             "text-amber-500",
-  Link2:           "text-teal-500",
-  // Master data
-  GitBranch:       "text-teal-500",
-  Briefcase:       "text-indigo-500",
-  Building2:       "text-emerald-500",
-  Network:         "text-violet-500",
-  // Integrasi / SSO
-  ShieldCheck:     "text-violet-500",
-  // Apps & misc
-  Code2:           "text-blue-500",
-  Scale:           "text-orange-500",
-  FolderOpen:      "text-amber-500",
-  BarChart2:       "text-cyan-500",
-  Globe:           "text-sky-500",
-  Lock:            "text-rose-500",
-  Cpu:             "text-slate-500",
-  // SSD
-  FileSignature:   "text-violet-500",
-  Send:            "text-blue-500",
-  CheckSquare:     "text-emerald-500",
-  PenLine:         "text-indigo-500",
-  ListChecks:      "text-teal-500",
-  // Pengaturan
-  Mail:            "text-violet-500",
-  // Medis
-  Stethoscope:     "text-rose-500",
-  // Apps tambahan
-  Terminal:        "text-slate-600",
-  ScrollText:      "text-blue-500",
-  Star:            "text-amber-500",
 };
 
 const groupColorRegistry: Record<string, string> = {
@@ -99,14 +21,6 @@ const groupColorRegistry: Record<string, string> = {
   "Approval":    "text-amber-500",
   "Transaksi":   "text-blue-500",
 };
-
-function getIcon(name: string | null): LucideIcon {
-  return (name && iconRegistry[name]) ? iconRegistry[name] : LayoutDashboard;
-}
-
-function getIconColor(name: string | null): string {
-  return (name && iconColorRegistry[name]) ? iconColorRegistry[name] : "text-slate-400";
-}
 
 const Sidebar = ({
   open,
@@ -169,7 +83,7 @@ const Sidebar = ({
   };
 
   const NavItem = ({ m }: { m: SidebarModule }) => {
-    const Icon   = getIcon(m.icon);
+    const Icon   = getSidebarIcon(m.icon);
     const active = isActive(m.path);
     const isApprovalInbox = m.path.endsWith("/approval");
 
