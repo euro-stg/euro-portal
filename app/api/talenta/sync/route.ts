@@ -272,6 +272,12 @@ export async function POST(req: NextRequest) {
     today.setHours(0, 0, 0, 0);
 
     // Ambil semua user yang sudah ada beserta talentaImageKey + image untuk cek/hapus avatar lama
+    // Manual users di-skip agar tidak tertimpa sync Talenta
+    const manualUserIds = new Set(
+      (await prisma.user.findMany({ where: { source: "manual" }, select: { employeeId: true } }))
+        .map((u) => u.employeeId),
+    );
+
     const existingUsers = new Map(
       (await prisma.user.findMany({ select: { employeeId: true, talentaImageKey: true, image: true } }))
         .map((u) => [u.employeeId, { talentaImageKey: u.talentaImageKey, image: u.image }]),
@@ -288,6 +294,7 @@ export async function POST(req: NextRequest) {
       await Promise.all(
         batch.map(async (emp) => {
           if (!emp.employee_id) return;
+          if (manualUserIds.has(emp.employee_id)) return; // skip manual users
 
           const existingUser = existingUsers.get(emp.employee_id);
           const isExisting = !!existingUser;
@@ -367,7 +374,7 @@ export async function POST(req: NextRequest) {
 
           if (!isExisting) {
             const hashedPassword = await bcrypt.hash(crypto.randomBytes(16).toString("hex"), 8);
-            await prisma.user.create({ data: { ...payload, password: hashedPassword } });
+            await prisma.user.create({ data: { ...payload, source: "talenta", password: hashedPassword } });
             existingUsers.set(emp.employee_id, { talentaImageKey: newImageKey, image: imageFields.image ?? null });
             created++;
           } else {

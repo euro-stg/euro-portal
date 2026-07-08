@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Pagination } from "@/components/ui/pagination";
 import Link from "next/link";
 import Image from "next/image";
-import { RefreshCw, Users, CloudDownload, UserCheck, List, Layers, X, History, CheckCircle, AlertCircle, Clock } from "lucide-react";
+import { RefreshCw, Users, CloudDownload, UserCheck, List, Layers, X, History, CheckCircle, AlertCircle, Clock, UserPlus, Trash2 } from "lucide-react";
 
 type RoleEntry = { name: string; appId: string | null };
 
@@ -28,6 +28,7 @@ type UserRow = {
   phone: string | null;
   mobilePhone: string | null;
   email: string | null;
+  source: string;
 };
 
 type UserDetail = UserRow & {
@@ -130,6 +131,21 @@ function RoleBadges({ roles }: { roles: RoleEntry[] }) {
   );
 }
 
+function SourceBadge({ source }: { source: string }) {
+  if (source === "manual") {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
+        Manual
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
+      Talenta
+    </span>
+  );
+}
+
 function FormField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1.5">
@@ -169,6 +185,15 @@ export default function ListUserPage() {
 
   // Avatar preview
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+
+  // Create manual user
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createForm, setCreateForm] = useState({ employeeId: "", name: "", email: "", password: "" });
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  // Delete
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Sync log
   type SyncLog = { id: string; type: string; trigger: string; status: string; processed: number | null; created: number | null; updated: number | null; error: string | null; startedAt: string; finishedAt: string | null };
@@ -457,6 +482,39 @@ export default function ListUserPage() {
     setLogOpen(true);
   };
 
+  const handleCreate = async () => {
+    if (creating) return;
+    setCreating(true);
+    setCreateError(null);
+    try {
+      const res = await fetch("/api/user", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(createForm),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) { setCreateError(json?.message ?? "Gagal membuat user"); return; }
+      showToast("success", "User berhasil dibuat");
+      setCreateOpen(false);
+      setCreateForm({ employeeId: "", name: "", email: "", password: "" });
+      void refreshList(currentPage, filters, showAll);
+    } catch { setCreateError("Network error"); }
+    finally { setCreating(false); }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Nonaktifkan user ini?")) return;
+    setDeletingId(id);
+    try {
+      const res = await fetch(`/api/user/delete/${id}`, { method: "DELETE" });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) { showToast("error", json?.message ?? "Gagal menghapus user"); return; }
+      showToast("success", "User dinonaktifkan");
+      void refreshList(currentPage, filters, showAll);
+    } catch { showToast("error", "Network error"); }
+    finally { setDeletingId(null); }
+  };
+
   // Roles filtered by selected scope for assign modal
   const filteredAssignRoles = assignRoles.filter((r) => {
     // This filters by appId on the role itself — roles API doesn't return appId here
@@ -506,6 +564,10 @@ export default function ListUserPage() {
               Bulk Assign Role
             </Button>
           </Link>
+          <Button variant="primary" size="sm" onClick={() => { setCreateError(null); setCreateOpen(true); }}>
+            <UserPlus className="w-3.5 h-3.5" />
+            Tambah User
+          </Button>
           <Button variant="success" size="sm" onClick={handleSyncTalenta} disabled={loading}>
             <CloudDownload className="w-3.5 h-3.5" />
             Sync Talenta
@@ -558,7 +620,7 @@ export default function ListUserPage() {
                   className="w-4 h-4 rounded border-slate-300 accent-blue-600"
                 />
               </th>
-              {["No","Employee ID","Name","Join Date","Resign Date","Organization","Branch","Position","Age","Role",""].map((h, i) => (
+              {["No","Employee ID","Name","Join Date","Resign Date","Organization","Branch","Position","Age","Role","Source",""].map((h, i) => (
                 <th key={i} className="px-3 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">
                   {h}
                 </th>
@@ -584,12 +646,13 @@ export default function ListUserPage() {
                 </select>
               </td>
               <td className="px-3 py-2" />
+              <td className="px-3 py-2" />
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {loading ? (
               <tr>
-                <td colSpan={12} className="text-center py-12 text-slate-400 text-sm">
+                <td colSpan={13} className="text-center py-12 text-slate-400 text-sm">
                   <div className="flex items-center justify-center gap-2">
                     <RefreshCw className="w-4 h-4 animate-spin" /> Memuat data...
                   </div>
@@ -597,7 +660,7 @@ export default function ListUserPage() {
               </tr>
             ) : data.length === 0 ? (
               <tr>
-                <td colSpan={12} className="text-center py-12 text-slate-400 text-sm">Tidak ada data</td>
+                <td colSpan={13} className="text-center py-12 text-slate-400 text-sm">Tidak ada data</td>
               </tr>
             ) : (
               data.map((item, index) => {
@@ -626,8 +689,21 @@ export default function ListUserPage() {
                     <td className="px-3 py-3 text-xs text-slate-600">{item.jobPositionName ?? "—"}</td>
                     <td className="px-3 py-3 text-xs text-slate-500 text-center">{item.age ?? "—"}</td>
                     <td className="px-3 py-3"><RoleBadges roles={item.roles ?? (item.role ? [{ name: item.role, appId: null }] : [])} /></td>
+                    <td className="px-3 py-3"><SourceBadge source={item.source ?? "talenta"} /></td>
                     <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
-                      <Button variant="primary" size="sm" onClick={() => void openDetail(item.id)}>Detail</Button>
+                      <div className="flex items-center gap-1.5">
+                        <Button variant="primary" size="sm" onClick={() => void openDetail(item.id)}>Detail</Button>
+                        {item.source === "manual" && (
+                          <button
+                            onClick={() => void handleDelete(item.id)}
+                            disabled={deletingId === item.id}
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium text-red-600 border border-red-200 bg-red-50 hover:bg-red-100 disabled:opacity-50 transition-colors"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            {deletingId === item.id ? "..." : "Hapus"}
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -853,6 +929,53 @@ export default function ListUserPage() {
           </button>
         </div>
       )}
+
+      {/* Create Manual User Modal */}
+      <Modal open={createOpen} title="Tambah User Manual" onClose={() => setCreateOpen(false)} boxClassName="w-full max-w-md">
+        <div className="space-y-4">
+          {createError && <Alert variant="error" message={createError} />}
+          <FormField label="Employee ID *">
+            <input
+              className={inputCls}
+              placeholder="Contoh: EXT001"
+              value={createForm.employeeId}
+              onChange={(e) => setCreateForm((p) => ({ ...p, employeeId: e.target.value }))}
+            />
+          </FormField>
+          <FormField label="Nama *">
+            <input
+              className={inputCls}
+              placeholder="Nama lengkap"
+              value={createForm.name}
+              onChange={(e) => setCreateForm((p) => ({ ...p, name: e.target.value }))}
+            />
+          </FormField>
+          <FormField label="Email">
+            <input
+              type="email"
+              className={inputCls}
+              placeholder="email@example.com (opsional)"
+              value={createForm.email}
+              onChange={(e) => setCreateForm((p) => ({ ...p, email: e.target.value }))}
+            />
+          </FormField>
+          <FormField label="Password *">
+            <input
+              type="password"
+              className={inputCls}
+              placeholder="Minimal 8 karakter"
+              value={createForm.password}
+              onChange={(e) => setCreateForm((p) => ({ ...p, password: e.target.value }))}
+            />
+          </FormField>
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+            <Button variant="ghost" onClick={() => setCreateOpen(false)} disabled={creating}>Batal</Button>
+            <Button variant="primary" onClick={() => void handleCreate()} disabled={creating}>
+              {creating ? "Menyimpan..." : "Buat User"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Sync Log Modal */}
       <Modal open={logOpen} title="Log Sync User" onClose={() => setLogOpen(false)} boxClassName="w-11/12 max-w-2xl">

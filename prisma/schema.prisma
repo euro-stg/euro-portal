@@ -41,6 +41,7 @@ model User {
   identityNumber   String?
   jobLevel         String?
   employmentStatus String?
+  source           String   @default("talenta") // "talenta" | "manual"
 
   accounts             Account[]
   sessions             Session[]

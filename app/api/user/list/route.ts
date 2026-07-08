@@ -103,6 +103,7 @@ export async function GET(request: Request) {
           employeeId: true,
           name: true,
           status: true,
+          source: true,
           userRoles: {
             select: { role: { select: { name: true, appId: true } } },
             orderBy: { createdAt: "asc" },
