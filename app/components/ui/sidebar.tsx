@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { X, ArrowLeft } from "lucide-react";
+import { X, ArrowLeft, LayoutDashboard, BookOpen } from "lucide-react";
 import { getSidebarIcon, getIconColor } from "@/lib/icon-registry";
 import type { SidebarModule } from "@/types/sidebar";
 
