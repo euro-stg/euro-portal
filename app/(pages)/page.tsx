@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { Lock } from "lucide-react";
+import { Lock, Layers } from "lucide-react";
 import Image from "next/image";
 import prisma from "@/lib/db/db";
 import { auth } from "@/lib/auth";
