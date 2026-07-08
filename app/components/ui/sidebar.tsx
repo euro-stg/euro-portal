@@ -9,7 +9,7 @@ import {
   Settings, Database, Shield, Package, X, Bell, Layers,
   FileText, Ticket, Workflow, BookOpen, FolderKanban, ArrowLeft,
   Settings2, Key, Link2,
-  GitBranch, Briefcase, Building2, ShieldCheck,
+  GitBranch, Briefcase, Building2, Network, ShieldCheck,
   Code2, Scale, FolderOpen, BarChart2, Globe, Lock, Cpu,
   FileSignature, Send, CheckSquare, PenLine, ListChecks, Mail,
   type LucideIcon,
@@ -27,7 +27,7 @@ const iconRegistry: Record<string, LucideIcon> = {
   Database, Bell, Layers, FileText, Ticket, Workflow, BookOpen, FolderKanban,
   Key, Link2,
   // Master data
-  GitBranch, Briefcase, Building2,
+  GitBranch, Briefcase, Building2, Network,
   // Integrasi / SSO
   ShieldCheck,
   // Apps & misc
@@ -60,6 +60,7 @@ const iconColorRegistry: Record<string, string> = {
   GitBranch:       "text-teal-500",
   Briefcase:       "text-indigo-500",
   Building2:       "text-emerald-500",
+  Network:         "text-violet-500",
   // Integrasi / SSO
   ShieldCheck:     "text-violet-500",
   // Apps & misc

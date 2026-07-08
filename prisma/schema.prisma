@@ -65,7 +65,6 @@ model User {
   ssdApprovalSubmitted SsdApproval[]         @relation("SsdApprovalSubmitter")
   ssdApprovalActions   SsdApprovalStep[]     @relation("SsdApprovalActor")
   ssdActivities        SsdActivity[]         @relation("SsdActivityActor")
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -720,6 +719,22 @@ model SsdActivity {
 
   letter SsdLetter @relation(fields: [letterId], references: [id], onDelete: Cascade)
   actor  User      @relation("SsdActivityActor", fields: [userId], references: [id])
+}
+
+model Organization {
+  id                   String    @id  // Talenta org id (string) atau cuid jika manual
+  name                 String
+  parentOrganizationId String?
+  branchId             String?
+  code                 String?
+  source               String    @default("manual")  // "talenta" | "user_sync" | "manual"
+  syncedAt             DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime?
+  deletedAt            DateTime?
+
+  parent   Organization?  @relation("OrgHierarchy", fields: [parentOrganizationId], references: [id])
+  children Organization[] @relation("OrgHierarchy")
 }
 
 // ===================== EMAIL LOG =====================

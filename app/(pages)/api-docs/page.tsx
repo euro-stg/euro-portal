@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Copy, Check, BookOpen, Lock, Users, ShieldCheck, ArrowRight, ChevronDown, GitBranch, Briefcase, Building2 } from "lucide-react";
+import { Copy, Check, BookOpen, Lock, Users, ShieldCheck, ArrowRight, ChevronDown, GitBranch, Briefcase, Building2, Network } from "lucide-react";
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -636,6 +636,70 @@ curl -X GET "${BASE_URL}/api/sso/job-positions?search=dokter" \\
             <Field name="name" type="string" desc="Nama lengkap perusahaan" />
             <Field name="order" type="number" desc="Urutan tampil (ascending)" />
             <Field name="status" type="string" desc="Status perusahaan. Endpoint ini hanya mengembalikan yang berstatus 'active'" />
+          </div>
+        </div>
+      </Section>
+
+      <Section id="organizations" icon={Network} title="8. Master Organization" open={openSections.has("organizations")} onToggle={() => toggle("organizations")}>
+        <div className="flex items-center gap-3">
+          <Badge method="GET" />
+          <code className="text-sm font-mono text-slate-700 bg-slate-100 px-3 py-1 rounded">/api/sso/organizations</code>
+        </div>
+        <p className="text-sm text-slate-600">
+          Mengambil daftar organization beserta informasi hierarki (org utama dan sub-org).
+          Data dikelola di Master Organization portal, mendukung 3 sumber: input manual, sync dari data user, dan sync Talenta (mendatang).
+          Memerlukan permission <code className="font-mono bg-slate-100 px-1 rounded text-xs">GET_ORGANIZATIONS</code> pada App Token.
+        </p>
+
+        <div>
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Query Parameter (opsional)</p>
+          <div className="border border-slate-100 rounded-lg overflow-hidden">
+            <Field name="search" type="string" desc="Filter nama atau kode organization (case-insensitive)" />
+            <Field name="parentId" type="string" desc="Filter berdasarkan parent. Gunakan 'null' untuk hanya org utama (tanpa parent), atau isi ID untuk sub-org dari org tertentu" />
+          </div>
+        </div>
+
+        <div>
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Contoh Request</p>
+          <CodeBlock lang="bash" code={`curl -X GET "${BASE_URL}/api/sso/organizations" \\
+  -H "X-App-Token: your-app-token-here"
+
+# Hanya org utama (tanpa parent)
+curl -X GET "${BASE_URL}/api/sso/organizations?parentId=null" \\
+  -H "X-App-Token: your-app-token-here"`} />
+        </div>
+
+        <div>
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Response Sukses <span className="text-emerald-500 font-mono">200</span></p>
+          <CodeBlock code={`{
+  "data": [
+    {
+      "id": "79747",
+      "name": "HRD & GA",
+      "code": null,
+      "parentOrganizationId": null,
+      "source": "user_sync"
+    },
+    {
+      "id": "79748",
+      "name": "HRD",
+      "code": null,
+      "parentOrganizationId": "79747",
+      "source": "manual"
+    }
+  ],
+  "total": 2
+}`} />
+        </div>
+
+        <div>
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Keterangan Field</p>
+          <div className="border border-slate-100 rounded-lg overflow-hidden">
+            <Field name="id" type="string" desc="ID organization — berupa Talenta numeric ID (string) untuk data hasil sync, atau UUID untuk input manual" />
+            <Field name="name" type="string" desc="Nama organization" />
+            <Field name="code" type="string | null" desc="Kode singkat organization, bisa null jika tidak diisi" />
+            <Field name="parentOrganizationId" type="string | null" desc="ID parent organization. Null berarti ini adalah org utama; jika berisi ID maka ini adalah sub-org" />
+            <Field name="source" type="string" desc="Sumber data: 'manual' (input portal), 'user_sync' (sync dari profil user), 'talenta' (sync API Talenta)" />
           </div>
         </div>
       </Section>

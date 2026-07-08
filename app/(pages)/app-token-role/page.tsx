@@ -12,7 +12,8 @@ const SSO_PERMISSIONS = [
   { key: "GET_USERS",        label: "Get Users",    desc: "GET /api/sso/users — ambil daftar user aktif" },
   { key: "GET_BRANCHES",     label: "Get Branches", desc: "GET /api/sso/branches — ambil daftar master branch" },
   { key: "GET_JOB_POSITIONS",label: "Get Jabatan",  desc: "GET /api/sso/job-positions — ambil daftar master jabatan" },
-  { key: "GET_COMPANIES",    label: "Get Companies",desc: "GET /api/sso/companies — ambil daftar master perusahaan" },
+  { key: "GET_COMPANIES",      label: "Get Companies",     desc: "GET /api/sso/companies — ambil daftar master perusahaan" },
+  { key: "GET_ORGANIZATIONS",  label: "Get Organizations", desc: "GET /api/sso/organizations — ambil daftar master organization & sub-org" },
 ] as const;
 
 type PermKey = (typeof SSO_PERMISSIONS)[number]["key"];
