@@ -7,9 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 
 type Category   = { id: string; code: string; name: string; hasDraft: boolean };
-type Department = { id: string; code: string; name: string };
 type Company    = { id: string; code: string; name: string };
 type UserOption = { id: string; name: string | null; employeeId: string; jobPositionName: string | null };
+type OrgInfo    = { id: string; name: string; code: string | null; parentOrganizationId: string | null } | null;
 
 const inputCls = "w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-400 bg-white transition-colors";
 const labelCls = "block text-sm font-medium text-slate-700 mb-1.5";
@@ -19,8 +19,8 @@ export default function EditLetterPage() {
   const router = useRouter();
 
   const [categories,  setCategories]  = useState<Category[]>([]);
-  const [departments, setDepartments] = useState<Department[]>([]);
   const [companies,   setCompanies]   = useState<Company[]>([]);
+  const [orgInfo,     setOrgInfo]     = useState<OrgInfo>(undefined as unknown as OrgInfo);
   const [users,       setUsers]       = useState<UserOption[]>([]);
   const [loading,     setLoading]     = useState(true);
   const [submitting,  setSubmitting]  = useState(false);
@@ -29,7 +29,7 @@ export default function EditLetterPage() {
   const toastTimer = useRef<NodeJS.Timeout | null>(null);
 
   const [form, setForm] = useState({
-    title: "", tujuan: "", categoryId: "", departmentId: "", companyId: "", picId: "", fileDraft: "",
+    title: "", tujuan: "", categoryId: "", companyId: "", picId: "", fileDraft: "",
   });
   const [draftFile,     setDraftFile]     = useState<File | null>(null);
   const [existingDraft, setExistingDraft] = useState<string | null>(null);
@@ -40,10 +40,10 @@ export default function EditLetterPage() {
     Promise.all([
       fetch(`/api/ssd/letter/${id}`).then((r) => r.json()),
       fetch("/api/ssd/category").then((r) => r.json()),
-      fetch("/api/ssd/department").then((r) => r.json()),
       fetch("/api/company").then((r) => r.json()),
       fetch("/api/user/list?all=true&status=active").then((r) => r.json()),
-    ]).then(([letter, cat, dept, comp, usr]) => {
+      fetch("/api/ssd/org-admin/me").then((r) => r.json()),
+    ]).then(([letter, cat, comp, usr, me]) => {
       if (!letter.data || letter.data.status !== "DRAFT") {
         router.replace(`/apps/${appSlug}/letter/${id}`);
         return;
@@ -53,16 +53,15 @@ export default function EditLetterPage() {
         title:        l.title ?? "",
         tujuan:       l.tujuan ?? "",
         categoryId:   l.category?.id ?? "",
-        departmentId: l.department?.id ?? "",
         companyId:    l.company?.id ?? "",
         picId:        l.pic?.id ?? "",
         fileDraft:    l.fileDraft ?? "",
       });
       setExistingDraft(l.fileDraft ?? null);
       setCategories(cat.data ?? []);
-      setDepartments(dept.data ?? []);
       setCompanies((comp.data ?? []).filter((c: Company & { status: string }) => c.status === "active"));
       setUsers(usr.data ?? []);
+      setOrgInfo((me.data as { organization: OrgInfo })?.organization ?? null);
     }).catch(() => {}).finally(() => setLoading(false));
   }, [id, appSlug, router]);
 
@@ -112,7 +111,6 @@ export default function EditLetterPage() {
     e.preventDefault();
     if (!form.title.trim())    { showToast("error", "Perihal wajib diisi"); return; }
     if (!form.categoryId)      { showToast("error", "Pilih kategori"); return; }
-    if (!form.departmentId)    { showToast("error", "Pilih departemen"); return; }
     if (!form.companyId)       { showToast("error", "Pilih perusahaan"); return; }
     if (selectedCategory?.hasDraft && !form.fileDraft) { showToast("error", "Upload file draft terlebih dahulu"); return; }
 
@@ -126,7 +124,6 @@ export default function EditLetterPage() {
           tujuan:       form.tujuan || null,
           picId:        form.picId || null,
           categoryId:   form.categoryId,
-          departmentId: form.departmentId,
           companyId:    form.companyId,
           fileDraft:    form.fileDraft || null,
         }),
@@ -174,8 +171,25 @@ export default function EditLetterPage() {
 
       <form onSubmit={handleSubmit} className="space-y-5 bg-white rounded-xl border border-slate-200 p-6">
 
-        {/* Row 1: Kategori, Perusahaan, Departemen */}
-        <div className="grid grid-cols-3 gap-4">
+        {/* Org info banner */}
+        {orgInfo === null ? (
+          <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+            Anda belum di-assign ke organisasi SSD. Hubungi admin untuk mendapatkan akses.
+          </div>
+        ) : orgInfo && !orgInfo.code ? (
+          <div className="px-4 py-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
+            Kode organisasi <span className="font-semibold">{orgInfo.name}</span> belum diset. Hubungi admin untuk mengisi kode org/sub-org sebelum membuat surat.
+          </div>
+        ) : orgInfo ? (
+          <div className="px-4 py-2.5 bg-violet-50 border border-violet-100 rounded-lg flex items-center gap-2 text-sm">
+            <span className="font-mono text-xs bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded">{orgInfo.code}</span>
+            <span className="text-slate-600">{orgInfo.name}</span>
+            <span className="text-xs text-slate-400 ml-auto">{orgInfo.parentOrganizationId ? "Sub-Org" : "Org"}</span>
+          </div>
+        ) : null}
+
+        {/* Row 1: Kategori, Perusahaan */}
+        <div className="grid grid-cols-2 gap-4">
           <div>
             <label className={labelCls}>Kategori Surat <span className="text-red-500">*</span></label>
             <select
@@ -203,19 +217,6 @@ export default function EditLetterPage() {
               <option value="">Pilih perusahaan...</option>
               {companies.map((c) => (
                 <option key={c.id} value={c.id}>{c.code} — {c.name}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className={labelCls}>Departemen <span className="text-red-500">*</span></label>
-            <select
-              className={inputCls}
-              value={form.departmentId}
-              onChange={(e) => setForm((f) => ({ ...f, departmentId: e.target.value }))}
-            >
-              <option value="">Pilih departemen...</option>
-              {departments.map((d) => (
-                <option key={d.id} value={d.id}>{d.code} — {d.name}</option>
               ))}
             </select>
           </div>

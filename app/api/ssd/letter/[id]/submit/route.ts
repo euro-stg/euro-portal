@@ -15,7 +15,7 @@ export async function POST(
     const { id: letterId } = await params;
     const letter = await db.ssdLetter.findUnique({
       where: { id: letterId, deletedAt: null },
-      include: { category: true, department: true, company: true },
+      include: { category: true, company: true },
     });
     if (!letter) return NextResponse.json({ message: "Tidak ditemukan" }, { status: 404 });
     if (letter.requestedBy !== userId)

@@ -24,8 +24,8 @@ type Letter = {
   status: string; fileDraft: string | null; fileFinal: string | null;
   createdAt: string; updatedAt: string | null;
   category: { id: string; code: string; name: string; hasDraft: boolean };
-  department: { id: string; code: string; name: string };
   company: { id: string; code: string; name: string };
+  organization: { id: string; name: string; code: string | null; parentOrganizationId: string | null } | null;
   requester: { id: string; name: string | null; jobPositionName: string | null; organizationName: string | null };
   pic: { id: string; name: string | null; jobPositionName: string | null } | null;
   approval: {
@@ -197,8 +197,12 @@ export default function LetterDetailPage() {
             <span>{letter.category.code} — {letter.category.name}</span>
             <ChevronRight className="w-3 h-3" />
             <span>{letter.company.code} — {letter.company.name}</span>
-            <ChevronRight className="w-3 h-3" />
-            <span>{letter.department.code} — {letter.department.name}</span>
+            {letter.organization && (
+              <>
+                <ChevronRight className="w-3 h-3" />
+                <span>{letter.organization.code ? `${letter.organization.code} — ` : ""}{letter.organization.name}</span>
+              </>
+            )}
           </div>
           <p className="text-xs text-slate-400 mt-1">
             Dibuat oleh {letter.requester.name} • {new Date(letter.createdAt).toLocaleString("id-ID")}
@@ -289,8 +293,12 @@ export default function LetterDetailPage() {
               <p className="font-medium text-slate-800">{letter.company.code} — {letter.company.name}</p>
             </div>
             <div>
-              <p className="text-xs text-slate-400 mb-0.5">Departemen</p>
-              <p className="font-medium text-slate-800">{letter.department.code} — {letter.department.name}</p>
+              <p className="text-xs text-slate-400 mb-0.5">Organisasi</p>
+              <p className="font-medium text-slate-800">
+                {letter.organization
+                  ? `${letter.organization.code ? letter.organization.code + " — " : ""}${letter.organization.name}`
+                  : <span className="text-slate-400 font-normal">—</span>}
+              </p>
             </div>
             <div>
               <p className="text-xs text-slate-400 mb-0.5">Requestor</p>

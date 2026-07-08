@@ -16,8 +16,8 @@ export async function GET(
       where: { id, deletedAt: null },
       include: {
         category: true,
-        department: true,
         company: true,
+        organization: { select: { id: true, name: true, code: true, parentOrganizationId: true } },
         requester: { select: { id: true, name: true, jobPositionName: true, organizationName: true, branchName: true } },
         pic: { select: { id: true, name: true, jobPositionName: true } },
         approval: {
@@ -79,10 +79,9 @@ export async function PATCH(
       return NextResponse.json({ message: "Hanya surat berstatus DRAFT yang bisa diedit" }, { status: 400 });
 
     const body = await request.json().catch(() => ({}));
-    const { title, tujuan, picId, categoryId, departmentId, companyId, fileDraft } = body as {
+    const { title, tujuan, picId, categoryId, companyId, fileDraft } = body as {
       title?: string; tujuan?: string; picId?: string;
-      categoryId?: string; departmentId?: string; companyId?: string;
-      fileDraft?: string;
+      categoryId?: string; companyId?: string; fileDraft?: string;
     };
 
     const data = await db.ssdLetter.update({
@@ -92,7 +91,6 @@ export async function PATCH(
         ...(tujuan !== undefined ? { tujuan: tujuan?.trim() || null } : {}),
         ...(picId  !== undefined ? { picId: picId || null }          : {}),
         ...(categoryId   ? { categoryId }   : {}),
-        ...(departmentId ? { departmentId } : {}),
         ...(companyId    ? { companyId }    : {}),
         ...(fileDraft !== undefined ? { fileDraft: fileDraft || null } : {}),
         updatedAt: new Date(),

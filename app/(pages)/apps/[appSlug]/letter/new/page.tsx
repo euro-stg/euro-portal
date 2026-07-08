@@ -7,9 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 
 type Category   = { id: string; code: string; name: string; hasDraft: boolean };
-type Department = { id: string; code: string; name: string };
 type Company    = { id: string; code: string; name: string };
 type UserOption = { id: string; name: string | null; employeeId: string; jobPositionName: string | null };
+type OrgInfo    = { id: string; name: string; code: string | null; parentOrganizationId: string | null } | null;
 
 const inputCls = "w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-400 bg-white transition-colors";
 const labelCls = "block text-sm font-medium text-slate-700 mb-1.5";
@@ -19,9 +19,9 @@ export default function NewLetterPage() {
   const router = useRouter();
 
   const [categories,  setCategories]  = useState<Category[]>([]);
-  const [departments, setDepartments] = useState<Department[]>([]);
   const [companies,   setCompanies]   = useState<Company[]>([]);
   const [users,       setUsers]       = useState<UserOption[]>([]);
+  const [orgInfo,     setOrgInfo]     = useState<OrgInfo>(undefined as unknown as OrgInfo);
   const [loading,     setLoading]     = useState(true);
   const [submitting,  setSubmitting]  = useState(false);
   const [uploading,   setUploading]   = useState(false);
@@ -29,7 +29,7 @@ export default function NewLetterPage() {
   const toastTimer = useRef<NodeJS.Timeout | null>(null);
 
   const [form, setForm] = useState({
-    title: "", tujuan: "", categoryId: "", departmentId: "", companyId: "", picId: "", fileDraft: "",
+    title: "", tujuan: "", categoryId: "", companyId: "", picId: "", fileDraft: "",
   });
   const [draftFile, setDraftFile] = useState<File | null>(null);
   const [picSearch, setPicSearch] = useState("");
@@ -38,14 +38,14 @@ export default function NewLetterPage() {
   useEffect(() => {
     Promise.all([
       fetch("/api/ssd/category").then((r) => r.json()),
-      fetch("/api/ssd/department").then((r) => r.json()),
       fetch("/api/company").then((r) => r.json()),
       fetch("/api/user/list?all=true&status=active").then((r) => r.json()),
-    ]).then(([cat, dept, comp, usr]) => {
+      fetch("/api/ssd/org-admin/me").then((r) => r.json()),
+    ]).then(([cat, comp, usr, me]) => {
       setCategories(cat.data ?? []);
-      setDepartments(dept.data ?? []);
       setCompanies((comp.data ?? []).filter((c: Company & { status: string }) => c.status === "active"));
       setUsers(usr.data ?? []);
+      setOrgInfo((me.data as { organization: OrgInfo })?.organization ?? null);
     }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
@@ -69,7 +69,6 @@ export default function NewLetterPage() {
     const current = { ...form, fileDraft: fileDraftPath };
     if (!current.title.trim())  { showToast("error", "Perihal wajib diisi"); return; }
     if (!current.categoryId)    { showToast("error", "Pilih kategori"); return; }
-    if (!current.departmentId)  { showToast("error", "Pilih departemen"); return; }
     if (!current.companyId)     { showToast("error", "Pilih perusahaan"); return; }
     setSubmitting(true);
     try {
@@ -81,7 +80,6 @@ export default function NewLetterPage() {
           tujuan: current.tujuan || null,
           picId: current.picId || null,
           categoryId: current.categoryId,
-          departmentId: current.departmentId,
           companyId: current.companyId,
           fileDraft: fileDraftPath || null,
         }),
@@ -95,7 +93,6 @@ export default function NewLetterPage() {
   const handleFileSelect = async (file: File) => {
     if (!form.title.trim())   { showToast("error", "Isi Perihal terlebih dahulu"); return; }
     if (!form.categoryId)     { showToast("error", "Pilih kategori terlebih dahulu"); return; }
-    if (!form.departmentId)   { showToast("error", "Pilih departemen terlebih dahulu"); return; }
     if (!form.companyId)      { showToast("error", "Pilih perusahaan terlebih dahulu"); return; }
     if (file.size > 10 * 1024 * 1024) { showToast("error", "File maksimal 10MB"); return; }
     setDraftFile(file);
@@ -154,8 +151,25 @@ export default function NewLetterPage() {
 
       <form onSubmit={handleSubmit} className="space-y-5 bg-white rounded-xl border border-slate-200 p-6">
 
-        {/* Row 1: Kategori, Perusahaan, Departemen */}
-        <div className="grid grid-cols-3 gap-4">
+        {/* Org info banner */}
+        {orgInfo === null ? (
+          <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+            Anda belum di-assign ke organisasi SSD. Hubungi admin untuk mendapatkan akses.
+          </div>
+        ) : orgInfo && !orgInfo.code ? (
+          <div className="px-4 py-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
+            Kode organisasi <span className="font-semibold">{orgInfo.name}</span> belum diset. Hubungi admin untuk mengisi kode org/sub-org sebelum membuat surat.
+          </div>
+        ) : orgInfo ? (
+          <div className="px-4 py-2.5 bg-violet-50 border border-violet-100 rounded-lg flex items-center gap-2 text-sm">
+            <span className="font-mono text-xs bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded">{orgInfo.code}</span>
+            <span className="text-slate-600">{orgInfo.name}</span>
+            <span className="text-xs text-slate-400 ml-auto">{orgInfo.parentOrganizationId ? "Sub-Org" : "Org"}</span>
+          </div>
+        ) : null}
+
+        {/* Row 1: Kategori, Perusahaan */}
+        <div className="grid grid-cols-2 gap-4">
           <div>
             <label className={labelCls}>Kategori Surat <span className="text-red-500">*</span></label>
             <select
@@ -179,19 +193,6 @@ export default function NewLetterPage() {
               <option value="">Pilih perusahaan...</option>
               {companies.map((c) => (
                 <option key={c.id} value={c.id}>{c.code} — {c.name}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className={labelCls}>Departemen <span className="text-red-500">*</span></label>
-            <select
-              className={inputCls}
-              value={form.departmentId}
-              onChange={(e) => setForm((f) => ({ ...f, departmentId: e.target.value }))}
-            >
-              <option value="">Pilih departemen...</option>
-              {departments.map((d) => (
-                <option key={d.id} value={d.id}>{d.code} — {d.name}</option>
               ))}
             </select>
           </div>
@@ -314,7 +315,7 @@ export default function NewLetterPage() {
         <div className="flex items-center gap-3 pt-2">
           <Button
             type="submit"
-            disabled={submitting || uploading}
+            disabled={submitting || uploading || !orgInfo?.code}
             className="bg-violet-600 hover:bg-violet-700 text-white flex items-center gap-2"
           >
             {submitting && <Loader2 className="w-4 h-4 animate-spin" />}

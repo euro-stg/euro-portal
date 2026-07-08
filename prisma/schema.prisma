@@ -65,6 +65,7 @@ model User {
   ssdApprovalSubmitted SsdApproval[]         @relation("SsdApprovalSubmitter")
   ssdApprovalActions   SsdApprovalStep[]     @relation("SsdApprovalActor")
   ssdActivities        SsdActivity[]         @relation("SsdActivityActor")
+  ssdOrgAdmin          SsdOrgAdmin?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -589,19 +590,6 @@ model SsdCategory {
   letters SsdLetter[]
 }
 
-model SsdDepartment {
-  id        String    @id @default(cuid())
-  code      String    @unique
-  name      String
-  order     Int       @default(0)
-  status    String    @default("active")
-  createdAt DateTime  @default(now())
-  updatedAt DateTime?
-  deletedAt DateTime?
-
-  letters SsdLetter[]
-}
-
 model SsdCounter {
   id           String   @id @default(cuid())
   categoryCode String
@@ -615,15 +603,15 @@ model SsdCounter {
 
 // Status: DRAFT → SUBMITTED → APPROVED (nomor surat ditetapkan) → DONE (file final diupload) | REJECTED
 model SsdLetter {
-  id           String    @id @default(cuid())
-  letterNo     String?   @unique
-  title        String
-  tujuan       String?
-  picId        String?
-  categoryId   String
-  departmentId String
-  companyId    String
-  requestedBy  String
+  id             String    @id @default(cuid())
+  letterNo       String?   @unique
+  title          String
+  tujuan         String?
+  picId          String?
+  categoryId     String
+  companyId      String
+  organizationId String?
+  requestedBy    String
   fileDraft    String?
   fileFinal    String?
   status       String    @default("DRAFT")
@@ -631,13 +619,13 @@ model SsdLetter {
   updatedAt    DateTime?
   deletedAt    DateTime?
 
-  category   SsdCategory   @relation(fields: [categoryId], references: [id])
-  department SsdDepartment @relation(fields: [departmentId], references: [id])
-  company    Company       @relation(fields: [companyId], references: [id])
-  requester  User          @relation("SsdRequester", fields: [requestedBy], references: [id])
-  pic        User?         @relation("SsdPic", fields: [picId], references: [id])
-  approval   SsdApproval?
-  activities SsdActivity[]
+  category     SsdCategory    @relation(fields: [categoryId], references: [id])
+  company      Company        @relation(fields: [companyId], references: [id])
+  organization Organization?  @relation(fields: [organizationId], references: [id])
+  requester    User           @relation("SsdRequester", fields: [requestedBy], references: [id])
+  pic          User?          @relation("SsdPic", fields: [picId], references: [id])
+  approval     SsdApproval?
+  activities   SsdActivity[]
 }
 
 model SsdApprovalTemplate {
@@ -733,8 +721,20 @@ model Organization {
   updatedAt            DateTime?
   deletedAt            DateTime?
 
-  parent   Organization?  @relation("OrgHierarchy", fields: [parentOrganizationId], references: [id])
-  children Organization[] @relation("OrgHierarchy")
+  parent      Organization?  @relation("OrgHierarchy", fields: [parentOrganizationId], references: [id])
+  children    Organization[] @relation("OrgHierarchy")
+  ssdAdmins   SsdOrgAdmin[]
+  ssdLetters  SsdLetter[]
+}
+
+model SsdOrgAdmin {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String   @unique
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 // ===================== EMAIL LOG =====================

@@ -15,8 +15,8 @@ type LetterRow = {
   status: string;
   createdAt: string;
   category: { code: string; name: string };
-  department: { code: string; name: string };
   company: { code: string; name: string };
+  organization: { name: string; code: string | null } | null;
   requester: { id: string; name: string | null };
   approval: { status: string; currentStep: number } | null;
 };
@@ -183,7 +183,7 @@ export default function SsdLetterListPage() {
                   <p className="font-semibold text-slate-800 truncate">{r.title}</p>
                   <div className="flex items-center gap-4 mt-1 text-xs text-slate-400">
                     <span>Oleh: {r.requester.name ?? "-"}</span>
-                    <span>{r.department.name}</span>
+                    {r.organization && <span>{r.organization.name}</span>}
                     <span>{new Date(r.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}</span>
                   </div>
                 </div>

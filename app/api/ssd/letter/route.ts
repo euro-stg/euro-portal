@@ -17,7 +17,6 @@ export async function GET(request: Request) {
     const status = searchParams.get("status")?.trim();
     const mine   = searchParams.get("mine") === "true";
     const catId  = searchParams.get("categoryId")?.trim();
-    const deptId = searchParams.get("departmentId")?.trim();
     const compId = searchParams.get("companyId")?.trim();
 
     const scopeFilter = await ssdLetterScopeFilter(userId);
@@ -32,7 +31,6 @@ export async function GET(request: Request) {
       ...(mine ? { requestedBy: userId } : scopeFilter),
       ...(status  ? { status }                 : {}),
       ...(catId   ? { categoryId: catId }      : {}),
-      ...(deptId  ? { departmentId: deptId }   : {}),
       ...(compId  ? { companyId: compId }      : {}),
       ...(searchFilter ? { AND: [{ OR: searchFilter }] } : {}),
     };
@@ -44,8 +42,8 @@ export async function GET(request: Request) {
           id: true, letterNo: true, title: true, tujuan: true, status: true,
           fileDraft: true, fileFinal: true, createdAt: true, updatedAt: true,
           category: { select: { id: true, code: true, name: true } },
-          department: { select: { id: true, code: true, name: true } },
           company: { select: { id: true, code: true, name: true } },
+          organization: { select: { id: true, code: true, name: true } },
           requester: { select: { id: true, name: true, jobPositionName: true } },
           pic: { select: { id: true, name: true } },
           approval: { select: { id: true, status: true, currentStep: true } },
@@ -73,16 +71,21 @@ export async function POST(request: Request) {
     if (!session?.user?.id) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
     const body = await request.json().catch(() => ({}));
-    const { title, tujuan, picId, categoryId, departmentId, companyId, fileDraft } = body as {
+    const { title, tujuan, picId, categoryId, companyId, fileDraft } = body as {
       title?: string; tujuan?: string; picId?: string;
-      categoryId?: string; departmentId?: string; companyId?: string;
-      fileDraft?: string;
+      categoryId?: string; companyId?: string; fileDraft?: string;
     };
 
     if (!title?.trim())    return NextResponse.json({ message: "Perihal wajib diisi" }, { status: 400 });
     if (!categoryId)       return NextResponse.json({ message: "Kategori wajib dipilih" }, { status: 400 });
-    if (!departmentId)     return NextResponse.json({ message: "Departemen wajib dipilih" }, { status: 400 });
     if (!companyId)        return NextResponse.json({ message: "Perusahaan wajib dipilih" }, { status: 400 });
+
+    const orgAdmin = await db.ssdOrgAdmin.findUnique({
+      where: { userId: session.user.id },
+      select: { organizationId: true, organization: { select: { code: true } } },
+    });
+    if (!orgAdmin) return NextResponse.json({ message: "Anda belum di-assign ke organisasi SSD, hubungi admin" }, { status: 403 });
+    if (!orgAdmin.organization.code) return NextResponse.json({ message: "Kode organisasi belum diset, hubungi admin untuk mengisi kode org/sub-org terlebih dahulu" }, { status: 422 });
 
     const category = await db.ssdCategory.findUnique({ where: { id: categoryId } });
     if (!category) return NextResponse.json({ message: "Kategori tidak ditemukan" }, { status: 404 });
@@ -95,8 +98,8 @@ export async function POST(request: Request) {
         tujuan: tujuan?.trim() || null,
         picId: picId || null,
         categoryId,
-        departmentId,
         companyId,
+        organizationId: orgAdmin.organizationId,
         requestedBy: session.user.id,
         fileDraft: fileDraft ?? null,
         status: "DRAFT",

@@ -55,13 +55,13 @@ export async function POST(
     if (action === "APPROVED" && isLastStep) {
       const letter = await db.ssdLetter.findUnique({
         where: { id: letterId },
-        include: { category: true, department: true, company: true },
+        include: { category: true, organization: { select: { code: true } }, company: true },
       });
       if (letter) {
         letterNo = await generateLetterNumber(
           letter.category.code,
           letter.company.code,
-          letter.department.code,
+          letter.organization?.code ?? "-",
           new Date(),
         );
       }

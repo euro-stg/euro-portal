@@ -31,14 +31,13 @@ export async function isSsdApprover(userId: string): Promise<boolean> {
  * the given user is allowed to see:
  *   - superadmin → no restriction
  *   - approver (matches active template step) → no restriction
- *   - regular user with organizationId → own org's letters + own + PIC + acted
- *   - regular user without organizationId → own letters + PIC + acted
+ *   - SSD org admin → all letters milik org yang di-assign
+ *   - user lain → hanya surat sendiri (requestedBy)
  */
 export async function ssdLetterScopeFilter(userId: string): Promise<object> {
   const dbUser = await db.user.findUnique({
     where: { id: userId },
     select: {
-      organizationId: true,
       userRoles: { where: { appId: null }, select: { role: { select: { name: true } } }, take: 1 },
     },
   });
@@ -47,11 +46,16 @@ export async function ssdLetterScopeFilter(userId: string): Promise<object> {
 
   if (await isSsdApprover(userId)) return {};
 
-  // Non-approver: own letters + PIC letters + same org + any letter they've acted on
-  const acted = { approval: { steps: { some: { actorId: userId } } } };
-  return dbUser?.organizationId
-    ? { OR: [{ requestedBy: userId }, { picId: userId }, { requester: { organizationId: dbUser.organizationId } }, acted] }
-    : { OR: [{ requestedBy: userId }, { picId: userId }, acted] };
+  // Cek apakah user adalah SSD org admin
+  const orgAdmin = await db.ssdOrgAdmin.findUnique({
+    where: { userId },
+    select: { organizationId: true },
+  });
+
+  if (orgAdmin) return { organizationId: orgAdmin.organizationId };
+
+  // Fallback: hanya surat sendiri
+  return { requestedBy: userId };
 }
 
 const ROMAN = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
@@ -63,7 +67,7 @@ export function toRoman(month: number): string {
 export async function generateLetterNumber(
   categoryCode: string,
   companyCode: string,
-  departmentCode: string,
+  orgCode: string,
   date: Date = new Date(),
 ): Promise<string> {
   const year = date.getFullYear();
@@ -76,6 +80,6 @@ export async function generateLetterNumber(
   });
 
   const seq = String(counter.seq).padStart(3, "0");
-  return `${seq}/${categoryCode}-${companyCode}/${departmentCode}/${toRoman(month)}/${year}`;
+  return `${seq}/${categoryCode}-${companyCode}/${orgCode}/${toRoman(month)}/${year}`;
 }
 
