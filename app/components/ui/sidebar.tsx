@@ -12,6 +12,7 @@ import {
   GitBranch, Briefcase, Building2, Network, ShieldCheck,
   Code2, Scale, FolderOpen, BarChart2, Globe, Lock, Cpu,
   FileSignature, Send, CheckSquare, PenLine, ListChecks, Mail,
+  Stethoscope,
   type LucideIcon,
 } from "lucide-react";
 import type { SidebarModule } from "@/types/sidebar";
@@ -36,6 +37,8 @@ const iconRegistry: Record<string, LucideIcon> = {
   FileSignature, Send, CheckSquare, PenLine, ListChecks,
   // Pengaturan
   Mail,
+  // Medis
+  Stethoscope,
 };
 
 const iconColorRegistry: Record<string, string> = {
@@ -79,6 +82,8 @@ const iconColorRegistry: Record<string, string> = {
   ListChecks:      "text-teal-500",
   // Pengaturan
   Mail:            "text-violet-500",
+  // Medis
+  Stethoscope:     "text-rose-500",
 };
 
 const groupColorRegistry: Record<string, string> = {
