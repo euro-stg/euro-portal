@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import {
   LayoutDashboard, Users, Tag, Shield, Package, Settings, Database,
   Bell, FileText, Ticket, Workflow, BookOpen, FolderKanban, Layers,
-  Lock, type LucideIcon,
+  Lock, Stethoscope, Terminal, ScrollText, Star, type LucideIcon,
 } from "lucide-react";
 
 import Image from "next/image";
@@ -17,6 +17,7 @@ export const dynamic = "force-dynamic";
 const iconRegistry: Record<string, LucideIcon> = {
   LayoutDashboard, Users, Tag, Shield, Package, Settings, Database,
   Bell, FileText, Ticket, Workflow, BookOpen, FolderKanban, Layers,
+  Stethoscope, Terminal, ScrollText, Star,
 };
 
 const colorMap: Record<string, { gradient: string; border: string }> = {
