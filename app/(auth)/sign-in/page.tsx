@@ -4,7 +4,7 @@ import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useState, useRef } from "react";
 import Link from "next/link";
-import { Layers } from "lucide-react";
+import Image from "next/image";
 
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -46,16 +46,23 @@ export default function SignInPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 px-4">
-      {/* Decorative circles */}
-      <div className="absolute top-0 left-0 w-96 h-96 bg-blue-200/20 rounded-full -translate-x-1/2 -translate-y-1/2 blur-3xl pointer-events-none" />
-      <div className="absolute bottom-0 right-0 w-96 h-96 bg-indigo-200/20 rounded-full translate-x-1/2 translate-y-1/2 blur-3xl pointer-events-none" />
+    <div className="relative min-h-screen flex items-center justify-center px-4 overflow-hidden">
+      {/* Background image */}
+      <Image
+        src="/bg-esc.jpg"
+        alt=""
+        fill
+        className="object-cover"
+        priority
+      />
+      {/* Overlay */}
+      <div className="absolute inset-0 bg-blue-950/30 backdrop-blur-[1px]" />
 
-      <div className="relative w-full max-w-sm bg-white rounded-2xl shadow-xl border border-slate-100 p-6 sm:p-8">
+      <div className="relative z-10 w-full max-w-sm bg-white/95 rounded-2xl shadow-2xl border border-white/20 p-6 sm:p-8 backdrop-blur-sm">
         {/* Brand */}
         <div className="text-center mb-8">
-          <div className="w-14 h-14 rounded-2xl mx-auto mb-4 flex items-center justify-center bg-gradient-to-br from-blue-600 to-indigo-600 shadow-lg shadow-blue-200">
-            <Layers className="w-7 h-7 text-white" />
+          <div className="w-60 h-30 relative mx-auto mb-4">
+            <Image src="/euromedica-logo.png" alt="Euromedica" fill className="object-contain" />
           </div>
           <h1 className="text-2xl font-bold text-slate-800">
             Euro<span className="text-blue-600">Portal</span>
@@ -105,13 +112,10 @@ export default function SignInPage() {
           </Link>
         </div>
 
-        <div className="relative my-5">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-slate-100" />
-          </div>
-          <div className="relative flex justify-center">
-            <span className="bg-white px-3 text-xs text-slate-400">Pertama kali masuk?</span>
-          </div>
+        <div className="flex items-center gap-3 my-5">
+          <div className="flex-1 border-t border-slate-200" />
+          <span className="text-xs text-slate-400 font-medium whitespace-nowrap">Pertama kali masuk?</span>
+          <div className="flex-1 border-t border-slate-200" />
         </div>
 
         <Link
