@@ -1367,7 +1367,7 @@ export function EuFeedPage() {
 
   return (
     <>
-      <div className="flex gap-6 max-w-6xl mx-auto w-full">
+      <div className="flex flex-col lg:flex-row gap-6 max-w-6xl mx-auto w-full">
         {/* ── Main Feed ──────────────────────────────────────────── */}
         <div className="flex-1 min-w-0">
           {pinnedPosts.length > 0 && <HeroSlider posts={pinnedPosts} onClickPost={handleOpenModal} />}
@@ -1442,7 +1442,7 @@ export function EuFeedPage() {
         </div>
 
         {/* ── Sidebar ────────────────────────────────────────────── */}
-        <div className="w-80 flex-shrink-0 hidden lg:flex flex-col gap-4">
+        <div className="flex flex-col gap-4 lg:w-80 lg:flex-shrink-0">
           <BirthdayWidget onOpen={setBirthdayModal} />
           <UpcomingEventsWidget onClick={handleOpenModal} />
           <AnnouncementWidget onClick={handleOpenModal} />
