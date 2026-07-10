@@ -67,6 +67,10 @@ model User {
   ssdApprovalActions   SsdApprovalStep[]     @relation("SsdApprovalActor")
   ssdActivities        SsdActivity[]         @relation("SsdActivityActor")
   ssdOrgAdmin          SsdOrgAdmin?
+  euPosts              EuPost[]         @relation("EuAuthor")
+  euReactions          EuReaction[]     @relation("EuReactor")
+  euComments           EuComment[]      @relation("EuCommenter")
+  euReadLogs           EuReadLog[]      @relation("EuReader")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -752,6 +756,90 @@ model EmailLog {
   @@index([createdAt])
   @@index([status])
   @@index([source])
+}
+
+// ===================== EURO UPDATE (EU) =====================
+
+model EuCategory {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  icon      String?  // emoji atau lucide icon name
+  color     String?  // hex color untuk badge, e.g. "#3B82F6"
+  order     Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  posts EuPost[]
+}
+
+model EuPost {
+  id                String   @id @default(cuid())
+  title             String
+  content           String   @db.Text
+  categoryId        String
+  category          EuCategory @relation(fields: [categoryId], references: [id])
+  authorId          String
+  author            User     @relation("EuAuthor", fields: [authorId], references: [id])
+  isPinned          Boolean  @default(false)
+  isMandatory       Boolean  @default(false)
+  targetBranchIds   String[] @default([])
+  targetOrgIds      String[] @default([])
+  targetPositionIds String[] @default([])
+  publishedAt       DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  deletedAt         DateTime?
+
+  attachments EuAttachment[]
+  readLogs    EuReadLog[]
+}
+
+model EuAttachment {
+  id        String   @id @default(cuid())
+  postId    String
+  post      EuPost   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  name      String
+  url       String
+  mimeType  String?
+  size      Int?
+  order     Int      @default(0) // urutan pertama = thumbnail jika gambar
+  createdAt DateTime @default(now())
+}
+
+// Polymorphic: targetType="post"|"birthday", targetId=postId atau "{userId}_{year}"
+model EuReaction {
+  id         String   @id @default(cuid())
+  targetType String   // "post" | "birthday"
+  targetId   String
+  userId     String
+  user       User     @relation("EuReactor", fields: [userId], references: [id], onDelete: Cascade)
+  type       String   // "like" | "appreciate" | "congrats" | "useful"
+  createdAt  DateTime @default(now())
+
+  @@unique([targetType, targetId, userId])
+}
+
+model EuComment {
+  id         String    @id @default(cuid())
+  targetType String    // "post" | "birthday"
+  targetId   String
+  userId     String
+  user       User      @relation("EuCommenter", fields: [userId], references: [id], onDelete: Cascade)
+  content    String    @db.Text
+  createdAt  DateTime  @default(now())
+  deletedAt  DateTime?
+}
+
+model EuReadLog {
+  id      String   @id @default(cuid())
+  postId  String
+  post    EuPost   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId  String
+  user    User     @relation("EuReader", fields: [userId], references: [id], onDelete: Cascade)
+  readAt  DateTime @default(now())
+
+  @@unique([postId, userId])
 }
 
 // ===================== PASSWORD RESET & SSO REDIRECT =====================

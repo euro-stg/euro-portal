@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { FileText, CheckCircle2, Clock, Loader2, ChevronRight, AlertCircle, FileSignature, Send, XCircle, BadgeCheck } from "lucide-react";
 import { ChatWidget } from "@/components/ui/chat-widget";
+import { EuFeedPage } from "./_eu-feed";
 
 const STATUS_LABEL: Record<string, string> = {
   DRAFT: "Draft", SUBMITTED: "Diajukan", IT_REVIEW: "Review IT",
@@ -44,6 +45,7 @@ export default function AppDashboardPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (appSlug === "euro-update") { setLoading(false); return; }
     if (appSlug === "software-development") {
       fetch("/api/sd/stats")
         .then((r) => r.json())
@@ -60,6 +62,8 @@ export default function AppDashboardPage() {
       setLoading(false);
     }
   }, [appSlug]);
+
+  if (appSlug === "euro-update") return <EuFeedPage />;
 
   if (appSlug === "ssd") {
     return (
