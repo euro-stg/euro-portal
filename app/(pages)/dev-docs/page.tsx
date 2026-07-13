@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ChevronRight, Shield, Layers, Code2, FileSignature } from "lucide-react";
+import { ChevronDown, ChevronRight, Shield, Layers, Code2, FileSignature, Newspaper } from "lucide-react";
 
 type Item = { label: string; desc?: string };
 type Block = { heading: string; items: Item[] };
@@ -46,9 +46,22 @@ const DOCS: AppDoc[] = [
         items: [
           { label: "Sinkronisasi Talenta", desc: "Data karyawan (nama, jabatan, cabang, organisasi, avatar) di-sync dari Talenta HRIS secara manual atau terjadwal via cron job dengan header X-Sync-Secret." },
           { label: "Status Aktif / Nonaktif", desc: "User nonaktif tidak bisa login ke portal maupun aplikasi SSO. Karyawan yang sudah resign (resignDate ≤ hari ini) otomatis diblokir di SSO." },
+          { label: "Aktivasi Akun", desc: "User baru mengaktifkan akun via email link (token sekali pakai, ber-expiry). Tampilan tombol aktivasi berwarna oranye. Setelah aktivasi berhasil, user diarahkan ke halaman login." },
+          { label: "Lupa & Reset Password", desc: "User bisa request reset password via NIK — sistem kirim link ke email terdaftar. Token one-time dengan expiry; setelah digunakan langsung di-invalidasi. Menampilkan pesan error jika NIK tidak ditemukan atau email kosong." },
           { label: "Assign Role", desc: "User bisa memiliki satu role per scope (portal = appId null, atau per aplikasi = appId tertentu). Unique constraint mencegah duplikasi role dalam satu scope." },
           { label: "Default Role", desc: "Role bisa ditandai sebagai default dengan scope: ALL / ORGANIZATION / POSITION / BRANCH / kombinasi. Saat sync Talenta, user yang belum punya role di scope tersebut akan otomatis di-assign." },
           { label: "Bulk Assign & Remove Role", desc: "Admin bisa memilih banyak user sekaligus untuk assign atau hapus role tertentu. Hapus role hanya menghapus roleId yang dipilih, tidak mereset semua role user." },
+        ],
+      },
+      {
+        heading: "Dashboard Portal",
+        items: [
+          { label: "Layout 2 Zona Responsif", desc: "Dashboard menggunakan layout flex-col (mobile) dan flex-row (desktop). Area utama berisi grid app card compact; sidebar kanan berisi widget Euro Update. Pada mobile, widget muncul di bawah grid secara vertikal." },
+          { label: "App Card Compact + Tooltip", desc: "App card dalam grid portal ditampilkan dalam mode compact — ikon kecil + nama. Saat di-hover, muncul balon tooltip berisi deskripsi aplikasi. Tooltip menggunakan CSS group-hover murni tanpa JS." },
+          { label: "Widget EU di Sidebar", desc: "Jika user punya akses ke Euro Update, sidebar portal menampilkan tiga card: Ulang Tahun Hari Ini, Event Mendatang, dan Pengumuman terbaru. Masing-masing memiliki link 'Lihat semua' ke EU app." },
+          { label: "Feed Preview Terbaru", desc: "Di bawah app grid, ditampilkan feed terbaru Euro Update: judul, kutipan 180 karakter, thumbnail, pill kategori berwarna, dan jumlah reaksi & komentar." },
+          { label: "EuLink — Close Sidebar", desc: "Semua link menuju Euro Update di dashboard portal menggunakan komponen EuLink (client component). Saat diklik, EuLink dispatch event closeSidebar agar sidebar navigasi portal otomatis menutup." },
+          { label: "Conditional EU Block", desc: "Seluruh blok EU (sidebar widget + feed preview) hanya di-render jika user memiliki akses ke module Euro Update. User tanpa akses melihat app grid full-width normal. Query EU dibungkus try/catch — jika gagal, dashboard tetap tampil normal tanpa EU data." },
         ],
       },
       {
@@ -212,6 +225,71 @@ const DOCS: AppDoc[] = [
           { label: "Validasi Approval per Langkah", desc: "Setiap aksi approve/reject divalidasi bahwa user adalah approver yang ditunjuk di langkah aktif saat itu. Tidak bisa melompat langkah atau approve atas nama orang lain." },
           { label: "Storage Internal", desc: "File disimpan di Nextcloud internal perusahaan, bukan cloud publik. URL file tidak bisa diakses tanpa kredensial Nextcloud." },
           { label: "Immutable Audit Trail", desc: "Activity log tidak bisa diedit atau dihapus via API. Setiap perubahan status selalu menambah record baru, tidak menimpa yang lama." },
+        ],
+      },
+    ],
+  },
+  {
+    id: "eu",
+    title: "Euro Update",
+    subtitle: "Platform informasi internal — feed berita, ulang tahun, event, dan pengumuman Euromedica Group",
+    icon: <Newspaper className="w-5 h-5" />,
+    accent: "text-orange-600",
+    accentBg: "bg-orange-50 border-orange-100",
+    blocks: [
+      {
+        heading: "Fungsi Bisnis",
+        items: [
+          { label: "Media Informasi Internal", desc: "Euro Update menjadi saluran resmi penyebaran informasi internal Euromedica Group: pengumuman perusahaan, event, berita, dan konten lainnya yang relevan untuk seluruh karyawan." },
+          { label: "Keterlibatan Karyawan", desc: "Karyawan bisa berinteraksi dengan konten melalui reaksi (ThumbsUp, Heart, dsb.) dan komentar. Fitur ulang tahun mendorong budaya apresiasi antar rekan kerja." },
+          { label: "Terintegrasi dengan Portal", desc: "Widget ulang tahun, event, dan pengumuman tampil langsung di dashboard portal sehingga informasi penting terlihat tanpa perlu masuk ke EU app. Feed preview juga tersedia di bawah app grid." },
+        ],
+      },
+      {
+        heading: "Feed & Konten",
+        items: [
+          { label: "Post dengan Kategori", desc: "Setiap post terikat ke satu kategori (Event, Announcement/Pengumuman, Berita, dsb.). Kategori dikonfigurasi admin: nama, warna, ikon emoji, dan apakah bisa di-pin." },
+          { label: "Hero Slider (Pinned)", desc: "Post yang di-pin tampil sebagai hero slider/carousel di bagian atas feed. Admin bisa tentukan urutan pin. Slider hanya muncul jika ada post yang di-pin." },
+          { label: "Filter & Pencarian", desc: "User bisa filter feed per kategori atau cari berdasarkan judul/konten. Filter kategori tampil sebagai pill horizontal yang bisa di-scroll. Pencarian debounced 300ms untuk mengurangi request." },
+          { label: "Thumbnail & Rich Content", desc: "Post bisa memiliki thumbnail gambar. Di dashboard portal, thumbnail ditampilkan dengan ukuran tetap (172×129px). Di EU app, konten full HTML dirender di modal detail post." },
+          { label: "Pagination", desc: "Feed di-load per halaman (default 10 post per page). Navigasi Sebelumnya/Selanjutnya di bagian bawah feed." },
+          { label: "Read Tracking", desc: "Setiap klik post mencatat EuRead per user — berguna untuk analitik engagement konten ke depannya." },
+          { label: "Create & Edit Post", desc: "User dengan permission canPost bisa membuat post baru (judul, konten rich text, kategori, thumbnail, pin toggle). Admin bisa edit atau hapus (soft delete) post apapun." },
+        ],
+      },
+      {
+        heading: "Ulang Tahun & Event",
+        items: [
+          { label: "Birthday Widget", desc: "Menampilkan karyawan yang berulang tahun hari ini. Data bersumber dari field dateOfBirth di tabel User. Tampil di sidebar EU app dan sidebar dashboard portal." },
+          { label: "Birthday Modal", desc: "Klik card ulang tahun membuka modal detail: foto profil, jabatan, ucapan selamat, form komentar, dan reaksi khusus birthday (polymorphic: targetType='birthday', targetId='{userId}_{year}')." },
+          { label: "Event Mendatang", desc: "Post berkategori 'Event' dengan tanggal event di masa depan ditampilkan di widget Upcoming Events. Urut berdasarkan tanggal event terdekat." },
+          { label: "Announcement Widget", desc: "Post berkategori 'Announcement' atau 'Pengumuman' ditampilkan di widget tersendiri (ikon Megaphone, tema oranye). Tampil di sidebar EU app dan portal." },
+        ],
+      },
+      {
+        heading: "Komentar & Reaksi",
+        items: [
+          { label: "Reaksi Emoji", desc: "User bisa bereaksi ke post atau birthday dengan emoji (ThumbsUp, Heart, dsb.). Satu user satu reaksi per konten — klik ulang tipe yang sama untuk toggle off, klik tipe lain untuk ganti reaksi." },
+          { label: "Komentar", desc: "User bisa komentar pada post dan pada birthday. Komentar menggunakan model polymorphic (EuComment) dengan targetType dan targetId — tidak terikat FK ke EuPost sehingga bisa dipakai untuk birthday maupun post." },
+          { label: "Hapus Komentar Sendiri", desc: "Pembuat komentar bisa menghapus komentarnya sendiri. Ikon trash merah selalu terlihat (bukan hover-only). Penghapusan adalah soft delete (deletedAt diisi, data tidak dihapus permanen)." },
+          { label: "Soft Delete Komentar", desc: "Komentar yang dihapus tidak muncul di UI (filter deletedAt: null) tapi tetap ada di database untuk audit. Hanya pemilik komentar yang bisa menghapus miliknya." },
+        ],
+      },
+      {
+        heading: "Admin & Konfigurasi",
+        items: [
+          { label: "EU Settings", desc: "Halaman konfigurasi khusus admin EU: manajemen kategori (tambah/edit/hapus), konfigurasi siapa yang bisa post, dan pengaturan lainnya." },
+          { label: "Icon Registry", desc: "Ikon untuk app card Euro Update di dashboard portal menggunakan icon 'Newspaper' (Lucide) yang terdaftar di icon-registry.ts dengan warna text-orange-500." },
+          { label: "Kategori Dinamis", desc: "Kategori dikonfigurasi di database (EuCategory), bukan hardcode. Warna, ikon emoji, dan flag pinnable bisa diubah tanpa deploy ulang." },
+        ],
+      },
+      {
+        heading: "Keamanan & Akses",
+        items: [
+          { label: "Session Required", desc: "Semua endpoint /api/eu/* dilindungi session NextAuth. Return 401 jika tidak terautentikasi." },
+          { label: "Akses Berbasis Modul", desc: "Halaman EU app hanya bisa diakses user yang memiliki modul Euro Update dalam role-nya. Server-side check di layout.tsx — tidak bisa bypass via URL langsung." },
+          { label: "Delete Hanya Milik Sendiri", desc: "API DELETE komentar (post maupun birthday) memvalidasi bahwa comment.userId === session.user.id sebelum menghapus. Return 403 jika bukan pemilik." },
+          { label: "Upload File", desc: "File gambar untuk konten EU disimpan di /uploads/ server lokal. Akses file dilindungi session via /api/files/." },
         ],
       },
     ],
