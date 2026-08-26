@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import db from "@/lib/db/db";
 import { requireSession, unauthorized } from "@/lib/api-auth";
+import { getEuPostPermission } from "@/lib/eu-permission";
 
 const PAGE_SIZE = 10;
 
@@ -87,6 +88,9 @@ export async function POST(request: Request) {
   try {
     const session = await auth();
     if (!session?.user?.id) return unauthorized();
+
+    const { canPost } = await getEuPostPermission(session.user.id);
+    if (!canPost) return NextResponse.json({ message: "Anda tidak memiliki izin untuk membuat post" }, { status: 403 });
 
     const body = await request.json().catch(() => ({}));
     const { title, content, categoryId, isPinned, isMandatory, targetBranchIds, targetOrgIds, targetPositionIds, publishNow, attachments } = body as {

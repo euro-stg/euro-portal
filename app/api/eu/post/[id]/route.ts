@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import db from "@/lib/db/db";
-import { requireSession, unauthorized } from "@/lib/api-auth";
+import { unauthorized } from "@/lib/api-auth";
+import { getEuPostPermission } from "@/lib/eu-permission";
 
 export async function GET(
   _request: Request,
@@ -69,6 +70,10 @@ export async function PATCH(
     const post = await db.euPost.findFirst({ where: { id, deletedAt: null } });
     if (!post) return NextResponse.json({ message: "Post tidak ditemukan" }, { status: 404 });
 
+    const { canPost, isSuperadmin } = await getEuPostPermission(session.user.id);
+    const canManage = isSuperadmin || canPost || post.authorId === session.user.id;
+    if (!canManage) return NextResponse.json({ message: "Anda tidak memiliki izin untuk mengubah post ini" }, { status: 403 });
+
     type AttachmentInput = { name: string; url: string; mimeType?: string; size?: number; order?: number };
     const attachmentList = Array.isArray(attachments) ? (attachments as AttachmentInput[]) : null;
 
@@ -113,8 +118,17 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    if (!await requireSession()) return unauthorized();
+    const session = await auth();
+    if (!session?.user?.id) return unauthorized();
+
     const { id } = await params;
+
+    const post = await db.euPost.findFirst({ where: { id, deletedAt: null } });
+    if (!post) return NextResponse.json({ message: "Post tidak ditemukan" }, { status: 404 });
+
+    const { canPost, isSuperadmin } = await getEuPostPermission(session.user.id);
+    const canManage = isSuperadmin || canPost || post.authorId === session.user.id;
+    if (!canManage) return NextResponse.json({ message: "Anda tidak memiliki izin untuk menghapus post ini" }, { status: 403 });
 
     await db.$transaction([
       // Soft-delete post
