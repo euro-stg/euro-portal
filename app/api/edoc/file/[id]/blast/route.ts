@@ -58,7 +58,7 @@ export async function POST(
     const userId = session.user.id;
 
     const { id } = await params;
-    const file = await db.eDocFile.findFirst({ where: { id, deletedAt: null }, select: { uploadedBy: true, requiresNumber: true, bulkImported: true } });
+    const file = await db.eDocFile.findFirst({ where: { id, deletedAt: null }, select: { folderId: true, uploadedBy: true, requiresNumber: true, bulkImported: true } });
     if (!file) return NextResponse.json({ message: "File tidak ditemukan" }, { status: 404 });
     if (!(await canManageBlast(userId, file))) {
       return NextResponse.json({ message: "Hanya pembuat file atau superadmin yang bisa mengatur blast" }, { status: 403 });
@@ -70,7 +70,13 @@ export async function POST(
       : [];
     if (folderIds.length === 0) return NextResponse.json({ message: "folderIds wajib diisi" }, { status: 400 });
 
-    const uniqueIds = Array.from(new Set(folderIds)).filter((fid) => fid !== id);
+    // BUG (ditemukan 2026-09-21 dari React key-collision error): sebelumnya filter di sini
+    // membandingkan folder id terhadap id FILE (`fid !== id`) — dua jenis entity yang
+    // berbeda, jadi tidak pernah nyaring apapun. Seharusnya nyaring folder ASAL file itu
+    // sendiri (`file.folderId`) — kalau lolos, file muncul dobel di listing folder itu (satu
+    // dari isi folder asli, satu lagi dari link blast ke folder yang sama), match persis
+    // sama seperti aturan di upload-time (POST /api/edoc/file, lihat uniqueBlastFolderIds).
+    const uniqueIds = Array.from(new Set(folderIds)).filter((fid) => fid !== file.folderId);
     for (const fid of uniqueIds) {
       const folder = await db.eDocFolder.findFirst({ where: { id: fid, deletedAt: null }, select: { type: true } });
       if (!folder) return NextResponse.json({ message: "Salah satu folder tujuan blast tidak ditemukan" }, { status: 404 });

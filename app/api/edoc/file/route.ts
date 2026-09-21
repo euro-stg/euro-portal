@@ -48,7 +48,15 @@ export async function GET(request: Request) {
         select: { file: { select: fileSelect } },
       }),
     ]);
-    const files = [...ownFiles, ...blastLinks.map((l) => l.file)];
+    // De-dupe by id (defense-in-depth) — kalau file kebetulan sudah pernah ke-blast ke
+    // folder yang sama dengan folder asalnya sendiri (bug lama di POST .../blast yang
+    // salah bandingkan id, sudah diperbaiki 2026-09-21, tapi row EDocFileBlastFolder yang
+    // sudah kadung dibuat sebelum fix ini tidak dibersihkan otomatis), file itu bisa muncul
+    // dobel di sini — bikin React key collision di listing. ownFiles diprioritaskan (union
+    // Map, bukan concat biasa) supaya data yang dipakai tetap dari sumber utamanya.
+    const filesById = new Map(ownFiles.map((f) => [f.id, f]));
+    for (const l of blastLinks) if (!filesById.has(l.file.id)) filesById.set(l.file.id, l.file);
+    const files = Array.from(filesById.values());
     const blastedFileIds = new Set(blastLinks.map((l) => l.file.id));
 
     // DRAFT hanya kelihatan oleh superadmin, uploader-nya sendiri, atau Document Approver

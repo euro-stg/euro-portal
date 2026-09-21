@@ -1309,6 +1309,16 @@ function BulkUploadModal({
         // Semua sukses — langsung tutup & refresh, tidak perlu ganggu user lihat ringkasan.
         onDone(json.succeeded);
       }
+    } catch (err) {
+      // Kegagalan level jaringan (koneksi putus/timeout di tengah upload batch besar,
+      // BEDA dari response error biasa yang sudah ditangani di atas via !res.ok) —
+      // sebelumnya tidak ditangkap sama sekali, jadi muncul sebagai uncaught exception
+      // (persis error report user: "NetworkError when attempting to fetch resource").
+      // File yang SUDAH sempat sukses dibuat di server tetap ada (tidak di-rollback) —
+      // makanya di-refresh lewat onError, bukan cuma toast, biar user tahu harus cek
+      // listing folder dulu sebelum coba upload ulang (menghindari file dobel).
+      console.error(err);
+      onError("Koneksi terputus di tengah upload — cek dulu folder ini, beberapa file mungkin sudah sempat masuk sebelum kegagalan. Kalau perlu, upload ulang dalam batch lebih kecil.");
     } finally { setSubmitting(false); }
   };
 
