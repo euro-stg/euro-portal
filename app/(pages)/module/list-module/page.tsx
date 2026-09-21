@@ -23,8 +23,10 @@ type ModuleRow = {
   status: string;
   isExternal: boolean;
   externalUrl: string | null;
+  appId: string | null;
   createdAt: string;
 };
+type AppOption = { id: string; name: string };
 
 const inputCls  = "w-full border border-slate-200 rounded-md px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 bg-white transition-colors";
 const selectCls = "w-full border border-slate-200 rounded-md px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 bg-white transition-colors";
@@ -40,17 +42,19 @@ function FormField({ label, children, hint }: { label: string; children: React.R
   );
 }
 
-const emptyForm = { id: "", name: "", path: "", type: "module", icon: "", color: "", group: "", order: "0", status: "active", description: "", isExternal: false, externalUrl: "" };
+const emptyForm = { id: "", name: "", path: "", type: "module", icon: "", color: "", group: "", order: "0", status: "active", description: "", isExternal: false, externalUrl: "", appId: "" };
 type FormShape = typeof emptyForm;
 
 function FormContent({
   form,
   formError,
   setForm,
+  apps,
 }: {
   form: FormShape;
   formError: string | null;
   setForm: React.Dispatch<React.SetStateAction<FormShape>>;
+  apps: AppOption[];
 }) {
   return (
     <div className="space-y-4">
@@ -70,6 +74,14 @@ function FormContent({
             <option value="app">app — card dashboard</option>
           </select>
         </FormField>
+        {form.type === "module" && (
+          <FormField label="App Induk" hint="Muncul di sidebar app mana — kosongkan untuk module portal-level (sidebar utama, di luar app manapun)">
+            <select className={selectCls} value={form.appId} onChange={(e) => setForm((p) => ({ ...p, appId: e.target.value }))}>
+              <option value="">— Portal (tanpa app) —</option>
+              {apps.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+          </FormField>
+        )}
         <FormField label="Icon" hint="Nama icon Lucide: LayoutDashboard, Tag, Users, dll">
           <input className={inputCls} placeholder="LayoutDashboard" value={form.icon}
             onChange={(e) => setForm((p) => ({ ...p, icon: e.target.value }))} />
@@ -139,6 +151,7 @@ export default function ListModulePage() {
   const [deleting, setDeleting]     = useState(false);
   const [formError, setFormError]   = useState<string | null>(null);
   const [form, setForm]             = useState(emptyForm);
+  const [apps, setApps]             = useState<AppOption[]>([]);
 
   const showToast = (variant: "success" | "error", message: string) => {
     if (toastRef.current) clearTimeout(toastRef.current);
@@ -170,6 +183,12 @@ export default function ListModulePage() {
 
   useEffect(() => {
     void refreshList(1, filters);
+    // Daftar app (type=app) untuk dropdown "App Induk" — dipakai saat bikin/edit module
+    // bertipe "module" (sidebar item) supaya tersambung ke app yang benar.
+    fetch("/api/module/list?type=app", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => setApps((j?.data ?? []).map((m: { id: string; name: string }) => ({ id: m.id, name: m.name }))))
+      .catch(() => {});
     return () => { if (toastRef.current) clearTimeout(toastRef.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -184,7 +203,7 @@ export default function ListModulePage() {
   const closeEdit   = () => { setEditOpen(false);   setSaving(false); setFormError(null); setForm(emptyForm); };
 
   const openEdit = async (row: ModuleRow) => {
-    setForm({ id: row.id, name: row.name, path: row.path, type: row.type ?? "module", icon: row.icon ?? "", color: row.color ?? "", group: row.group ?? "", order: String(row.order), status: row.status, description: row.description ?? "", isExternal: row.isExternal ?? false, externalUrl: row.externalUrl ?? "" });
+    setForm({ id: row.id, name: row.name, path: row.path, type: row.type ?? "module", icon: row.icon ?? "", color: row.color ?? "", group: row.group ?? "", order: String(row.order), status: row.status, description: row.description ?? "", isExternal: row.isExternal ?? false, externalUrl: row.externalUrl ?? "", appId: row.appId ?? "" });
     setFormError(null); setEditOpen(true);
   };
 
@@ -195,6 +214,7 @@ export default function ListModulePage() {
     description: form.description.trim() || null,
     isExternal: form.type === "app" ? form.isExternal : false,
     externalUrl: (form.type === "app" && form.isExternal) ? (form.externalUrl.trim() || null) : null,
+    appId: form.type === "module" ? (form.appId || null) : null,
   });
 
   const handleCreate = async () => {
@@ -286,18 +306,18 @@ export default function ListModulePage() {
         <Table>
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50">
-              {["No", "Nama", "Path", "Type", "Icon", "Group", "Urutan", "Status", "Dibuat", ""].map((h, i) => (
+              {["No", "Nama", "Path", "Type", "App Induk", "Icon", "Group", "Urutan", "Status", "Dibuat", ""].map((h, i) => (
                 <th key={i} className="px-3 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {loading ? (
-              <tr><td colSpan={10} className="text-center py-12 text-slate-400 text-sm">
+              <tr><td colSpan={11} className="text-center py-12 text-slate-400 text-sm">
                 <div className="flex items-center justify-center gap-2"><RefreshCw className="w-4 h-4 animate-spin" /> Memuat...</div>
               </td></tr>
             ) : data.length === 0 ? (
-              <tr><td colSpan={10} className="text-center py-12 text-slate-400 text-sm">Tidak ada data</td></tr>
+              <tr><td colSpan={11} className="text-center py-12 text-slate-400 text-sm">Tidak ada data</td></tr>
             ) : (
               data.map((row, i) => (
                 <tr key={row.id} className="hover:bg-slate-50/60 transition-colors">
@@ -309,6 +329,7 @@ export default function ListModulePage() {
                       row.type === "app" ? "bg-blue-50 text-blue-700 border border-blue-200" : "bg-slate-50 text-slate-600 border border-slate-200"
                     }`}>{row.type ?? "module"}</span>
                   </td>
+                  <td className="px-3 py-3 text-xs text-slate-500">{apps.find((a) => a.id === row.appId)?.name ?? "—"}</td>
                   <td className="px-3 py-3 text-xs text-slate-500">{row.icon ?? "—"}</td>
                   <td className="px-3 py-3 text-xs text-slate-500">{row.group ?? "—"}</td>
                   <td className="px-3 py-3 text-xs text-slate-500 text-center">{row.order}</td>
@@ -335,7 +356,7 @@ export default function ListModulePage() {
         onPageChange={(p) => { setCurrentPage(p); void refreshList(p, filters); }} />
 
       <Modal open={createOpen} title="Tambah Module" onClose={closeCreate} boxClassName="w-full max-w-2xl">
-        <FormContent form={form} formError={formError} setForm={setForm} />
+        <FormContent form={form} formError={formError} setForm={setForm} apps={apps} />
         <div className="flex justify-end gap-2 pt-4 border-t border-slate-100 mt-4">
           <Button variant="ghost" type="button" onClick={closeCreate}>Batal</Button>
           <Button variant="primary" type="button" onClick={handleCreate} disabled={saving}>
@@ -345,7 +366,7 @@ export default function ListModulePage() {
       </Modal>
 
       <Modal open={editOpen} title="Edit Module" onClose={closeEdit} boxClassName="w-full max-w-2xl">
-        <FormContent form={form} formError={formError} setForm={setForm} />
+        <FormContent form={form} formError={formError} setForm={setForm} apps={apps} />
         <div className="flex justify-end gap-2 pt-4 border-t border-slate-100 mt-4">
           <Button variant="ghost" type="button" onClick={closeEdit}>Batal</Button>
           <Button variant="primary" type="button" onClick={handleUpdate} disabled={saving}>

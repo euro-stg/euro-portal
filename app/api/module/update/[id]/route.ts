@@ -18,16 +18,24 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const description = String(body.description ?? "").trim() || null;
     const isExternal  = Boolean(body.isExternal ?? false);
     const externalUrl = String(body.externalUrl ?? "").trim() || null;
+    // App Induk — lihat catatan yang sama di create/route.ts.
+    const appIdRaw = String(body.appId ?? "").trim() || null;
+    const appId    = type === "module" ? appIdRaw : null;
 
     if (!name) return NextResponse.json({ message: "Name wajib diisi" }, { status: 400 });
     if (!path) return NextResponse.json({ message: "Path wajib diisi" }, { status: 400 });
+    if (appId) {
+      if (appId === id) return NextResponse.json({ message: "App Induk tidak boleh module itu sendiri" }, { status: 400 });
+      const parentApp = await prisma.module.findFirst({ where: { id: appId, type: "app", deletedAt: null } });
+      if (!parentApp) return NextResponse.json({ message: "App Induk tidak ditemukan" }, { status: 400 });
+    }
 
     const exists = await prisma.module.findUnique({ where: { id } });
     if (!exists) return NextResponse.json({ message: "Tidak ditemukan" }, { status: 404 });
 
     const updated = await prisma.module.update({
       where: { id },
-      data: { name, path, icon, color, group, order, status, type, description, isExternal, externalUrl, updatedAt: new Date() },
+      data: { name, path, icon, color, group, order, status, type, description, isExternal, externalUrl, appId, updatedAt: new Date() },
     });
     return NextResponse.json({ message: "Module berhasil diperbarui", data: updated });
   } catch (err) {
