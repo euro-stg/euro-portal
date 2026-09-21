@@ -10,8 +10,8 @@ datasource db {
 // ===================== AUTH =====================
 
 model User {
-  id               String   @id @default(cuid())
-  employeeId       String   @unique
+  id               String    @id @default(cuid())
+  employeeId       String    @unique
   name             String?
   password         String?
   joinDate         DateTime?
@@ -25,7 +25,7 @@ model User {
   branchName       String?
   age              Int?
   image            String?
-  talentaImageKey  String?  // path dari URL Talenta tanpa query params, untuk deteksi perubahan avatar
+  talentaImageKey  String? // path dari URL Talenta tanpa query params, untuk deteksi perubahan avatar
   phone            String?
   mobilePhone      String?
   email            String?
@@ -41,38 +41,52 @@ model User {
   identityNumber   String?
   jobLevel         String?
   employmentStatus String?
-  source           String   @default("talenta") // "talenta" | "manual"
+  source           String    @default("talenta") // "talenta" | "manual"
 
-  accounts             Account[]
-  sessions             Session[]
-  userRoles            UserRole[]
-  notifications        Notification[]
-  sdRequests           SdRequest[]           @relation("SdRequester")
-  sdPicRequests        SdRequest[]           @relation("SdPic")
-  sdItDocCreated       SdItDocument[]        @relation("ItDocCreator")
-  sdItDocApproved      SdItDocument[]        @relation("ItDocApprover")
-  sdUatApproved        SdUat[]               @relation("UatApprover")
-  sdUatRevisions       SdUatRevision[]       @relation("UatRevisionCreator")
-  sdAttachments        SdAttachment[]        @relation("SdAttachUploader")
-  sdActivities         SdActivity[]          @relation("SdActivityActor")
-  sdApprovalSubmitted  SdApprovalRequest[]   @relation("SdApprovalSubmitter")
-  sdApprovalActions    SdApprovalRequestStep[] @relation("SdApprovalActor")
-  appTokensCreated     AppToken[]            @relation("AppTokenCreator")
-  ssoSessions          SsoSession[]          @relation("SsoSessionUser")
-  ssoRedirectTokens    SsoRedirectToken[]    @relation("SsoRedirectUser")
-  passwordResetTokens  PasswordResetToken[]
-  ssdLetters           SsdLetter[]           @relation("SsdRequester")
-  ssdPicLetters        SsdLetter[]           @relation("SsdPic")
-  ssdApprovalSubmitted SsdApproval[]         @relation("SsdApprovalSubmitter")
-  ssdApprovalActions   SsdApprovalStep[]     @relation("SsdApprovalActor")
-  ssdActivities        SsdActivity[]         @relation("SsdActivityActor")
-  ssdOrgAdmin          SsdOrgAdmin?
-  euPosts              EuPost[]         @relation("EuAuthor")
-  euReactions          EuReaction[]     @relation("EuReactor")
-  euComments           EuComment[]      @relation("EuCommenter")
-  euReadLogs           EuReadLog[]      @relation("EuReader")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  accounts                    Account[]
+  sessions                    Session[]
+  userRoles                   UserRole[]
+  notifications               Notification[]
+  sdRequests                  SdRequest[]             @relation("SdRequester")
+  sdPicRequests               SdRequest[]             @relation("SdPic")
+  sdItDocCreated              SdItDocument[]          @relation("ItDocCreator")
+  sdItDocApproved             SdItDocument[]          @relation("ItDocApprover")
+  sdUatApproved               SdUat[]                 @relation("UatApprover")
+  sdUatRevisions              SdUatRevision[]         @relation("UatRevisionCreator")
+  sdAttachments               SdAttachment[]          @relation("SdAttachUploader")
+  sdActivities                SdActivity[]            @relation("SdActivityActor")
+  sdApprovalSubmitted         SdApprovalRequest[]     @relation("SdApprovalSubmitter")
+  sdApprovalActions           SdApprovalRequestStep[] @relation("SdApprovalActor")
+  appTokensCreated            AppToken[]              @relation("AppTokenCreator")
+  ssoSessions                 SsoSession[]            @relation("SsoSessionUser")
+  ssoRedirectTokens           SsoRedirectToken[]      @relation("SsoRedirectUser")
+  passwordResetTokens         PasswordResetToken[]
+  ssdLetters                  SsdLetter[]             @relation("SsdRequester")
+  ssdPicLetters               SsdLetter[]             @relation("SsdPic")
+  ssdApprovalSubmitted        SsdApproval[]           @relation("SsdApprovalSubmitter")
+  ssdApprovalActions          SsdApprovalStep[]       @relation("SsdApprovalActor")
+  ssdActivities               SsdActivity[]           @relation("SsdActivityActor")
+  ssdOrgAdmin                 SsdOrgAdmin?
+  euPosts                     EuPost[]                @relation("EuAuthor")
+  euReactions                 EuReaction[]            @relation("EuReactor")
+  euComments                  EuComment[]             @relation("EuCommenter")
+  euReadLogs                  EuReadLog[]             @relation("EuReader")
+  edocFoldersCreated          EDocFolder[]            @relation("EDocFolderCreatedBy")
+  edocFilesUploaded           EDocFile[]              @relation("EDocFileUploader")
+  edocFilesApproved           EDocFile[]              @relation("EDocFileApprover")
+  edocFilesRejected           EDocFile[]              @relation("EDocFileRejecter")
+  edocFileRevisions           EDocFileRevisionLog[]   @relation("EDocFileRevisionReplacer")
+  edocFolderCreatorRole       EDocFolderCreator?      @relation("EDocFolderCreatorUser")
+  edocFolderCreatorAssigned   EDocFolderCreator[]     @relation("EDocFolderCreatorAssignedBy")
+  edocApproverRole            EDocDocumentApprover?   @relation("EDocDocumentApproverUser")
+  edocApproverAssigned        EDocDocumentApprover[]  @relation("EDocDocumentApproverAssignedBy")
+  edocImProductsImported      EDocImProduct[]         @relation("EDocImProductImporter")
+  edocImPricelistItemsUpdated EDocImPricelistItem[]   @relation("EDocImPricelistItemUpdatedBy")
+  edocFileBlastFoldersCreated EDocFileBlastFolder[]   @relation("EDocFileBlastFolderCreatedBy")
+  edocFeedbacksCreated        EDocFeedback[]          @relation("EDocFeedbackCreator")
+  edocFeedbackResponses       EDocFeedbackResponse[]  @relation("EDocFeedbackResponder")
+  createdAt                   DateTime                @default(now())
+  updatedAt                   DateTime                @updatedAt
 }
 
 model Account {
@@ -121,26 +135,26 @@ model VerificationToken {
 // appId null  = role portal (superadmin, admin, user)
 // appId terisi = role spesifik untuk 1 app
 model Role {
-  id          String    @id @default(cuid())
+  id          String  @id @default(cuid())
   name        String
-  appId       String?   // null = portal-level
+  appId       String? // null = portal-level
   description String?
-  isLocked    Boolean   @default(false)
-  status      String    @default("active")
+  isLocked    Boolean @default(false)
+  status      String  @default("active")
 
   // Default role assignment rules
-  isDefault           Boolean @default(false)
+  isDefault         Boolean @default(false)
   // Scope: ALL | ORGANIZATION | POSITION | BRANCH
   //        | ORGANIZATION_POSITION | ORGANIZATION_BRANCH | POSITION_BRANCH
   //        | ORGANIZATION_POSITION_BRANCH
-  defaultScope        String?
-  defaultOrgId        String?
-  defaultPositionId   String?
-  defaultBranchId     String?
+  defaultScope      String?
+  defaultOrgId      String?
+  defaultPositionId String?
+  defaultBranchId   String?
 
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime?
-  deletedAt   DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime?
+  deletedAt DateTime?
 
   modules   RoleModule[]
   userRoles UserRole[]
@@ -153,7 +167,7 @@ model UserRole {
   id        String   @id @default(cuid())
   userId    String
   roleId    String
-  appId     String?  // denorm dari role.appId — untuk unique constraint per app
+  appId     String? // denorm dari role.appId — untuk unique constraint per app
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -173,12 +187,12 @@ model Module {
   name        String
   path        String
   icon        String?
-  color       String?   // "blue"|"violet"|"emerald"|"orange"|"rose"|"cyan"|"amber"|"indigo"
-  description String?   // subtitle untuk app launcher card
+  color       String? // "blue"|"violet"|"emerald"|"orange"|"rose"|"cyan"|"amber"|"indigo"
+  description String? // subtitle untuk app launcher card
   type        String    @default("module") // "app" | "module"
-  appId       String?   // null = portal; ref ke Module.id dengan type="app"
-  isExternal  Boolean   @default(false)   // true = apps eksternal, buka via SSO redirect
-  externalUrl String?                     // base URL apps eksternal untuk SSO redirect
+  appId       String? // null = portal; ref ke Module.id dengan type="app"
+  isExternal  Boolean   @default(false) // true = apps eksternal, buka via SSO redirect
+  externalUrl String? // base URL apps eksternal untuk SSO redirect
   group       String?
   order       Int       @default(0)
   status      String    @default("active")
@@ -186,8 +200,8 @@ model Module {
   updatedAt   DateTime?
   deletedAt   DateTime?
 
-  app      Module?   @relation("AppModules", fields: [appId], references: [id])
-  modules  Module[]  @relation("AppModules")
+  app      Module?      @relation("AppModules", fields: [appId], references: [id])
+  modules  Module[]     @relation("AppModules")
   roles    RoleModule[]
   appToken AppToken?
 
@@ -209,22 +223,22 @@ model RoleModule {
 // Status: DRAFT → SUBMITTED → IT_REVIEW → APPROVED_IT → APPROVED_USER → IN_PROGRESS → UAT → DONE | REJECTED | CANCELLED
 model SdRequest {
   id                   String    @id @default(cuid())
-  requestNo            String    @unique  // auto: "SD-2026-001"
-  type                 String    // "NEW_APP" | "CHANGE_REQUEST"
-  refAppId             String?   // CHANGE_REQUEST: Module.id (type="app")
+  requestNo            String    @unique // auto: "SD-2026-001"
+  type                 String // "NEW_APP" | "CHANGE_REQUEST"
+  refAppId             String? // CHANGE_REQUEST: Module.id (type="app")
   title                String
   description          String    @db.Text
   requestedBy          String
-  picId                String?   // IT PIC userId
+  picId                String? // IT PIC userId
   estimatedCompletedAt DateTime?
   status               String    @default("DRAFT")
   createdAt            DateTime  @default(now())
   updatedAt            DateTime?
   deletedAt            DateTime?
 
-  requester    User              @relation("SdRequester", fields: [requestedBy], references: [id])
-  pic          User?             @relation("SdPic", fields: [picId], references: [id])
-  refApp       Module?           @relation(fields: [refAppId], references: [id])
+  requester    User               @relation("SdRequester", fields: [requestedBy], references: [id])
+  pic          User?              @relation("SdPic", fields: [picId], references: [id])
+  refApp       Module?            @relation(fields: [refAppId], references: [id])
   sdApproval   SdApprovalRequest?
   itDocument   SdItDocument?
   progresses   SdProgress[]
@@ -237,18 +251,18 @@ model SdRequest {
 
 // Dokumen teknis + bisnis dari IT — user harus approve sebelum dev mulai
 model SdItDocument {
-  id          String    @id @default(cuid())
-  requestId   String    @unique
-  content     String    @db.Text
-  createdBy   String
-  approvedBy  String?
-  approvedAt  DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime?
+  id         String    @id @default(cuid())
+  requestId  String    @unique
+  content    String    @db.Text
+  createdBy  String
+  approvedBy String?
+  approvedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime?
 
-  request     SdRequest    @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  creator     User         @relation("ItDocCreator", fields: [createdBy], references: [id])
-  approver    User?        @relation("ItDocApprover", fields: [approvedBy], references: [id])
+  request     SdRequest      @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  creator     User           @relation("ItDocCreator", fields: [createdBy], references: [id])
+  approver    User?          @relation("ItDocApprover", fields: [approvedBy], references: [id])
   attachments SdAttachment[]
 }
 
@@ -256,7 +270,7 @@ model SdItDocument {
 model SdProgress {
   id        String    @id @default(cuid())
   requestId String
-  label     String    // "Design" | "Backend" | "Frontend" | "Testing" | "Deployment"
+  label     String // "Design" | "Backend" | "Frontend" | "Testing" | "Deployment"
   note      String?   @db.Text
   status    String    @default("IN_PROGRESS") // "IN_PROGRESS" | "DONE"
   order     Int       @default(0)
@@ -270,7 +284,7 @@ model SdProgress {
 model SdEnvironment {
   id        String   @id @default(cuid())
   requestId String
-  name      String   // "Staging" | "UAT"
+  name      String // "Staging" | "UAT"
   url       String
   username  String?
   password  String?
@@ -297,17 +311,17 @@ model SdUat {
 // File upload per step — category menentukan di step mana file diupload
 // category: "REQUEST" | "IT_DOC" | "PROGRESS" | "UAT" | "UAT_REVISION"
 model SdAttachment {
-  id              String   @id @default(cuid())
-  requestId       String?
-  itDocId         String?
-  uatRevisionId   String?
-  category        String   @default("REQUEST")
-  name            String
-  path            String
-  mimeType        String?
-  size            Int?
-  uploadedBy      String
-  createdAt       DateTime @default(now())
+  id            String   @id @default(cuid())
+  requestId     String?
+  itDocId       String?
+  uatRevisionId String?
+  category      String   @default("REQUEST")
+  name          String
+  path          String
+  mimeType      String?
+  size          Int?
+  uploadedBy    String
+  createdAt     DateTime @default(now())
 
   request     SdRequest?     @relation(fields: [requestId], references: [id])
   itDoc       SdItDocument?  @relation(fields: [itDocId], references: [id])
@@ -317,12 +331,12 @@ model SdAttachment {
 
 // Iterasi revisi UAT — dibuat oleh requester saat "Perlu Revisi"
 model SdUatRevision {
-  id          String   @id @default(cuid())
-  requestId   String
-  iteration   Int
-  note        String?  @db.Text
-  createdBy   String
-  createdAt   DateTime @default(now())
+  id        String   @id @default(cuid())
+  requestId String
+  iteration Int
+  note      String?  @db.Text
+  createdBy String
+  createdAt DateTime @default(now())
 
   request     SdRequest      @relation(fields: [requestId], references: [id], onDelete: Cascade)
   creator     User           @relation("UatRevisionCreator", fields: [createdBy], references: [id])
@@ -334,7 +348,7 @@ model SdActivity {
   id        String   @id @default(cuid())
   requestId String
   userId    String
-  action    String   // "SUBMITTED" | "IT_REVIEWED" | "USER_APPROVED_DOC" | "PROGRESS_UPDATE" | "UAT_READY" | "UAT_APPROVED" | "REJECTED" | "CANCELLED" | "COMMENT"
+  action    String // "SUBMITTED" | "IT_REVIEWED" | "USER_APPROVED_DOC" | "PROGRESS_UPDATE" | "UAT_READY" | "UAT_APPROVED" | "REJECTED" | "CANCELLED" | "COMMENT"
   note      String?  @db.Text
   createdAt DateTime @default(now())
 
@@ -386,9 +400,9 @@ model SdApprovalRequest {
   updatedAt   DateTime?
 
   templateId String
-  template   SdApprovalTemplate    @relation(fields: [templateId], references: [id])
-  submitter  User                  @relation("SdApprovalSubmitter", fields: [submittedBy], references: [id])
-  sdRequest  SdRequest             @relation(fields: [sdRequestId], references: [id], onDelete: Cascade)
+  template   SdApprovalTemplate      @relation(fields: [templateId], references: [id])
+  submitter  User                    @relation("SdApprovalSubmitter", fields: [submittedBy], references: [id])
+  sdRequest  SdRequest               @relation(fields: [sdRequestId], references: [id], onDelete: Cascade)
   steps      SdApprovalRequestStep[]
 }
 
@@ -418,11 +432,11 @@ model SdApprovalRequestStep {
 // ===================== NOTIFICATION =====================
 
 model Notification {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   userId    String
   title     String
   body      String
-  type      String   // "APPROVAL_REQUEST" | "APPROVAL_ACTION" | "TICKET" | "GENERAL"
+  type      String // "APPROVAL_REQUEST" | "APPROVAL_ACTION" | "TICKET" | "GENERAL"
   refId     String?
   appType   String?
   refUrl    String?
@@ -440,7 +454,7 @@ model AppTokenRole {
   id          String    @id @default(cuid())
   name        String    @unique
   description String?
-  permissions String[]  // ["LOGIN", "VALIDATE", "GET_USERS"]
+  permissions String[] // ["LOGIN", "VALIDATE", "GET_USERS"]
   createdAt   DateTime  @default(now())
   updatedAt   DateTime?
   deletedAt   DateTime?
@@ -456,19 +470,19 @@ model AppToken {
   description String?
   token       String    @unique
   active      Boolean   @default(true)
-  moduleId    String?   @unique  // relasi ke Module (type="app", isExternal=true)
+  moduleId    String?   @unique // relasi ke Module (type="app", isExternal=true)
   roleId      String?
   createdBy   String
   createdAt   DateTime  @default(now())
   updatedAt   DateTime?
   deletedAt   DateTime?
 
-  creator          User               @relation("AppTokenCreator", fields: [createdBy], references: [id])
-  module           Module?            @relation(fields: [moduleId], references: [id])
-  role             AppTokenRole?      @relation(fields: [roleId], references: [id])
-  ssoSessions      SsoSession[]
-  redirectTokens   SsoRedirectToken[]
-  apiLogs          ApiLog[]
+  creator        User               @relation("AppTokenCreator", fields: [createdBy], references: [id])
+  module         Module?            @relation(fields: [moduleId], references: [id])
+  role           AppTokenRole?      @relation(fields: [roleId], references: [id])
+  ssoSessions    SsoSession[]
+  redirectTokens SsoRedirectToken[]
+  apiLogs        ApiLog[]
 }
 
 // Session user setelah login SSO — flag ke AppToken (apps mana yang buat)
@@ -486,19 +500,19 @@ model SsoSession {
 
 // Log semua aktivitas API eksternal (SSO login, validate, user info, dll)
 model ApiLog {
-  id          String   @id @default(cuid())
-  appTokenId  String?
-  appName     String?  // snapshot nama app saat log dibuat
-  userId      String?
-  method      String   // "GET" | "POST"
-  endpoint    String   // "/api/sso/login" | "/api/sso/validate"
-  status      String   // "SUCCESS" | "FAILED"
-  statusCode  Int?
-  reason      String?
-  ip          String?
-  userAgent   String?
-  duration    Int?     // ms
-  createdAt   DateTime @default(now())
+  id         String   @id @default(cuid())
+  appTokenId String?
+  appName    String? // snapshot nama app saat log dibuat
+  userId     String?
+  method     String // "GET" | "POST"
+  endpoint   String // "/api/sso/login" | "/api/sso/validate"
+  status     String // "SUCCESS" | "FAILED"
+  statusCode Int?
+  reason     String?
+  ip         String?
+  userAgent  String?
+  duration   Int? // ms
+  createdAt  DateTime @default(now())
 
   appToken AppToken? @relation(fields: [appTokenId], references: [id])
 }
@@ -506,7 +520,7 @@ model ApiLog {
 // ===================== MASTER DATA (Talenta sync) =====================
 
 model Branch {
-  id             String   @id  // Talenta branch_id sebagai string
+  id             String   @id // Talenta branch_id sebagai string
   name           String
   parentBranchId String?
   address        String?
@@ -520,7 +534,7 @@ model Branch {
 }
 
 model JobPosition {
-  id          String   @id  // Talenta job_position_id sebagai string
+  id          String   @id // Talenta job_position_id sebagai string
   name        String
   level       Int?
   description String?
@@ -547,16 +561,16 @@ model Company {
 // ===================== SYNC LOG =====================
 
 model SyncLog {
-  id          String    @id @default(cuid())
-  type        String    @default("user") // "user" | "branch" | "job_position"
-  trigger     String    // "manual" | "scheduled"
-  status      String    // "running" | "success" | "error"
-  processed   Int?
-  created     Int?
-  updated     Int?
-  error       String?   @db.Text
-  startedAt   DateTime  @default(now())
-  finishedAt  DateTime?
+  id         String    @id @default(cuid())
+  type       String    @default("user") // "user" | "branch" | "job_position"
+  trigger    String // "manual" | "scheduled"
+  status     String // "running" | "success" | "error"
+  processed  Int?
+  created    Int?
+  updated    Int?
+  error      String?   @db.Text
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
 }
 
 model PasswordResetToken {
@@ -617,18 +631,18 @@ model SsdLetter {
   companyId      String
   organizationId String?
   requestedBy    String
-  fileDraft    String?
-  fileFinal    String?
-  status       String    @default("DRAFT")
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime?
-  deletedAt    DateTime?
+  fileDraft      String?
+  fileFinal      String?
+  status         String    @default("DRAFT")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime?
+  deletedAt      DateTime?
 
-  category     SsdCategory    @relation(fields: [categoryId], references: [id])
-  company      Company        @relation(fields: [companyId], references: [id])
-  organization Organization?  @relation(fields: [organizationId], references: [id])
-  requester    User           @relation("SsdRequester", fields: [requestedBy], references: [id])
-  pic          User?          @relation("SsdPic", fields: [picId], references: [id])
+  category     SsdCategory   @relation(fields: [categoryId], references: [id])
+  company      Company       @relation(fields: [companyId], references: [id])
+  organization Organization? @relation(fields: [organizationId], references: [id])
+  requester    User          @relation("SsdRequester", fields: [requestedBy], references: [id])
+  pic          User?         @relation("SsdPic", fields: [picId], references: [id])
   approval     SsdApproval?
   activities   SsdActivity[]
 }
@@ -715,21 +729,21 @@ model SsdActivity {
 }
 
 model Organization {
-  id                   String    @id  // Talenta org id (string) atau cuid jika manual
+  id                   String    @id // Talenta org id (string) atau cuid jika manual
   name                 String
   parentOrganizationId String?
   branchId             String?
   code                 String?
-  source               String    @default("manual")  // "talenta" | "user_sync" | "manual"
+  source               String    @default("manual") // "talenta" | "user_sync" | "manual"
   syncedAt             DateTime?
   createdAt            DateTime  @default(now())
   updatedAt            DateTime?
   deletedAt            DateTime?
 
-  parent      Organization?  @relation("OrgHierarchy", fields: [parentOrganizationId], references: [id])
-  children    Organization[] @relation("OrgHierarchy")
-  ssdAdmins   SsdOrgAdmin[]
-  ssdLetters  SsdLetter[]
+  parent     Organization?  @relation("OrgHierarchy", fields: [parentOrganizationId], references: [id])
+  children   Organization[] @relation("OrgHierarchy")
+  ssdAdmins  SsdOrgAdmin[]
+  ssdLetters SsdLetter[]
 }
 
 model SsdOrgAdmin {
@@ -748,8 +762,8 @@ model EmailLog {
   id        String   @id @default(cuid())
   to        String
   subject   String
-  source    String   // ssd | sd | portal | system
-  status    String   // sent | failed
+  source    String // ssd | sd | portal | system
+  status    String // sent | failed
   error     String?  @db.Text
   createdAt DateTime @default(now())
 
@@ -763,8 +777,8 @@ model EmailLog {
 model EuCategory {
   id        String   @id @default(cuid())
   name      String   @unique
-  icon      String?  // emoji atau lucide icon name
-  color     String?  // hex color untuk badge, e.g. "#3B82F6"
+  icon      String? // emoji atau lucide icon name
+  color     String? // hex color untuk badge, e.g. "#3B82F6"
   order     Int      @default(0)
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
@@ -774,21 +788,21 @@ model EuCategory {
 }
 
 model EuPost {
-  id                String   @id @default(cuid())
+  id                String     @id @default(cuid())
   title             String
-  content           String   @db.Text
+  content           String     @db.Text
   categoryId        String
   category          EuCategory @relation(fields: [categoryId], references: [id])
   authorId          String
-  author            User     @relation("EuAuthor", fields: [authorId], references: [id])
-  isPinned          Boolean  @default(false)
-  isMandatory       Boolean  @default(false)
-  targetBranchIds   String[] @default([])
-  targetOrgIds      String[] @default([])
-  targetPositionIds String[] @default([])
+  author            User       @relation("EuAuthor", fields: [authorId], references: [id])
+  isPinned          Boolean    @default(false)
+  isMandatory       Boolean    @default(false)
+  targetBranchIds   String[]   @default([])
+  targetOrgIds      String[]   @default([])
+  targetPositionIds String[]   @default([])
   publishedAt       DateTime?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
   deletedAt         DateTime?
 
   attachments EuAttachment[]
@@ -810,11 +824,11 @@ model EuAttachment {
 // Polymorphic: targetType="post"|"birthday", targetId=postId atau "{userId}_{year}"
 model EuReaction {
   id         String   @id @default(cuid())
-  targetType String   // "post" | "birthday"
+  targetType String // "post" | "birthday"
   targetId   String
   userId     String
   user       User     @relation("EuReactor", fields: [userId], references: [id], onDelete: Cascade)
-  type       String   // "like" | "appreciate" | "congrats" | "useful"
+  type       String // "like" | "appreciate" | "congrats" | "useful"
   createdAt  DateTime @default(now())
 
   @@unique([targetType, targetId, userId])
@@ -822,7 +836,7 @@ model EuReaction {
 
 model EuComment {
   id         String    @id @default(cuid())
-  targetType String    // "post" | "birthday"
+  targetType String // "post" | "birthday"
   targetId   String
   userId     String
   user       User      @relation("EuCommenter", fields: [userId], references: [id], onDelete: Cascade)
@@ -832,12 +846,12 @@ model EuComment {
 }
 
 model EuReadLog {
-  id      String   @id @default(cuid())
-  postId  String
-  post    EuPost   @relation(fields: [postId], references: [id], onDelete: Cascade)
-  userId  String
-  user    User     @relation("EuReader", fields: [userId], references: [id], onDelete: Cascade)
-  readAt  DateTime @default(now())
+  id     String   @id @default(cuid())
+  postId String
+  post   EuPost   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId String
+  user   User     @relation("EuReader", fields: [userId], references: [id], onDelete: Cascade)
+  readAt DateTime @default(now())
 
   @@unique([postId, userId])
 }
@@ -851,10 +865,444 @@ model SsoRedirectToken {
   userId     String
   appTokenId String
   token      String    @unique
-  expiresAt  DateTime  // 5 menit
+  expiresAt  DateTime // 5 menit
   usedAt     DateTime? // null = belum dipakai, terisi = sudah
   createdAt  DateTime  @default(now())
 
   user     User     @relation("SsoRedirectUser", fields: [userId], references: [id], onDelete: Cascade)
   appToken AppToken @relation(fields: [appTokenId], references: [id], onDelete: Cascade)
+}
+
+// ===================== E DOCUMENT =====================
+// Directory/document management miniapp. Permission model (EDocFolderCreator,
+// EDocDocumentApprover) is deliberately independent from Portal's Role/Module
+// system, and EDocBusinessUnit is deliberately independent from SSD's Company —
+// both to avoid coupling E Document to other apps' data.
+
+// Folder Creator: global role, independent from Portal Role/Module. Only superadmin
+// can assign/revoke. Holder gets full access on any folder they create.
+model EDocFolderCreator {
+  id         String   @id @default(cuid())
+  userId     String   @unique
+  assignedAt DateTime @default(now())
+  assignedBy String
+
+  user     User @relation("EDocFolderCreatorUser", fields: [userId], references: [id], onDelete: Cascade)
+  assigner User @relation("EDocFolderCreatorAssignedBy", fields: [assignedBy], references: [id])
+}
+
+// Document Approver: global role, independent from Portal Role/Module. Approves/generates
+// numbers for any document anywhere in E Document (flat pool, not scoped per category/folder).
+model EDocDocumentApprover {
+  id         String   @id @default(cuid())
+  userId     String   @unique
+  assignedAt DateTime @default(now())
+  assignedBy String
+
+  user     User @relation("EDocDocumentApproverUser", fields: [userId], references: [id], onDelete: Cascade)
+  assigner User @relation("EDocDocumentApproverAssignedBy", fields: [assignedBy], references: [id])
+}
+
+// Business unit master — conceptually same real-world entities as Company (SLI/ESC/ESL/EHL/HO-style)
+// but deliberately NOT a relation to Company, to avoid coupling with SSD.
+model EDocBusinessUnit {
+  id        String    @id @default(cuid())
+  code      String    @unique // e.g. "SKIN+", "SLIM+", "ESC", "ESL", "EHL", "HO"
+  name      String
+  status    String    @default("active")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime?
+  deletedAt DateTime?
+}
+
+// Maps a branch-name prefix (from User.branchName, format "PREFIX - Location") to one or
+// more business units. Admin-configurable, not hardcoded — the SS prefix maps to two units.
+// isDefault marks the fallback row used when no prefix matches (currently HO).
+model EDocBranchPrefixMapping {
+  id                String    @id @default(cuid())
+  prefix            String    @unique // e.g. "SS", "ESC", "ESL", "EHL", "HEAD OFFICE"
+  businessUnitCodes String[]  @default([])
+  isDefault         Boolean   @default(false)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime?
+}
+
+// Folder: hierarchical, CRD-only (no update/rename/move — Nextcloud storage doesn't handle
+// updates well). type=OBSOLETE folders get absolute content-access restriction regardless of ACL.
+model EDocFolder {
+  id             String  @id @default(cuid())
+  name           String
+  parentFolderId String?
+  type           String  @default("NORMAL") // "NORMAL" | "OBSOLETE"
+  createdBy      String
+
+  // ACL — multi-select per dimension, independent read/write. Write implies read.
+  readBranchIds          String[] @default([])
+  readOrgIds             String[] @default([])
+  readPositionIds        String[] @default([])
+  readBusinessUnitCodes  String[] @default([])
+  writeBranchIds         String[] @default([])
+  writeOrgIds            String[] @default([])
+  writePositionIds       String[] @default([])
+  writeBusinessUnitCodes String[] @default([])
+
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+
+  creator               User                  @relation("EDocFolderCreatedBy", fields: [createdBy], references: [id])
+  parent                EDocFolder?           @relation("EDocFolderHierarchy", fields: [parentFolderId], references: [id])
+  children              EDocFolder[]          @relation("EDocFolderHierarchy")
+  files                 EDocFile[]            @relation("EDocFolderFiles")
+  obsoleteFilesDestined EDocFile[]            @relation("EDocFileObsoleteDestination")
+  blastedFiles          EDocFileBlastFolder[]
+
+  @@index([parentFolderId])
+}
+
+// File: PDF-only upload. requiresNumber toggles the approval/numbering flow (status
+// DRAFT -> RELEASE). documentNumber/mocNumber are generated via the Number Format
+// Builder (EDocNumberFormat) at approval time / a separate MOC-generation action.
+model EDocFile {
+  id       String @id @default(cuid())
+  folderId String
+
+  title       String
+  description String? @db.Text
+
+  categoryId     String
+  categoryTypeId String?
+
+  // Multi-value tags on the file itself (distinct from folder ACL matching, which is
+  // separate per-folder arrays) — changed from single String? to String[] on 2026-09-18,
+  // user clarified a file can legitimately belong to more than one Business Unit/Branch.
+  businessUnitCodes String[] @default([])
+  branchIds         String[] @default([]) // Talenta branch ids, plain strings like elsewhere in this schema
+  organizationId    String? // plain string ref to Organization.id (like Role.defaultOrgId), source for the ORG_DEPT_CODE number-format token
+
+  startDate DateTime?
+  // endDate juga berfungsi ganda sebagai pemicu auto-pindah-ke-Obsolete (dulu field
+  // terpisah "expiryDate" — digabung 2026-09-14 karena user menganggap End Date sudah
+  // cukup, tidak perlu 2 field tanggal yang mirip). Begitu endDate lewat DAN
+  // obsoleteDestinationFolderId terisi, relocateExpiredFiles() memindahkan file ke folder
+  // itu secara otomatis.
+  endDate   DateTime?
+
+  obsoleteDestinationFolderId String?
+
+  fileUrl String // current active PDF (Nextcloud path)
+
+  // Document Number/approval sekarang WAJIB untuk semua file — toggle opsionalnya dihapus
+  // dari UI upload 2026-09-18 (default berubah dari false ke true untuk baris baru; baris
+  // lama yang sudah terlanjur false dibiarkan apa adanya, tidak dipaksa migrasi).
+  requiresNumber     Boolean @default(true)
+  // Ditentukan pembuat file saat upload (khusus Category IM) — kalau true, file ini
+  // dianggap promo dan WAJIB punya minimal 1 EDocImProduct ter-import sebelum bisa
+  // di-approve (lihat POST /api/edoc/file/[id]/approve). Kalau false, section
+  // Produk/Promo Terkait disembunyikan total di halaman detail file.
+  requiresItemImport Boolean @default(false)
+  documentNumber     String? // null until approved (or typed in manually on a bulk-imported file — see bulkImported)
+  mocNumber          String? // null until MOC generated (optional, separate action)
+  status             String  @default("DRAFT") // "DRAFT" | "RELEASE" | "REJECTED"
+  // Bulk Import (2026-09-21) — file created via POST /api/edoc/file/bulk, an initial-migration
+  // shortcut for Folder Creators to dump many existing PDFs straight to RELEASE with
+  // requiresNumber=false (bypasses the approval queue entirely, no documentNumber generated).
+  // This flag is NOT about status/permissions by itself (requiresNumber=false already grants
+  // free uploader edit access) — it exists purely so the UI can show a "Bulk Import" badge
+  // (metadata is likely incomplete: no BU/branch/dates/document number yet) and so Folder
+  // Creators (not just the original uploader) are allowed to fill in the missing metadata
+  // afterward via PATCH /api/edoc/file/[id] — see canEditFileMetadata in app/lib/edoc.ts.
+  bulkImported       Boolean @default(false)
+
+  uploadedBy     String
+  approvedBy     String?
+  approvedAt     DateTime?
+  approvalNote   String?   @db.Text
+  // Reject (2026-09-21) — jalur alternatif dari Approve, sama-sama cuma untuk file DRAFT
+  // yang requiresNumber=true. rejectionNote WAJIB diisi (beda dari approvalNote yang
+  // opsional). File yang di-reject bisa direvisi uploader-nya (lihat revision/route.ts)
+  // untuk balik ke DRAFT dan masuk antrian approval lagi.
+  rejectedBy     String?
+  rejectedAt     DateTime?
+  rejectionNote  String?   @db.Text
+  mocGeneratedBy String?
+  mocGeneratedAt DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  folder              EDocFolder            @relation("EDocFolderFiles", fields: [folderId], references: [id])
+  obsoleteDestination EDocFolder?           @relation("EDocFileObsoleteDestination", fields: [obsoleteDestinationFolderId], references: [id])
+  category            EDocCategory          @relation(fields: [categoryId], references: [id])
+  categoryType        EDocCategoryType?     @relation(fields: [categoryTypeId], references: [id])
+  uploader            User                  @relation("EDocFileUploader", fields: [uploadedBy], references: [id])
+  approver            User?                 @relation("EDocFileApprover", fields: [approvedBy], references: [id])
+  rejecter            User?                 @relation("EDocFileRejecter", fields: [rejectedBy], references: [id])
+  revisions           EDocFileRevisionLog[]
+  imProducts          EDocImProduct[]
+  feedback            EDocFeedback?
+  blastFolders        EDocFileBlastFolder[]
+
+  @@index([folderId])
+  @@index([categoryId])
+}
+
+// "Blast" — file yang SAMA (1 master record, bukan disalin) juga muncul di listing folder
+// lain, di luar folderId aslinya (ditambahkan 2026-09-21, per diskusi ACL folder vs tag
+// Business Unit lintas-folder). Cuma link visibilitas, bukan file fisik baru — begitu file
+// induknya dihapus/expired/masuk Obsolete, kemunculannya di SEMUA blast folder ikut hilang
+// juga (karena selalu resolve dari baris EDocFile yang sama, bukan snapshot). Melihat file
+// lewat blast folder butuh akses baca ke blast folder ITU (independen dari ACL folder
+// aslinya) — lihat resolveFileReadAccess.
+model EDocFileBlastFolder {
+  id        String   @id @default(cuid())
+  fileId    String
+  folderId  String
+  createdAt DateTime @default(now())
+  createdBy String
+
+  file    EDocFile   @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  folder  EDocFolder @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  creator User       @relation("EDocFileBlastFolderCreatedBy", fields: [createdBy], references: [id])
+
+  @@unique([fileId, folderId])
+  @@index([folderId])
+}
+
+// Revision history — re-upload after RELEASE does not change documentNumber/status,
+// new file becomes active immediately; old version logged here for audit only.
+model EDocFileRevisionLog {
+  id              String   @id @default(cuid())
+  fileId          String
+  previousFileUrl String
+  replacedAt      DateTime @default(now())
+  replacedBy      String
+
+  file     EDocFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  replacer User     @relation("EDocFileRevisionReplacer", fields: [replacedBy], references: [id])
+}
+
+// Category master data (was "File Type"), admin-configurable, e.g. IM.
+model EDocCategory {
+  id        String    @id @default(cuid())
+  code      String    @unique
+  name      String
+  status    String    @default("active")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime?
+  deletedAt DateTime?
+
+  // Contoh PDF yang diupload admin di halaman Pengaturan, dipakai sebagai dasar preview
+  // posisi stempel (Document Number/MOC Number/Watermark) — disimpan persisten (Nextcloud
+  // path) supaya tetap kelihatan tiap buka preview, tidak perlu upload ulang tiap kali.
+  samplePdfPath String?
+
+  categoryTypes EDocCategoryType[]
+  numberFormats EDocNumberFormat[]
+  files         EDocFile[]
+  watermark     EDocWatermarkConfig?
+}
+
+// Custom watermark stamp per Category — independent text/position/color from the
+// Document Number and MOC Number stamps (all three can sit at different spots on the
+// same A4 page-1). Applied at approval time, same as the numbers.
+model EDocWatermarkConfig {
+  id          String @id @default(cuid())
+  categoryId  String @unique
+  text        String // e.g. "APPROVED", "OK" — free text, admin-configurable per category
+  color       String @default("green")
+  positionXMm Float
+  positionYMm Float
+  fontSize    Float  @default(24)
+
+  category EDocCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+}
+
+// Category Type, scoped per category, e.g. Regular / Non-Regular under IM.
+model EDocCategoryType {
+  id         String @id @default(cuid())
+  categoryId String
+  code       String
+  name       String
+
+  category EDocCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  files    EDocFile[]
+
+  @@unique([categoryId, code])
+}
+
+// Number Format Builder — admin-configurable segment structure per category, per number
+// type. A DOCUMENT_NUMBER format is required before a category's files can be approved;
+// MOC_NUMBER is optional per category.
+model EDocNumberFormat {
+  id            String  @id @default(cuid())
+  categoryId    String
+  type          String // "DOCUMENT_NUMBER" | "MOC_NUMBER"
+  name          String?
+  sequenceScope String  @default("GLOBAL") // "GLOBAL" | "PER_CATEGORY" — see EDocNumberSequenceCounter keying
+
+  // Where this number gets stamped onto the (always-A4) PDF at approval time — precise mm
+  // coordinates from the top-left corner, page 1 only. Independent per (categoryId, type),
+  // so Document Number and MOC Number can each sit at a different spot on the page.
+  positionXMm Float?
+  positionYMm Float?
+  fontSize    Float? @default(11)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime?
+
+  category EDocCategory              @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  segments EDocNumberFormatSegment[]
+
+  @@unique([categoryId, type])
+}
+
+// Ordered segment list for a number format. LITERAL_TEXT segments use literalValue;
+// every other segmentType is resolved from context at generation time. `separatorAfter`
+// is the text inserted immediately after THIS segment, before the next one — per-segment
+// (not one format-wide separator) so e.g. "No." can be followed by a plain space while
+// the rest of the segments still join with "/" (ignored on the last segment).
+model EDocNumberFormatSegment {
+  id             String  @id @default(cuid())
+  numberFormatId String
+  order          Int
+  // "LITERAL_TEXT" | "SEQUENCE" | "CATEGORY_CODE" | "CATEGORY_TYPE_CODE" | "ORG_DEPT_CODE"
+  // | "MONTH_ROMAN" | "YEAR" | "REF_MAIN_DOCUMENT_NUMBER"
+  segmentType    String
+  literalValue   String? // used only when segmentType = "LITERAL_TEXT"
+  separatorAfter String  @default("/")
+
+  numberFormat EDocNumberFormat @relation(fields: [numberFormatId], references: [id], onDelete: Cascade)
+
+  @@unique([numberFormatId, order])
+}
+
+// Sequence counter — the "Master Number", admin-editable directly so production can be
+// corrected. Keying depends on the owning format's sequenceScope (NOT numberFormatId,
+// which would silently defeat GLOBAL scope since every category has its own format row):
+//   scope="GLOBAL"       -> key = the number type (e.g. "DOCUMENT_NUMBER"), shared across categories
+//   scope="PER_CATEGORY" -> key = the categoryId alone (not type+categoryId)
+// Increment via upsert+increment (same atomic pattern as SsdCounter / generateLetterNumber
+// in app/lib/ssd.ts) to stay safe under concurrent approvals.
+model EDocNumberSequenceCounter {
+  id        String   @id @default(cuid())
+  scope     String // "GLOBAL" | "PER_CATEGORY"
+  key       String
+  seq       Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@unique([scope, key])
+}
+
+// IM-specific product/SKU search attachment — hardcoded to Category IM only, not a
+// general per-category capability. Pure search metadata, no lifecycle of its own;
+// "active" for search purposes refers to the FILE (status RELEASE etc.), not the SKU.
+// Exact imported columns beyond sku are TBD (format to follow) — kept in `extra` until spec'd.
+// Baris "Promo per Item" yang diimport untuk 1 file IM tertentu. Field mengikuti kolom
+// asli template promo (bilingual ID/EN) apa adanya — bukan JSON generik — supaya bisa jadi
+// bahan filter/dashboard di kemudian hari. imNumber/imSubject ikut disimpan dari file Excel
+// (dipakai untuk cross-check terhadap EDocFile.documentNumber saat import, sekadar validasi
+// — bukan penentu file tujuan; file tujuan selalu ditentukan oleh fileId tempat diupload).
+model EDocImProduct {
+  id     String @id @default(cuid())
+  fileId String
+
+  itemName        String
+  sku             String? // kode SKU, terpisah dari itemName (kolom "SKU" di Excel — ditambahkan 2026-09-21, opsional karena template lama tidak punya kolom ini)
+  category        String?
+  discountClass   String?
+  normalPrice     Float?
+  promoType       String?
+  promoDetail     String? @db.Text
+  promoPrice      Float?
+  discountPercent Float?
+  qty             Int?
+  imNumber        String?
+  imSubject       String?
+  validity        String? @db.Text
+  eligibleClient  String? @db.Text
+  keyConditions   String? @db.Text
+
+  extra Json? // kolom tak dikenal lain di luar daftar di atas, supaya tidak ada data yang diam-diam hilang
+
+  importedAt DateTime @default(now())
+  importedBy String
+
+  file     EDocFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  importer User     @relation("EDocImProductImporter", fields: [importedBy], references: [id])
+
+  @@index([fileId])
+  @@index([itemName])
+  @@index([sku])
+}
+
+// Master Pricelist Category IM — sumber kebenaran nama item/kategori/harga normal, dikelola
+// admin lewat import Excel. Dipakai untuk mengisi tab "Pricelist" pada template yang
+// di-download user (app/lib/edoc.ts: generateImProductTemplate), supaya selalu up-to-date
+// tanpa user perlu tahu di mana master data ini disimpan.
+model EDocImPricelistItem {
+  id            String   @id @default(cuid())
+  itemName      String   @unique
+  category      String?
+  discountClass String?
+  packaging     String?
+  normalPrice   Float?
+  notes         String?  @db.Text
+  updatedAt     DateTime @updatedAt
+  updatedBy     String
+
+  updater User @relation("EDocImPricelistItemUpdatedBy", fields: [updatedBy], references: [id])
+}
+
+// Feedback: at most one per file, owned by the file's uploader (not Folder Creator, not a
+// separate role). Not a graded quiz — no scoring. Questions can be bulk-imported via an
+// Excel template and/or added manually.
+model EDocFeedback {
+  id        String   @id @default(cuid())
+  fileId    String   @unique
+  createdBy String
+  createdAt DateTime @default(now())
+
+  file      EDocFile               @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  creator   User                   @relation("EDocFeedbackCreator", fields: [createdBy], references: [id])
+  questions EDocFeedbackQuestion[]
+  responses EDocFeedbackResponse[]
+}
+
+model EDocFeedbackQuestion {
+  id           String   @id @default(cuid())
+  feedbackId   String
+  order        Int      @default(0)
+  type         String // "ESSAY" | "MULTIPLE_CHOICE"
+  questionText String   @db.Text
+  options      String[] @default([]) // MULTIPLE_CHOICE only
+
+  feedback EDocFeedback         @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+  answers  EDocFeedbackAnswer[]
+}
+
+// One response per user per feedback — submit once, then locked (enforced by the unique
+// constraint below plus application-level check before allowing a submit).
+model EDocFeedbackResponse {
+  id          String   @id @default(cuid())
+  feedbackId  String
+  userId      String
+  submittedAt DateTime @default(now())
+
+  feedback EDocFeedback         @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+  user     User                 @relation("EDocFeedbackResponder", fields: [userId], references: [id])
+  answers  EDocFeedbackAnswer[]
+
+  @@unique([feedbackId, userId])
+}
+
+model EDocFeedbackAnswer {
+  id              String   @id @default(cuid())
+  responseId      String
+  questionId      String
+  essayText       String?  @db.Text
+  selectedOptions String[] @default([]) // MULTIPLE_CHOICE allows more than one selection
+
+  response EDocFeedbackResponse @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  question EDocFeedbackQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
 }

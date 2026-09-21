@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { FileText, CheckCircle2, Clock, Loader2, ChevronRight, AlertCircle, FileSignature, Send, XCircle, BadgeCheck } from "lucide-react";
 import { ChatWidget } from "@/components/ui/chat-widget";
 import { EuFeedPage } from "./_eu-feed";
+import { EDocApp } from "./_edoc-app";
 
 const STATUS_LABEL: Record<string, string> = {
   DRAFT: "Draft", SUBMITTED: "Diajukan", IT_REVIEW: "Review IT",
@@ -64,6 +65,7 @@ export default function AppDashboardPage() {
   }, [appSlug]);
 
   if (appSlug === "euro-update") return <EuFeedPage />;
+  if (appSlug === "e-document") return <EDocApp />;
 
   if (appSlug === "ssd") {
     return (
