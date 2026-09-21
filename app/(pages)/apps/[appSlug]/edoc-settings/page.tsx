@@ -6,9 +6,11 @@ import { Alert } from "@/components/ui/alert";
 import { CategoryFormatManager } from "./_category-format-manager";
 import { CounterManager } from "./_counter-manager";
 import { ImPricelistManager } from "./_im-pricelist-manager";
+import { BusinessUnitManager, BranchPrefixMappingManager } from "./_business-unit-manager";
 
 type UserOption = { id: string; name: string | null; employeeId: string; jobPositionName: string | null };
 type AssignedRow = { id: string; userId: string; assignedAt: string; user: UserOption };
+type BusinessUnit = { id: string; code: string; name: string; status: string };
 
 const inputCls = "w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 bg-white transition-colors";
 
@@ -21,6 +23,15 @@ export default function EDocSettingsPage() {
     setToast({ variant, message });
     toastTimer.current = setTimeout(() => setToast(null), 4000);
   };
+
+  // Diangkat ke sini (bukan lokal di BranchPrefixMappingManager) supaya begitu Business
+  // Unit baru ditambah lewat BusinessUnitManager, dropdown pilihannya di
+  // BranchPrefixMappingManager langsung ikut update tanpa reload halaman.
+  const [businessUnits, setBusinessUnits] = useState<BusinessUnit[]>([]);
+  const loadBusinessUnits = useCallback(() => {
+    fetch("/api/edoc/business-unit").then((r) => r.json()).then((j) => setBusinessUnits(j.data ?? [])).catch(() => {});
+  }, []);
+  useEffect(() => { loadBusinessUnits(); }, [loadBusinessUnits]);
 
   return (
     <div className="space-y-6">
@@ -41,6 +52,7 @@ export default function EDocSettingsPage() {
         </div>
         <ol className="text-sm text-blue-800 space-y-1.5 list-decimal list-inside">
           <li><b>Assign role</b> — tentukan siapa Folder Creator (boleh bikin folder) dan Document Approver (boleh approve dokumen).</li>
+          <li><b>Isi Business Unit &amp; Branch Mapping</b> — wajib diisi dulu sebelum form upload/edit file bisa pilih Business Unit (kosong = dropdown-nya juga kosong).</li>
           <li><b>Buat Category</b> — mis. &ldquo;IM&rdquo;. Tambahkan Category Type kalau perlu (mis. Regular / Non-Regular).</li>
           <li><b>Atur Document Number</b> — <u>wajib</u> diisi dulu sebelum file di Category ini bisa di-approve. Susun segmen (teks tetap, nomor urut, kode kategori, dst) lalu set posisi X/Y di halaman PDF (mm dari pojok kiri-atas, kertas A4).</li>
           <li><b>Atur MOC Number</b> — opsional. Kalau tidak diisi, file di Category ini tidak akan punya opsi generate MOC.</li>
@@ -76,17 +88,31 @@ export default function EDocSettingsPage() {
       </div>
 
       <div>
-        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">2-5. Category, Number Format &amp; Watermark</p>
+        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">2. Business Unit &amp; Branch Mapping</p>
+        <div className="space-y-4">
+          <BusinessUnitManager
+            onError={(m) => showToast("error", m)} onSuccess={(m) => showToast("success", m)}
+            onChanged={loadBusinessUnits}
+          />
+          <BranchPrefixMappingManager
+            businessUnits={businessUnits}
+            onError={(m) => showToast("error", m)} onSuccess={(m) => showToast("success", m)}
+          />
+        </div>
+      </div>
+
+      <div>
+        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">3-6. Category, Number Format &amp; Watermark</p>
         <CategoryFormatManager onError={(m) => showToast("error", m)} onSuccess={(m) => showToast("success", m)} />
       </div>
 
       <div>
-        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">6. Master Number</p>
+        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">7. Master Number</p>
         <CounterManager onError={(m) => showToast("error", m)} onSuccess={(m) => showToast("success", m)} />
       </div>
 
       <div>
-        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">7. Master Pricelist (Category IM)</p>
+        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">8. Master Pricelist (Category IM)</p>
         <ImPricelistManager onError={(m) => showToast("error", m)} onSuccess={(m) => showToast("success", m)} />
       </div>
     </div>
