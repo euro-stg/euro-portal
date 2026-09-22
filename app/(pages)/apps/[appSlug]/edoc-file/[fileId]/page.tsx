@@ -41,8 +41,15 @@ const STATUS_LABEL: Record<string, string> = { DRAFT: "Draft", RELEASE: "Release
 const STATUS_COLOR: Record<string, string> = { DRAFT: "bg-slate-100 text-slate-600", RELEASE: "bg-emerald-50 text-emerald-700", REJECTED: "bg-red-50 text-red-700" };
 
 export default function EDocFileDetailPage() {
-  const { fileId } = useParams<{ appSlug: string; fileId: string }>();
+  const { appSlug, fileId } = useParams<{ appSlug: string; fileId: string }>();
   const router = useRouter();
+  // "Back" ke folder asal file ini, bukan ke root E Document (2026-09-22) — folder
+  // navigation di EDocApp murni state client, tidak pernah masuk browser history, jadi
+  // router.back() polos selalu mendarat di root, bukan folder yang lagi dibuka user
+  // sebelumnya. file.folderId sendiri (bukan query param) yang dipakai — selalu ada begitu
+  // file-nya sudah termuat, jadi tetap benar dilihat dari mana pun halaman ini dibuka
+  // (klik dari list, dari search, atau link langsung).
+  const backToFolder = (folderId: string) => router.push(`/apps/${appSlug}?folderId=${folderId}`);
 
   const [file, setFile] = useState<FileDetail | null>(null);
   const [reference, setReference] = useState<Reference | null>(null);
@@ -173,7 +180,7 @@ export default function EDocFileDetailPage() {
       const json = await res.json().catch(() => ({}));
       if (!res.ok) { showToast("error", json.message || "Gagal menghapus file"); return; }
       showToast("success", "File berhasil dihapus");
-      router.back();
+      if (file) backToFolder(file.folderId); else router.back();
     } finally { setDeleting(false); }
   };
 
@@ -204,7 +211,7 @@ export default function EDocFileDetailPage() {
       )}
 
       <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => router.back()} className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors">
+        <button onClick={() => backToFolder(file.folderId)} className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors">
           <ArrowLeft className="w-4 h-4" />
         </button>
         <div className="flex items-center gap-3 min-w-0">

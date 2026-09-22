@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   FolderOpen, Folder, FileText, Plus, Upload, Download, ChevronRight, Home, Loader2,
   Archive, X, Info, Pencil, Trash2, AlertTriangle, Search, Check,
@@ -56,6 +56,7 @@ const STATUS_COLOR: Record<string, string> = { DRAFT: "bg-slate-100 text-slate-6
 export function EDocApp() {
   const { appSlug } = useParams<{ appSlug: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [me, setMe] = useState<Me | null>(null);
   const [reference, setReference] = useState<Reference | null>(null);
@@ -105,6 +106,29 @@ export function EDocApp() {
   useEffect(() => {
     fetch("/api/edoc/me").then((r) => r.json()).then(setMe).catch(() => {});
     fetch("/api/edoc/reference").then((r) => r.json()).then(setReference).catch(() => {});
+  }, []);
+
+  // Restore folder saat landing di sini dengan ?folderId=... (2026-09-22) — dipakai oleh
+  // tombol "Back" di halaman detail file, supaya balik ke folder asalnya, bukan ke root
+  // E Document (folder navigation di app ini murni state client, tidak pernah ke URL,
+  // jadi router.back() dari detail file tanpa ini selalu mendarat di root). Sama seperti
+  // openSearchFolderResult — cuma sumber breadcrumb-nya dari endpoint baru, bukan dari
+  // payload search. Mount-only (baca URL sekali di awal, bukan tiap kali currentFolderId
+  // berubah lewat navigasi biasa) — folder browsing selanjutnya tetap murni state seperti
+  // biasa, tidak ikut menulis balik ke URL.
+  useEffect(() => {
+    const initialFolderId = searchParams.get("folderId");
+    if (!initialFolderId) return;
+    fetch(`/api/edoc/folder/${initialFolderId}/breadcrumb`)
+      .then((r) => r.json())
+      .then((j) => {
+        if (Array.isArray(j.data) && j.data.length > 0) {
+          setBreadcrumb(j.data);
+          setCurrentFolderId(initialFolderId);
+        }
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const load = useCallback(async (folderId: string | null) => {
