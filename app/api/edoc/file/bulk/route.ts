@@ -72,7 +72,20 @@ export async function POST(request: Request) {
     const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
     const filename = `${ts}-${safeName}`;
     const buffer = await file.arrayBuffer();
-    const fileUrl = await uploadEDocFileToFolder(buffer, filename, folderId);
+
+    // Error dari langkah upload ke Nextcloud SENGAJA ditangkap terpisah dan pesannya
+    // ditampilkan apa adanya ke client (bukan "Internal Server Error" generik seperti
+    // catch-all di bawah) — uploadToNextcloud sudah menyertakan status HTTP + body respons
+    // Nextcloud di pesan errornya (mis. 413 Payload Too Large), jadi kalau ada limit ukuran
+    // file yang menolak (baik dari Nextcloud sendiri atau reverse proxy di depannya),
+    // pesan itu langsung kelihatan di UI — tidak perlu menebak dari log server.
+    let fileUrl: string;
+    try {
+      fileUrl = await uploadEDocFileToFolder(buffer, filename, folderId);
+    } catch (e) {
+      console.error("[edoc] bulk upload gagal upload ke Nextcloud", e);
+      return NextResponse.json({ message: e instanceof Error ? e.message : "Gagal upload ke Nextcloud" }, { status: 502 });
+    }
 
     let created;
     try {

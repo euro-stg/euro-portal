@@ -170,7 +170,17 @@ export async function POST(request: Request) {
     const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
     const filename = `${ts}-${safeName}`;
     const buffer = await file.arrayBuffer();
-    const fileUrl = await uploadEDocFileToFolder(buffer, filename, folderId);
+    // Pesan error dari Nextcloud (status HTTP + body respons, sudah termasuk di dalam
+    // Error-nya — lihat uploadToNextcloud) ditampilkan apa adanya, bukan ditelan jadi
+    // "Internal Server Error" generik — biar limit ukuran file (kalau memang itu
+    // penyebabnya) langsung kelihatan di UI, bukan cuma di log server (2026-09-22).
+    let fileUrl: string;
+    try {
+      fileUrl = await uploadEDocFileToFolder(buffer, filename, folderId);
+    } catch (e) {
+      console.error("[edoc] upload gagal ke Nextcloud", e);
+      return NextResponse.json({ message: e instanceof Error ? e.message : "Gagal upload ke Nextcloud" }, { status: 502 });
+    }
 
     const created = await db.eDocFile.create({
       data: {
