@@ -1012,6 +1012,14 @@ model EDocFile {
   // Creators (not just the original uploader) are allowed to fill in the missing metadata
   // afterward via PATCH /api/edoc/file/[id] — see canEditFileMetadata in app/lib/edoc.ts.
   bulkImported       Boolean @default(false)
+  // Idempotency key untuk POST /api/edoc/file/bulk (2026-09-22) — client generate 1 key
+  // acak per file saat masuk antrian upload, dikirim di tiap percobaan (termasuk retry).
+  // Kalau server sudah sempat berhasil membuat file ini tapi response-nya gagal sampai ke
+  // client (koneksi putus persis di detik terakhir), retry dengan key yang SAMA akan
+  // dikenali server dan hasil yang SUDAH ADA dikembalikan apa adanya — bukan bikin file
+  // baru — jadi retry tidak pernah bisa menghasilkan file dobel. Null untuk file yang
+  // dibuat lewat jalur lain (upload biasa, dsb).
+  bulkUploadKey      String? @unique
 
   uploadedBy     String
   approvedBy     String?

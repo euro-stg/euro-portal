@@ -1263,13 +1263,61 @@ function UploadFileModal({
 }
 
 // ===================== Bulk Upload Modal =====================
-// Migrasi awal (2026-09-21) — dump banyak PDF sekaligus ke 1 folder, BYPASS approval total
-// (langsung RELEASE, requiresNumber=false, tanpa Document Number). Sengaja minim field —
-// cuma folder tujuan (sudah ditentukan dari halaman ini) + 1 Category yang berlaku untuk
-// SEMUA file dalam batch ini + daftar PDF. Title otomatis dari nama file. Field lain (BU,
-// Branch, tanggal, Nomor Dokumen manual, dst) dilengkapi belakangan lewat tombol "Edit" di
-// halaman detail tiap file — lihat canEditFileMetadata di app/lib/edoc.ts.
-type BulkResult = { filename: string; success: boolean; fileId?: string; error?: string };
+// Migrasi awal (2026-09-21) — dump banyak PDF ke 1 folder, BYPASS approval total (langsung
+// RELEASE, requiresNumber=false, tanpa Document Number). Sengaja minim field — cuma folder
+// tujuan (sudah ditentukan dari halaman ini) + 1 Category yang berlaku untuk SEMUA file +
+// daftar PDF. Title otomatis dari nama file. Field lain (BU, Branch, tanggal, Nomor Dokumen
+// manual, dst) dilengkapi belakangan lewat tombol "Edit" di halaman detail tiap file —
+// lihat canEditFileMetadata di app/lib/edoc.ts.
+//
+// Upload 1 REQUEST PER FILE (diubah 2026-09-22 — sebelumnya semua file dibungkus jadi 1
+// request `fetch()` raksasa: tidak ada progress granular per file, dan 1 koneksi putus
+// menggagalkan SELURUH batch sekaligus). Sekarang tiap file dikirim lewat XHR terpisah
+// (perlu XHR, bukan fetch, supaya dapat event `progress` asli), SEKUENSIAL satu per satu
+// (dipilih user — lebih lambat tapi paling aman untuk server/Nextcloud) — 1 file gagal
+// cuma menggagalkan file itu, sisanya tetap lanjut, dan retry cukup untuk yang gagal saja.
+//
+// idempotencyKey: 1 key acak DIBUAT SEKALI per item saat masuk antrian, dikirim apa
+// adanya di setiap percobaan TERMASUK retry (bukan digenerate ulang) — kalau server
+// sempat sukses tapi response-nya tidak sampai (koneksi putus di detik terakhir), retry
+// dengan key yang sama membuat server mengembalikan file yang SUDAH ADA, bukan bikin baru
+// (lihat POST /api/edoc/file/bulk) — jadi retry benar-benar tidak pernah menghasilkan dobel.
+//
+// xhr.timeout 5 menit — jaga-jaga kalau koneksi menggantung total (bukan putus, TIDAK ada
+// event error/progress lanjutan sama sekali) supaya antrian sekuensial tidak macet
+// selamanya di 1 file. 5 menit dipilih longgar (file di sini realistis puluhan MB, bukan
+// ratusan) — kalau upload masih maju (progress event masih jalan) ini praktis tidak
+// pernah kepicu; cuma jaring pengaman untuk koneksi yang benar-benar mati rasa.
+type QueueStatus = "queued" | "uploading" | "success" | "error";
+type QueueItem = { file: File; idempotencyKey: string; status: QueueStatus; progress: number; error?: string };
+const queueKey = (f: File) => `${f.name}-${f.size}`;
+const UPLOAD_TIMEOUT_MS = 5 * 60 * 1000;
+
+function uploadOneFile(
+  file: File, folderId: string, categoryId: string, idempotencyKey: string, onProgress: (pct: number) => void
+): Promise<{ ok: boolean; message?: string }> {
+  return new Promise((resolve) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/api/edoc/file/bulk");
+    xhr.timeout = UPLOAD_TIMEOUT_MS;
+    xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100)); };
+    xhr.onload = () => {
+      let json: { message?: string } = {};
+      try { json = JSON.parse(xhr.responseText); } catch { /* respons bukan JSON, message tetap kosong */ }
+      if (xhr.status >= 200 && xhr.status < 300) resolve({ ok: true });
+      else resolve({ ok: false, message: json.message || `Gagal upload (HTTP ${xhr.status})` });
+    };
+    xhr.onerror = () => resolve({ ok: false, message: "Koneksi terputus" });
+    xhr.ontimeout = () => resolve({ ok: false, message: "Upload timeout — koneksi menggantung terlalu lama" });
+
+    const fd = new FormData();
+    fd.append("folderId", folderId);
+    fd.append("categoryId", categoryId);
+    fd.append("idempotencyKey", idempotencyKey);
+    fd.append("file", file);
+    xhr.send(fd);
+  });
+}
 
 function BulkUploadModal({
   folderId, reference, onClose, onDone, onError,
@@ -1278,52 +1326,64 @@ function BulkUploadModal({
   onClose: () => void; onDone: (succeeded: number) => void; onError: (m: string) => void;
 }) {
   const [categoryId, setCategoryId] = useState("");
-  const [files, setFiles] = useState<File[]>([]);
-  const [submitting, setSubmitting] = useState(false);
-  const [results, setResults] = useState<BulkResult[] | null>(null);
+  const [queue, setQueue] = useState<QueueItem[]>([]);
+  const [running, setRunning] = useState(false);
+  const [started, setStarted] = useState(false);
   const filesRef = useRef<HTMLInputElement>(null);
+  const unmountedRef = useRef(false);
+  useEffect(() => () => { unmountedRef.current = true; }, []);
 
   const addFiles = (list: FileList | null) => {
     if (!list) return;
     const picked = Array.from(list);
-    setFiles((prev) => [...prev, ...picked.filter((f) => !prev.some((p) => p.name === f.name && p.size === f.size))]);
+    setQueue((prev) => [
+      ...prev,
+      ...picked
+        .filter((f) => !prev.some((p) => queueKey(p.file) === queueKey(f)))
+        .map((file) => ({ file, idempotencyKey: crypto.randomUUID(), status: "queued" as const, progress: 0 })),
+    ]);
   };
-  const removeFile = (name: string, size: number) => setFiles((prev) => prev.filter((f) => !(f.name === name && f.size === size)));
+  const removeFile = (key: string) => setQueue((prev) => prev.filter((q) => queueKey(q.file) !== key));
 
-  const submit = async () => {
+  const updateItem = (key: string, patch: Partial<QueueItem>) => {
+    if (unmountedRef.current) return;
+    setQueue((prev) => prev.map((q) => (queueKey(q.file) === key ? { ...q, ...patch } : q)));
+  };
+
+  // Sekuensial — jalankan satu per satu, tunggu file sebelumnya benar-benar selesai
+  // (sukses/gagal) sebelum lanjut ke berikutnya. Return jumlah yang sukses di run ini.
+  const runQueue = async (items: QueueItem[]): Promise<number> => {
+    setRunning(true); setStarted(true);
+    let successCount = 0;
+    for (const item of items) {
+      const key = queueKey(item.file);
+      updateItem(key, { status: "uploading", progress: 0, error: undefined });
+      const result = await uploadOneFile(item.file, folderId, categoryId, item.idempotencyKey, (pct) => updateItem(key, { progress: pct }));
+      if (result.ok) { updateItem(key, { status: "success", progress: 100 }); successCount++; }
+      else updateItem(key, { status: "error", error: result.message });
+    }
+    if (!unmountedRef.current) setRunning(false);
+    return successCount;
+  };
+
+  const start = async () => {
     if (!categoryId) { onError("Category wajib dipilih"); return; }
-    if (files.length === 0) { onError("Pilih minimal 1 file PDF"); return; }
-
-    setSubmitting(true);
-    try {
-      const fd = new FormData();
-      fd.append("folderId", folderId);
-      fd.append("categoryId", categoryId);
-      files.forEach((f) => fd.append("files", f));
-
-      const res = await fetch("/api/edoc/file/bulk", { method: "POST", body: fd });
-      const json = await res.json();
-      if (!res.ok) { onError(json.message || "Gagal bulk upload"); return; }
-      setResults(json.data ?? []);
-      if ((json.succeeded ?? 0) > 0 && (json.failed ?? 0) === 0) {
-        // Semua sukses — langsung tutup & refresh, tidak perlu ganggu user lihat ringkasan.
-        onDone(json.succeeded);
-      }
-    } catch (err) {
-      // Kegagalan level jaringan (koneksi putus/timeout di tengah upload batch besar,
-      // BEDA dari response error biasa yang sudah ditangani di atas via !res.ok) —
-      // sebelumnya tidak ditangkap sama sekali, jadi muncul sebagai uncaught exception
-      // (persis error report user: "NetworkError when attempting to fetch resource").
-      // File yang SUDAH sempat sukses dibuat di server tetap ada (tidak di-rollback) —
-      // makanya di-refresh lewat onError, bukan cuma toast, biar user tahu harus cek
-      // listing folder dulu sebelum coba upload ulang (menghindari file dobel).
-      console.error(err);
-      onError("Koneksi terputus di tengah upload — cek dulu folder ini, beberapa file mungkin sudah sempat masuk sebelum kegagalan. Kalau perlu, upload ulang dalam batch lebih kecil.");
-    } finally { setSubmitting(false); }
+    if (queue.length === 0) { onError("Pilih minimal 1 file PDF"); return; }
+    const successCount = await runQueue(queue);
+    // Semua sukses di percobaan pertama — langsung tutup & refresh, tidak perlu ganggu
+    // user lihat ringkasan. Kalau ada yang gagal, modal tetap terbuka (lihat render di
+    // bawah) supaya user bisa retry yang gagal saja, baru klik Selesai manual.
+    if (successCount === queue.length) onDone(successCount);
   };
+
+  const retryFailed = () => { void runQueue(queue.filter((q) => q.status === "error")); };
+
+  const succeededCount = queue.filter((q) => q.status === "success").length;
+  const failedCount = queue.filter((q) => q.status === "error").length;
+  const doneRunning = started && !running;
 
   return (
-    <Modal open title="Bulk Upload (Migrasi Awal)" onClose={onClose} boxClassName="max-w-2xl">
+    <Modal open title="Bulk Upload (Migrasi Awal)" onClose={running ? () => {} : onClose} boxClassName="max-w-2xl">
       <div className="space-y-4">
         <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
           Khusus migrasi dokumen lama — file langsung berstatus <b>Release</b> tanpa antrian approval dan tanpa Document Number.
@@ -1332,7 +1392,7 @@ function BulkUploadModal({
 
         <div>
           <label className={labelCls}>Category <span className="text-red-500">*</span></label>
-          <select className={inputCls} value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+          <select className={inputCls} value={categoryId} onChange={(e) => setCategoryId(e.target.value)} disabled={started}>
             <option value="">Pilih category...</option>
             {reference.categories.map((c) => <option key={c.id} value={c.id}>{c.code} — {c.name}</option>)}
           </select>
@@ -1341,48 +1401,64 @@ function BulkUploadModal({
 
         <div>
           <label className={labelCls}>File PDF <span className="text-red-500">*</span></label>
-          <input ref={filesRef} type="file" accept="application/pdf,.pdf" multiple className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
-          <button type="button" onClick={() => filesRef.current?.click()} className="w-full flex items-center justify-center gap-2 p-4 border-2 border-dashed border-slate-200 rounded-lg text-slate-500 hover:border-amber-300 hover:text-amber-600 transition-colors">
-            <Upload className="w-4 h-4" /> Klik untuk pilih banyak file PDF sekaligus
-          </button>
-          {files.length > 0 && (
-            <div className="mt-2 space-y-1 max-h-56 overflow-y-auto">
-              {files.map((f) => (
-                <div key={`${f.name}-${f.size}`} className="flex items-center gap-2 p-2 bg-slate-50 border border-slate-200 rounded-lg">
-                  <FileText className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  <p className="text-xs text-slate-700 truncate flex-1">{f.name}</p>
-                  <button type="button" onClick={() => removeFile(f.name, f.size)} className="p-0.5 text-slate-400 hover:text-red-500 transition-colors"><X className="w-3.5 h-3.5" /></button>
-                </div>
-              ))}
-              <p className="text-xs text-slate-400 pt-1">{files.length} file dipilih</p>
+          {!started && (
+            <>
+              <input ref={filesRef} type="file" accept="application/pdf,.pdf" multiple className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
+              <button type="button" onClick={() => filesRef.current?.click()} className="w-full flex items-center justify-center gap-2 p-4 border-2 border-dashed border-slate-200 rounded-lg text-slate-500 hover:border-amber-300 hover:text-amber-600 transition-colors">
+                <Upload className="w-4 h-4" /> Klik untuk pilih banyak file PDF sekaligus
+              </button>
+            </>
+          )}
+          {queue.length > 0 && (
+            <div className="mt-2 space-y-1 max-h-72 overflow-y-auto">
+              {queue.map((q) => {
+                const key = queueKey(q.file);
+                return (
+                  <div key={key} className="p-2 bg-slate-50 border border-slate-200 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      {q.status === "success" ? <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        : q.status === "error" ? <X className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                        : q.status === "uploading" ? <Loader2 className="w-3.5 h-3.5 text-amber-500 animate-spin shrink-0" />
+                        : <FileText className="w-3.5 h-3.5 text-slate-400 shrink-0" />}
+                      <p className="text-xs text-slate-700 truncate flex-1">{q.file.name}</p>
+                      {q.status === "uploading" && <span className="text-xs font-medium text-amber-600 shrink-0">{q.progress}%</span>}
+                      {!started && (
+                        <button type="button" onClick={() => removeFile(key)} className="p-0.5 text-slate-400 hover:text-red-500 transition-colors"><X className="w-3.5 h-3.5" /></button>
+                      )}
+                    </div>
+                    {q.status === "uploading" && (
+                      <div className="mt-1.5 h-1 bg-slate-200 rounded-full overflow-hidden">
+                        <div className="h-full bg-amber-500 transition-all" style={{ width: `${q.progress}%` }} />
+                      </div>
+                    )}
+                    {q.status === "error" && <p className="text-xs text-red-500 mt-1">{q.error}</p>}
+                  </div>
+                );
+              })}
+              <p className="text-xs text-slate-400 pt-1">
+                {started ? `${succeededCount} sukses, ${failedCount} gagal dari ${queue.length} file` : `${queue.length} file dipilih`}
+              </p>
             </div>
           )}
         </div>
 
-        {results && (
-          <div className="space-y-1 max-h-56 overflow-y-auto border-t border-slate-100 pt-3">
-            <p className="text-xs font-medium text-slate-600 mb-1">Hasil upload:</p>
-            {results.map((r) => (
-              <div key={`${r.filename}-${r.success}`} className={`flex items-center gap-2 p-2 rounded-lg text-xs ${r.success ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
-                {r.success ? <Check className="w-3.5 h-3.5 shrink-0" /> : <X className="w-3.5 h-3.5 shrink-0" />}
-                <span className="truncate flex-1">{r.filename}</span>
-                {!r.success && <span className="shrink-0">{r.error}</span>}
-              </div>
-            ))}
-          </div>
-        )}
-
         <div className="flex items-center gap-3 pt-2">
-          {results ? (
-            <Button onClick={() => onDone(results.filter((r) => r.success).length)} className="bg-amber-600 hover:bg-amber-700 text-white">Selesai</Button>
-          ) : (
+          {!started ? (
             <>
-              <Button onClick={submit} disabled={submitting} className="bg-amber-600 hover:bg-amber-700 text-white flex items-center gap-2">
-                {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
-                {submitting ? "Mengupload..." : `Upload ${files.length || ""} File`}
+              <Button onClick={start} className="bg-amber-600 hover:bg-amber-700 text-white flex items-center gap-2">
+                {`Upload ${queue.length || ""} File`}
               </Button>
               <Button variant="outline" onClick={onClose}>Batal</Button>
             </>
+          ) : running ? (
+            <p className="text-sm text-slate-500 flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Mengupload...</p>
+          ) : doneRunning && failedCount > 0 ? (
+            <>
+              <Button onClick={retryFailed} variant="outline" className="flex items-center gap-2">Retry Gagal ({failedCount})</Button>
+              <Button onClick={() => onDone(succeededCount)} className="bg-amber-600 hover:bg-amber-700 text-white">Selesai</Button>
+            </>
+          ) : (
+            <Button onClick={() => onDone(succeededCount)} className="bg-amber-600 hover:bg-amber-700 text-white">Selesai</Button>
           )}
         </div>
       </div>
