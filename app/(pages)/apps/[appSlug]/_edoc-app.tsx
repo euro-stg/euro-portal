@@ -16,6 +16,7 @@ type FolderItem = { id: string; name: string; type: string; createdBy: string; c
 type FileItem = {
   id: string; title: string; description: string | null; fileUrl: string;
   requiresNumber: boolean; documentNumber: string | null; mocNumber: string | null; status: string;
+  bulkImported?: boolean;
   startDate: string | null; endDate: string | null; createdAt: string; isBlasted?: boolean;
   category: { id: string; code: string; name: string } | null;
   categoryType: { id: string; code: string; name: string } | null;
@@ -38,6 +39,7 @@ function branchPrefixOf(name: string): string {
 type Breadcrumb = { id: string; name: string };
 type SearchFileResult = {
   id: string; title: string; description: string | null; documentNumber: string | null; mocNumber: string | null; status: string;
+  bulkImported?: boolean;
   folderId: string; folderBreadcrumb: Breadcrumb[]; createdAt: string; startDate: string | null; endDate: string | null;
   category: { id: string; code: string; name: string } | null;
   categoryType: { id: string; code: string; name: string } | null;
@@ -61,6 +63,14 @@ export function EDocApp() {
   const [breadcrumb, setBreadcrumb] = useState<{ id: string; name: string }[]>([]);
   const [folders, setFolders] = useState<FolderItem[]>([]);
   const [files, setFiles] = useState<FileItem[]>([]);
+  // Infinite scroll (2026-09-22) — folder hasil Bulk Import bisa berisi ratusan file,
+  // sebelumnya semua dimuat sekaligus tanpa batas. `fileCursor`/`hasMoreFiles` datang dari
+  // GET /api/edoc/file (cursor pagination di server); `loadingMoreFiles` beda dari
+  // `loading` biasa (yang itu untuk load folder PERTAMA kali, layar penuh spinner) —
+  // ini cuma spinner kecil di bawah list selagi batch berikutnya dimuat.
+  const [fileCursor, setFileCursor] = useState<string | null>(null);
+  const [hasMoreFiles, setHasMoreFiles] = useState(false);
+  const [loadingMoreFiles, setLoadingMoreFiles] = useState(false);
   const [canWriteCurrent, setCanWriteCurrent] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showCreateFolder, setShowCreateFolder] = useState(false);
@@ -110,9 +120,13 @@ export function EDocApp() {
         const fileJson = await fileRes.json();
         setFiles(fileJson.data ?? []);
         setCanWriteCurrent(!!fileJson.canWrite);
+        setHasMoreFiles(!!fileJson.hasMore);
+        setFileCursor(fileJson.nextCursor ?? null);
       } else {
         setFiles([]);
         setCanWriteCurrent(false);
+        setHasMoreFiles(false);
+        setFileCursor(null);
       }
     } catch {
       showToast("error", "Gagal memuat folder");
@@ -122,6 +136,42 @@ export function EDocApp() {
   }, []);
 
   useEffect(() => { void load(currentFolderId); }, [currentFolderId, load]);
+
+  // Load batch berikutnya (infinite scroll) — APPEND ke files yang sudah ada, beda dari
+  // `load()` yang mengganti seluruhnya (dipakai saat pindah folder). `loadingMoreRef`
+  // (ref, dicek SINKRON di awal fungsi) mencegah 2 pemicu (mis. IntersectionObserver
+  // nembak 2x berturutan) menghasilkan fetch dobel untuk batch yang sama —
+  // `loadingMoreFiles` (state) murni buat UI (spinner di sentinel), tidak dipakai untuk guard.
+  const loadingMoreRef = useRef(false);
+  const loadMoreFiles = useCallback(async () => {
+    if (!currentFolderId || !hasMoreFiles || !fileCursor || loadingMoreRef.current) return;
+    loadingMoreRef.current = true;
+    setLoadingMoreFiles(true);
+    try {
+      const res = await fetch(`/api/edoc/file?folderId=${currentFolderId}&cursor=${fileCursor}`);
+      const json = await res.json();
+      setFiles((prev) => [...prev, ...(json.data ?? [])]);
+      setHasMoreFiles(!!json.hasMore);
+      setFileCursor(json.nextCursor ?? null);
+    } catch {
+      showToast("error", "Gagal memuat file berikutnya");
+    } finally {
+      loadingMoreRef.current = false;
+      setLoadingMoreFiles(false);
+    }
+  }, [currentFolderId, hasMoreFiles, fileCursor]);
+
+  // Sentinel di bawah list file — begitu masuk viewport (rootMargin dikasih jarak supaya
+  // load-more mulai SEBELUM benar-benar mentok bawah, bukan pas sudah kelihatan), trigger
+  // loadMoreFiles(). Observer di-attach ulang tiap kali sentinel/handler berubah.
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || !hasMoreFiles) return;
+    const observer = new IntersectionObserver((entries) => { if (entries[0]?.isIntersecting) void loadMoreFiles(); }, { rootMargin: "200px" });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasMoreFiles, loadMoreFiles]);
 
   // Pencarian global (file + folder, lintas seluruh tree yang bisa diakses) — debounce
   // ringan biar tidak nembak API tiap ketikan huruf. Aktif kalau ada teks ATAU minimal 1
@@ -179,6 +229,11 @@ export function EDocApp() {
         </div>
       )}
 
+      {/* Header sticky (2026-09-22) — breadcrumb, tombol, search & filter selalu kelihatan
+          selagi daftar file di bawahnya di-scroll, terutama untuk folder isinya banyak
+          (mis. hasil Bulk Import). bg-white + z-20 supaya konten di bawahnya tidak
+          "menembus" kelihatan pas nempel; top-14 = tinggi navbar (h-14) di app-shell. */}
+      <div className="sticky top-14 z-20 bg-white pb-2 -mx-4 sm:-mx-6 px-4 sm:px-6 pt-1">
       {/* Business unit banner */}
       {me && me.businessUnits.length > 0 && (
         <div className="mb-4 px-4 py-2.5 bg-amber-50 border border-amber-100 rounded-lg flex items-center gap-2 text-sm">
@@ -288,6 +343,7 @@ export function EDocApp() {
           )}
         </div>
       </div>
+      </div>
 
       {/* Content */}
       {isSearchActive ? (
@@ -348,6 +404,7 @@ export function EDocApp() {
                             {STATUS_LABEL[file.status] ?? file.status}
                           </span>
                           {file.category && <span className="text-xs bg-amber-50 text-amber-700 px-2 py-0.5 rounded">{file.category.code}</span>}
+                          {file.bulkImported && <span className="text-xs bg-orange-50 text-orange-700 px-2 py-0.5 rounded" title="Hasil Bulk Import — metadata mungkin belum lengkap">Bulk Import</span>}
                         </div>
                         <p className="text-sm font-medium text-slate-700 truncate">{file.title}</p>
                         <p className="text-xs text-slate-400 truncate">{file.folderBreadcrumb.map((b) => b.name).join(" / ") || "Root"}</p>
@@ -449,12 +506,22 @@ export function EDocApp() {
                       </span>
                       {file.category && <span className="text-xs bg-amber-50 text-amber-700 px-2 py-0.5 rounded">{file.category.code}</span>}
                       {file.isBlasted && <span className="text-xs bg-violet-50 text-violet-600 px-2 py-0.5 rounded" title="File aslinya ada di folder lain, cuma ditampilkan juga di sini (Blast)">Blast</span>}
+                      {file.bulkImported && <span className="text-xs bg-orange-50 text-orange-700 px-2 py-0.5 rounded" title="Hasil Bulk Import — metadata mungkin belum lengkap">Bulk Import</span>}
                     </div>
                     <p className="text-sm font-medium text-slate-700 truncate">{file.title}</p>
                   </div>
                   <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-amber-400 shrink-0 transition-colors" />
                 </button>
               ))}
+              {/* Sentinel infinite scroll — begitu masuk viewport, batch berikutnya
+                  dimuat otomatis (lihat loadMoreFiles/IntersectionObserver di atas).
+                  Spinner cuma tampil selagi benar-benar fetching (loadingMoreFiles) —
+                  sebelum itu sentinel-nya tetap ada (perlu diobservasi) tapi kosong. */}
+              {hasMoreFiles && (
+                <div ref={sentinelRef} className="flex items-center justify-center py-4 text-slate-400 text-sm gap-2 h-10">
+                  {loadingMoreFiles && <><Loader2 className="w-4 h-4 animate-spin" /> Memuat file berikutnya...</>}
+                </div>
+              )}
             </div>
           )}
         </div>

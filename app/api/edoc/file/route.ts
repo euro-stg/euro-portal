@@ -6,10 +6,21 @@ import { resolveFolderContentAccess, relocateExpiredFiles, uploadEDocFileToFolde
 
 export const maxDuration = 60;
 
-// List file dalam satu folder. Filter endDate adalah sumber kebenaran visibility —
-// selalu diterapkan terlepas dari apakah physical move (relocateExpiredFiles) sudah
-// jalan atau belum, supaya file yang sudah lewat endDate langsung hilang dari pandangan.
-// (endDate dulu punya pasangan field terpisah "expiryDate" — digabung 2026-09-14.)
+const PAGE_SIZE = 30;
+
+// List file dalam satu folder, dengan cursor pagination (2026-09-22 — folder hasil Bulk
+// Import bisa berisi ratusan file, sebelumnya semua dimuat sekaligus tanpa batas). Filter
+// endDate adalah sumber kebenaran visibility — selalu diterapkan terlepas dari apakah
+// physical move (relocateExpiredFiles) sudah jalan atau belum, supaya file yang sudah
+// lewat endDate langsung hilang dari pandangan. (endDate dulu punya pasangan field
+// terpisah "expiryDate" — digabung 2026-09-14.)
+//
+// Cursor cuma jalan di atas `ownFiles` (file yang folderId-nya PERSIS folder ini) — Blast
+// links (file dari folder lain yang ditautkan ke sini) SENGAJA cuma diambil di halaman
+// PERTAMA (cursor kosong), tidak ikut dipaginate terpisah. Trade-off yang disadari: Blast
+// biasanya sedikit (fitur cross-link sesekali, bukan sumber volume utama), jadi
+// disederhanakan supaya tidak perlu 2 cursor independen yang di-merge — kalau nanti
+// jumlah Blast per folder ternyata besar juga, ini perlu direvisi.
 export async function GET(request: Request) {
   try {
     const session = await auth();
@@ -18,6 +29,7 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const folderId = searchParams.get("folderId");
+    const cursor = searchParams.get("cursor");
     if (!folderId) return NextResponse.json({ message: "folderId wajib diisi" }, { status: 400 });
 
     const access = await resolveFolderContentAccess(userId, folderId);
@@ -25,29 +37,44 @@ export async function GET(request: Request) {
     if (!access.canRead) return NextResponse.json({ message: "Folder tidak ditemukan" }, { status: 404 }); // hidden, not 403
 
     // Housekeeping — tidak mempengaruhi hasil query di bawah (filter endDate independen).
-    await relocateExpiredFiles(folderId).catch((e) => console.error("[edoc] relocateExpiredFiles gagal", e));
+    // Cuma dijalankan di halaman pertama — tidak perlu diulang tiap "load more".
+    if (!cursor) await relocateExpiredFiles(folderId).catch((e) => console.error("[edoc] relocateExpiredFiles gagal", e));
 
     const fileSelect = {
       id: true, title: true, description: true, categoryId: true, categoryTypeId: true,
       businessUnitCodes: true, branchIds: true, organizationId: true, startDate: true, endDate: true,
       fileUrl: true, requiresNumber: true, requiresItemImport: true, documentNumber: true, mocNumber: true, status: true,
-      uploadedBy: true, approvedAt: true, createdAt: true, updatedAt: true,
+      bulkImported: true, uploadedBy: true, approvedAt: true, createdAt: true, updatedAt: true,
       category: { select: { id: true, code: true, name: true } },
       categoryType: { select: { id: true, code: true, name: true } },
     } as const;
     const visibilityFilter = { deletedAt: null, OR: [{ endDate: null }, { endDate: { gt: new Date() } }] };
 
-    // Isi listing = file yang folderId-nya PERSIS folder ini, DITAMBAH file dari folder lain
-    // yang "Blast" ke sini (link, bukan copy — lihat EDocFileBlastFolder). Filter visibility
-    // (endDate) berlaku sama untuk keduanya, jadi file yang sudah expired hilang dari
-    // blast-nya juga, bukan cuma dari folder aslinya.
-    const [ownFiles, blastLinks] = await Promise.all([
-      db.eDocFile.findMany({ where: { folderId, ...visibilityFilter }, select: fileSelect, orderBy: { createdAt: "desc" } }),
-      db.eDocFileBlastFolder.findMany({
-        where: { folderId, file: visibilityFilter },
-        select: { file: { select: fileSelect } },
+    // Isi listing = file yang folderId-nya PERSIS folder ini, DITAMBAH (halaman pertama
+    // saja) file dari folder lain yang "Blast" ke sini (link, bukan copy — lihat
+    // EDocFileBlastFolder). Filter visibility (endDate) berlaku sama untuk keduanya, jadi
+    // file yang sudah expired hilang dari blast-nya juga, bukan cuma dari folder aslinya.
+    // `take: PAGE_SIZE + 1` — ambil 1 ekstra buat tahu masih ada lanjutannya atau tidak,
+    // tanpa perlu query count terpisah.
+    const [ownFilesRaw, blastLinks] = await Promise.all([
+      db.eDocFile.findMany({
+        where: { folderId, ...visibilityFilter },
+        select: fileSelect,
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        take: PAGE_SIZE + 1,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       }),
+      cursor
+        ? Promise.resolve([])
+        : db.eDocFileBlastFolder.findMany({
+            where: { folderId, file: visibilityFilter },
+            select: { file: { select: fileSelect } },
+          }),
     ]);
+    const hasMore = ownFilesRaw.length > PAGE_SIZE;
+    const ownFiles = ownFilesRaw.slice(0, PAGE_SIZE);
+    const nextCursor = hasMore ? ownFiles[ownFiles.length - 1]?.id ?? null : null;
+
     // De-dupe by id (defense-in-depth) — kalau file kebetulan sudah pernah ke-blast ke
     // folder yang sama dengan folder asalnya sendiri (bug lama di POST .../blast yang
     // salah bandingkan id, sudah diperbaiki 2026-09-21, tapi row EDocFileBlastFolder yang
@@ -60,12 +87,15 @@ export async function GET(request: Request) {
     const blastedFileIds = new Set(blastLinks.map((l) => l.file.id));
 
     // DRAFT hanya kelihatan oleh superadmin, uploader-nya sendiri, atau Document Approver
-    // (pool global) — bukan sekadar siapa saja yang punya ACL baca folder ini.
+    // (pool global) — bukan sekadar siapa saja yang punya ACL baca folder ini. Perhatikan:
+    // filter ini jalan SETELAH pagination di atas, jadi 1 halaman bisa mengembalikan lebih
+    // sedikit dari PAGE_SIZE kalau sebagian isinya DRAFT yang tidak terlihat user ini —
+    // trade-off yang diterima (client tetap terus "load more" selama hasMore true).
     const [superadmin, approver] = await Promise.all([isSuperadmin(userId), isEDocDocumentApprover(userId)]);
     const visibleFiles = (superadmin || approver ? files : files.filter((f) => (f.status !== "DRAFT" && f.status !== "REJECTED") || f.uploadedBy === userId))
       .map((f) => ({ ...f, isBlasted: blastedFileIds.has(f.id) }));
 
-    return NextResponse.json({ data: visibleFiles, canWrite: access.canWrite });
+    return NextResponse.json({ data: visibleFiles, canWrite: access.canWrite, hasMore, nextCursor });
   } catch (err) {
     console.error(err);
     return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });

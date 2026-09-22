@@ -88,7 +88,7 @@ export async function GET(request: Request) {
       where: fileWhere,
       select: {
         id: true, title: true, description: true, documentNumber: true, mocNumber: true, status: true,
-        folderId: true, uploadedBy: true, createdAt: true, startDate: true, endDate: true,
+        bulkImported: true, folderId: true, uploadedBy: true, createdAt: true, startDate: true, endDate: true,
         category: { select: { id: true, code: true, name: true } },
         categoryType: { select: { id: true, code: true, name: true } },
       },
