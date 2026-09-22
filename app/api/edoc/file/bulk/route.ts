@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { unauthorized } from "@/lib/api-auth";
 import db from "@/lib/db/db";
-import { resolveFolderContentAccess, uploadEDocFileToFolder, isSuperadmin, isEDocFolderCreator } from "@/lib/edoc";
+import { resolveFolderContentAccess, uploadEDocFileToFolder } from "@/lib/edoc";
 
 export const maxDuration = 120;
 
@@ -17,20 +17,16 @@ const ALLOWED_MIME = ["application/pdf"];
 // dilengkapi", dan (b) Folder Creator manapun — bukan cuma uploader aslinya — boleh bantu
 // melengkapi lewat canEditFileMetadata.
 //
-// Akses: gerbang ganda — role Folder Creator (global, sama seperti bikin folder), DAN
-// tetap harus punya write ACL ke folder tujuan yang sebenarnya (folder tujuan bisa saja
-// bukan folder yang mereka buat sendiri) — Folder Creator TIDAK otomatis bisa nulis ke
-// folder manapun, cuma boleh PAKAI fitur bulk upload ini kalau memang punya akses.
+// Akses (dilonggarkan 2026-09-22 — sebelumnya digate role Folder Creator secara terpisah,
+// SEKARANG murni ikut write ACL folder tujuan): siapa saja yang punya write ACL ke folder
+// itu boleh bulk-upload di situ, sama seperti syarat upload biasa — superadmin dan pembuat
+// folder itu sendiri otomatis lolos (sudah ditangani di dalam resolveFolderContentAccess),
+// tidak perlu lagi jadi Folder Creator secara global buat pakai fitur ini.
 export async function POST(request: Request) {
   try {
     const session = await auth();
     if (!session?.user?.id) return unauthorized();
     const userId = session.user.id;
-
-    const [superadmin, folderCreator] = await Promise.all([isSuperadmin(userId), isEDocFolderCreator(userId)]);
-    if (!superadmin && !folderCreator) {
-      return NextResponse.json({ message: "Bulk Import hanya untuk Folder Creator/superadmin" }, { status: 403 });
-    }
 
     const formData = await request.formData();
     const folderId = formData.get("folderId") as string | null;

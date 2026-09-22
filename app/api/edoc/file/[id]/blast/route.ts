@@ -6,13 +6,13 @@ import { getEDocFolderBreadcrumb, canEditFileMetadata } from "@/lib/edoc";
 
 // Kelola folder tujuan "Blast" untuk file yang SUDAH ADA (upload lama, atau file baru yang
 // belum di-blast sama sekali saat dibuat) — sebelumnya blast cuma bisa diset saat upload.
-// Akses: uploader file ini, superadmin, ATAU Folder Creator manapun kalau file ini hasil
-// Bulk Import (2026-09-21 — lewat canEditFileMetadata, disamakan dengan PATCH edit
-// metadata/import item, supaya sesama Folder Creator bisa kolaboratif melengkapi SEMUA
-// aspek file Bulk Import, bukan cuma metadata dasarnya). TIDAK dibatasi DRAFT-only seperti
-// revisi/hapus, karena blast cuma soal visibilitas (link ke folder lain), tidak menyentuh
-// isi atau status resmi file, jadi aman dilakukan kapan saja oleh uploader.
-async function canManageBlast(userId: string, file: { uploadedBy: string; requiresNumber: boolean; bulkImported: boolean }): Promise<boolean> {
+// Akses: uploader file ini, superadmin, ATAU (kalau file ini hasil Bulk Import) Folder
+// Creator manapun / siapa saja dengan write ACL ke folder file ini (2026-09-22, lewat
+// canEditFileMetadata — disamakan dengan PATCH edit metadata/import item, supaya siapapun
+// yang bisa melengkapi metadata file Bulk Import juga bisa kelola Blast-nya). TIDAK
+// dibatasi DRAFT-only seperti revisi/hapus, karena blast cuma soal visibilitas (link ke
+// folder lain), tidak menyentuh isi atau status resmi file.
+async function canManageBlast(userId: string, file: { folderId: string; uploadedBy: string; requiresNumber: boolean; bulkImported: boolean }): Promise<boolean> {
   if (file.uploadedBy === userId) return true;
   return canEditFileMetadata(userId, file);
 }
@@ -109,7 +109,7 @@ export async function DELETE(
     const userId = session.user.id;
 
     const { id } = await params;
-    const file = await db.eDocFile.findFirst({ where: { id, deletedAt: null }, select: { uploadedBy: true, requiresNumber: true, bulkImported: true } });
+    const file = await db.eDocFile.findFirst({ where: { id, deletedAt: null }, select: { folderId: true, uploadedBy: true, requiresNumber: true, bulkImported: true } });
     if (!file) return NextResponse.json({ message: "File tidak ditemukan" }, { status: 404 });
     if (!(await canManageBlast(userId, file))) {
       return NextResponse.json({ message: "Hanya pembuat file atau superadmin yang bisa mengatur blast" }, { status: 403 });

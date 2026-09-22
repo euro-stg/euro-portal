@@ -276,7 +276,7 @@ export function EDocApp() {
               <Plus className="w-4 h-4" /> Folder Baru
             </Button>
           )}
-          {currentFolderId && canWriteCurrent && me?.isFolderCreator && (
+          {currentFolderId && canWriteCurrent && (
             <Button onClick={() => setShowBulkUpload(true)} variant="outline" className="flex items-center gap-2">
               <Upload className="w-4 h-4" /> Bulk Upload
             </Button>
