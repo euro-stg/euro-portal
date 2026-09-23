@@ -128,11 +128,14 @@ export async function GET(request: Request) {
     );
 
     // ---------- Folders (name match only — filters below are file-specific fields) ----------
-    let folders: { id: string; name: string; type: string; breadcrumb: { id: string; name: string }[] }[] = [];
+    let folders: { id: string; name: string; type: string; fileCount: number; breadcrumb: { id: string; name: string }[] }[] = [];
     if (q) {
       const candidateFolders = await db.eDocFolder.findMany({
         where: { deletedAt: null, name: { contains: q, mode: "insensitive" } },
-        select: { id: true, name: true, type: true },
+        select: {
+          id: true, name: true, type: true,
+          _count: { select: { files: { where: { deletedAt: null, OR: [{ endDate: null }, { endDate: { gt: new Date() } }] } } } },
+        },
         orderBy: { name: "asc" },
         take: RESULT_LIMIT * 3,
       });
@@ -141,7 +144,7 @@ export async function GET(request: Request) {
       const visibleFolders = candidateFolders.filter((f) => folderVisibility.get(f.id)).slice(0, RESULT_LIMIT);
 
       folders = await Promise.all(
-        visibleFolders.map(async (f) => ({ id: f.id, name: f.name, type: f.type, breadcrumb: await getEDocFolderBreadcrumb(f.id) }))
+        visibleFolders.map(async (f) => ({ id: f.id, name: f.name, type: f.type, fileCount: f._count.files, breadcrumb: await getEDocFolderBreadcrumb(f.id) }))
       );
     }
 
