@@ -92,10 +92,35 @@ export async function GET(request: Request) {
     // sedikit dari PAGE_SIZE kalau sebagian isinya DRAFT yang tidak terlihat user ini —
     // trade-off yang diterima (client tetap terus "load more" selama hasMore true).
     const [superadmin, approver] = await Promise.all([isSuperadmin(userId), isEDocDocumentApprover(userId)]);
-    const visibleFiles = (superadmin || approver ? files : files.filter((f) => (f.status !== "DRAFT" && f.status !== "REJECTED") || f.uploadedBy === userId))
+    const draftBypass = superadmin || approver;
+    const visibleFiles = (draftBypass ? files : files.filter((f) => (f.status !== "DRAFT" && f.status !== "REJECTED") || f.uploadedBy === userId))
       .map((f) => ({ ...f, isBlasted: blastedFileIds.has(f.id) }));
 
-    return NextResponse.json({ data: visibleFiles, canWrite: access.canWrite, hasMore, nextCursor });
+    // Total file yang BENAR-BENAR terlihat user ini di folder ini (2026-09-22 — ditampilkan
+    // di atas daftar file, bukan di tile folder seperti percobaan pertama) — hanya dihitung
+    // di halaman pertama (`!cursor`), bukan diulang tiap "load more". Query terpisah,
+    // minim kolom (id/status/uploadedBy saja, bukan fileSelect lengkap) supaya tetap murah
+    // meski folder isinya ratusan file — replikasi logic dedupe+visibility yang sama
+    // seperti listing di atas, tapi TANPA `take`, jadi mencakup SEMUA file, bukan cuma
+    // halaman ini.
+    let totalCount: number | null = null;
+    if (!cursor) {
+      const [allOwnIds, allBlastLinks] = await Promise.all([
+        db.eDocFile.findMany({ where: { folderId, ...visibilityFilter }, select: { id: true, status: true, uploadedBy: true } }),
+        db.eDocFileBlastFolder.findMany({
+          where: { folderId, file: visibilityFilter },
+          select: { file: { select: { id: true, status: true, uploadedBy: true } } },
+        }),
+      ]);
+      const allById = new Map(allOwnIds.map((f) => [f.id, f]));
+      for (const l of allBlastLinks) if (!allById.has(l.file.id)) allById.set(l.file.id, l.file);
+      const allVisible = draftBypass
+        ? Array.from(allById.values())
+        : Array.from(allById.values()).filter((f) => (f.status !== "DRAFT" && f.status !== "REJECTED") || f.uploadedBy === userId);
+      totalCount = allVisible.length;
+    }
+
+    return NextResponse.json({ data: visibleFiles, canWrite: access.canWrite, hasMore, nextCursor, totalCount });
   } catch (err) {
     console.error(err);
     return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });

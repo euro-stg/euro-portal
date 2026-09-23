@@ -72,6 +72,7 @@ export function EDocApp() {
   const [fileCursor, setFileCursor] = useState<string | null>(null);
   const [hasMoreFiles, setHasMoreFiles] = useState(false);
   const [loadingMoreFiles, setLoadingMoreFiles] = useState(false);
+  const [totalFileCount, setTotalFileCount] = useState<number | null>(null);
   const [canWriteCurrent, setCanWriteCurrent] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showCreateFolder, setShowCreateFolder] = useState(false);
@@ -146,11 +147,13 @@ export function EDocApp() {
         setCanWriteCurrent(!!fileJson.canWrite);
         setHasMoreFiles(!!fileJson.hasMore);
         setFileCursor(fileJson.nextCursor ?? null);
+        setTotalFileCount(typeof fileJson.totalCount === "number" ? fileJson.totalCount : null);
       } else {
         setFiles([]);
         setCanWriteCurrent(false);
         setHasMoreFiles(false);
         setFileCursor(null);
+        setTotalFileCount(null);
       }
     } catch {
       showToast("error", "Gagal memuat folder");
@@ -510,7 +513,13 @@ export function EDocApp() {
           )}
 
           {files.length > 0 && (
-            <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-50">
+            <div>
+              {/* Total file di folder ini (2026-09-22) — dihitung server-side terpisah dari
+                  daftar yang dipaginate, jadi tetap akurat meski baru sebagian ter-load. */}
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">
+                {totalFileCount !== null ? `${totalFileCount} File` : "File"}
+              </p>
+              <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-50">
               {files.map((file) => (
                 <button
                   key={file.id}
@@ -546,6 +555,7 @@ export function EDocApp() {
                   {loadingMoreFiles && <><Loader2 className="w-4 h-4 animate-spin" /> Memuat file berikutnya...</>}
                 </div>
               )}
+              </div>
             </div>
           )}
         </div>
