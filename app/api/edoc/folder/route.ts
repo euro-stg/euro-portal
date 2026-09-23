@@ -47,18 +47,9 @@ export async function GET(request: Request) {
 
     const profile = superadmin ? null : await getUserProfileForAccess(userId);
 
-    // fileCount = jumlah file LANGSUNG di folder itu (folderId persis, bukan rekursif ke
-    // subfolder, dan TIDAK ikut menghitung file "Blast" dari folder lain) — angka
-    // ringkas "isi berapa file" di tile folder (2026-09-22), sengaja disederhanakan biar
-    // query-nya murah (1 count terfilter per folder, bukan replikasi logic gabungan
-    // Blast+DRAFT-visibility yang dipakai listing file sungguhan).
-    const fileVisibilityFilter = { deletedAt: null, OR: [{ endDate: null }, { endDate: { gt: new Date() } }] };
     const children = await db.eDocFolder.findMany({
       where: { parentFolderId: parentFolderId ?? null, deletedAt: null },
-      select: {
-        ...FOLDER_ACL_SELECT, name: true, type: true, createdBy: true, createdAt: true,
-        _count: { select: { files: { where: fileVisibilityFilter } } },
-      },
+      select: { ...FOLDER_ACL_SELECT, name: true, type: true, createdBy: true, createdAt: true },
       orderBy: { name: "asc" },
     });
 
@@ -84,7 +75,6 @@ export async function GET(request: Request) {
           createdAt: f.createdAt,
           canRead: access.canRead,
           canWrite: access.canWrite,
-          fileCount: f._count.files,
         };
       })
       .filter((f) => f.canRead);

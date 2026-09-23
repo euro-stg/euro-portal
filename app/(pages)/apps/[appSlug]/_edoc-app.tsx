@@ -12,7 +12,7 @@ import { Alert } from "@/components/ui/alert";
 import { MultiSelect, type MultiSelectOption } from "./_edoc-multiselect";
 
 type Me = { userId: string; isSuperadmin: boolean; isFolderCreator: boolean; isDocumentApprover: boolean; businessUnits: string[] };
-type FolderItem = { id: string; name: string; type: string; createdBy: string; createdAt: string; canRead: boolean; canWrite: boolean; fileCount: number };
+type FolderItem = { id: string; name: string; type: string; createdBy: string; createdAt: string; canRead: boolean; canWrite: boolean };
 type FileItem = {
   id: string; title: string; description: string | null; fileUrl: string;
   requiresNumber: boolean; documentNumber: string | null; mocNumber: string | null; status: string;
@@ -44,7 +44,7 @@ type SearchFileResult = {
   category: { id: string; code: string; name: string } | null;
   categoryType: { id: string; code: string; name: string } | null;
 };
-type SearchFolderResult = { id: string; name: string; type: string; fileCount: number; breadcrumb: Breadcrumb[] };
+type SearchFolderResult = { id: string; name: string; type: string; breadcrumb: Breadcrumb[] };
 type SearchResults = { files: SearchFileResult[]; folders: SearchFolderResult[] };
 
 const inputCls = "w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 bg-white transition-colors";
@@ -399,7 +399,6 @@ export function EDocApp() {
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-slate-800 truncate">{f.name}</p>
                         <p className="text-xs text-slate-400 truncate">{f.breadcrumb.slice(0, -1).map((b) => b.name).join(" / ") || "Root"}</p>
-                        <p className="text-xs text-slate-400">{f.fileCount} file</p>
                       </div>
                     </button>
                   ))}
@@ -478,7 +477,7 @@ export function EDocApp() {
                     </div>
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-slate-800 truncate">{f.name}</p>
-                      <p className="text-xs text-slate-400">{f.type === "OBSOLETE" ? "Obsolete · " : ""}{f.fileCount} file</p>
+                      {f.type === "OBSOLETE" && <p className="text-xs text-slate-400">Obsolete</p>}
                     </div>
                     {canEdit && (
                       <span className="absolute top-2 right-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all">
