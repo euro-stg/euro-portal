@@ -11,13 +11,14 @@ const PAGE_SIZE = 30;
 //                  sudah ada dari awal — akses sudah digate di level halaman itu sendiri
 //                  lewat canViewFile, jadi TIDAK perlu re-check ACL lagi di sini).
 //   (default, tanpa fileId) -> mode "Item/Promo Browser" (2026-09-25) — cari/filter promo
-//                  lintas SEMUA file IM sekaligus, dengan cursor pagination. Ini yang BARU
-//                  ditambah folder-ACL check (resolveFolderContentAccessBatch) — SEBELUMNYA
-//                  mode ini (waktu masih bernama ?itemName=, belum pernah dipanggil dari UI
-//                  manapun) tidak mengecek ACL folder user sama sekali, cuma "aktif"
-//                  (RELEASE, belum expired, bukan di folder Obsolete). Sengaja TIDAK Blast-
-//                  aware (beda dari GET /api/edoc/search) — kompleksitasnya tidak sepadan
-//                  untuk halaman ini, folder aslinya sudah cukup buat kebanyakan kasus.
+//                  lintas SEMUA file IM sekaligus, dengan cursor pagination. Folder-ACL
+//                  check-nya (resolveFolderContentAccessBatch) SEKARANG Blast-aware juga
+//                  (diperbaiki 2026-09-25, sama hari — laporan nyata: file folder asalnya
+//                  HO tapi di-blast ke folder ESL, user ESL seharusnya tetap bisa cari
+//                  item-nya di sini, sama seperti dia sudah bisa buka file-nya langsung di
+//                  halaman detail lewat resolveFileReadAccess. Awalnya sengaja disederhanakan
+//                  tanpa Blast — ternyata itu memang dipakai, jadi disamakan dengan pola
+//                  union access di GET /api/edoc/search).
 export async function GET(request: Request) {
   try {
     const session = await auth();
@@ -79,12 +80,26 @@ export async function GET(request: Request) {
     const page = candidates.slice(0, PAGE_SIZE);
     const nextCursor = hasMore ? page[page.length - 1]?.id ?? null : null;
 
-    // Baru ditambah (2026-09-25) — sebelumnya endpoint ini (dulu ?itemName=) TIDAK pernah
-    // dipanggil dari UI manapun jadi celah ini belum pernah kena, tapi tetap gap ACL nyata:
-    // "aktif" (RELEASE + belum expired + bukan Obsolete) BUKAN berarti user ini boleh
-    // melihatnya — folder ACL folder-nya sendiri yang menentukan itu.
+    // "Aktif" (RELEASE + belum expired + bukan Obsolete) BUKAN berarti user ini boleh
+    // melihatnya — folder ACL yang menentukan itu, lewat SALAH SATU dari: folder asal file
+    // itu sendiri, ATAU folder manapun yang jadi tujuan Blast-nya (union, sama seperti
+    // resolveFileReadAccess) — bukan cuma folder asal saja.
     const folderAccess = await resolveFolderContentAccessBatch(userId, page.map((p) => p.file.folderId));
-    const visible = page.filter((p) => folderAccess.get(p.file.folderId)?.canRead);
+
+    const blastLinks = await db.eDocFileBlastFolder.findMany({
+      where: { fileId: { in: page.map((p) => p.file.id) } },
+      select: { fileId: true, folderId: true },
+    });
+    const blastFolderIdsByFile = new Map<string, string[]>();
+    for (const link of blastLinks) {
+      blastFolderIdsByFile.set(link.fileId, [...(blastFolderIdsByFile.get(link.fileId) ?? []), link.folderId]);
+    }
+    const blastFolderAccess = await resolveFolderContentAccessBatch(userId, blastLinks.map((l) => l.folderId));
+
+    const visible = page.filter((p) => {
+      if (folderAccess.get(p.file.folderId)?.canRead) return true;
+      return (blastFolderIdsByFile.get(p.file.id) ?? []).some((bid) => blastFolderAccess.get(bid)?.canRead);
+    });
 
     return NextResponse.json({ data: visible, hasMore, nextCursor });
   } catch (err) {
