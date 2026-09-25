@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Search, X, Loader2, Package, ChevronRight, Hash } from "lucide-react";
+import { ArrowLeft, Search, X, Loader2, Package, ChevronRight } from "lucide-react";
+import { Table } from "@/components/ui/table";
 
 type Product = {
   id: string; itemName: string; sku: string | null; category: string | null; discountClass: string | null;
@@ -153,43 +154,51 @@ export default function EDocItemsPage() {
           <p className="text-slate-400 text-sm mt-1">Coba kata kunci atau filter lain.</p>
         </div>
       ) : (
-        <div className="space-y-2">
-          {products.map((p) => (
-            <button
-              key={p.id}
-              onClick={() => router.push(`/apps/${appSlug}/edoc-file/${p.file.id}`)}
-              className="w-full bg-white rounded-xl border border-slate-200 hover:border-amber-300 hover:shadow-sm transition-all p-4 text-left group"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 flex-wrap mb-1">
+        <div className="bg-white rounded-xl border border-slate-200">
+          <Table>
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50">
+                {["Item", "Category", "Discount Class", "Promo Type", "Normal", "Promo", "Diskon %", "Eligible Client", "Berlaku (teks)", "Dokumen IM", ""].map((h, i) => (
+                  <th key={i} className="px-3 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {products.map((p) => (
+                <tr
+                  key={p.id}
+                  onClick={() => router.push(`/apps/${appSlug}/edoc-file/${p.file.id}`)}
+                  className="hover:bg-amber-50/50 transition-colors cursor-pointer group"
+                >
+                  <td className="px-3 py-3">
                     <p className="text-sm font-medium text-slate-800">{p.itemName}</p>
-                    {p.sku && <span className="text-xs font-mono text-slate-400">SKU: {p.sku}</span>}
-                  </div>
-                  <div className="flex items-center gap-1.5 text-xs flex-wrap mb-1.5">
-                    {p.category && <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded">{p.category}</span>}
-                    {p.discountClass && <span className="bg-amber-50 text-amber-700 px-2 py-0.5 rounded">{p.discountClass}</span>}
-                    {p.promoType && <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded">{p.promoType}</span>}
-                  </div>
-                  <div className="text-xs text-slate-500 flex items-center gap-3 flex-wrap">
-                    <span>Normal: {fmtRupiah(p.normalPrice)}</span>
-                    {p.promoPrice != null && <span className="text-emerald-600 font-medium">Promo: {fmtRupiah(p.promoPrice)}</span>}
-                    {p.discountPercent != null && <span className="text-emerald-600 font-medium">Diskon {p.discountPercent}%</span>}
-                  </div>
-                  {p.eligibleClient && <p className="text-xs text-slate-400 mt-1">Client: {p.eligibleClient}</p>}
-                  {p.validity && <p className="text-xs text-slate-400">Berlaku (teks Excel): {p.validity}</p>}
-                  <div className="flex items-center gap-1.5 text-xs text-amber-700 mt-2 pt-2 border-t border-slate-100">
-                    <Hash className="w-3 h-3" />
-                    <span className="font-medium">{p.file.documentNumber ?? p.file.title}</span>
-                    <span className="text-slate-400">· {fmtDate(p.file.startDate)} s/d {fmtDate(p.file.endDate)}</span>
-                  </div>
-                </div>
-                <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-amber-400 shrink-0 transition-colors" />
-              </div>
-            </button>
-          ))}
+                    {p.sku && <p className="text-xs font-mono text-slate-400">SKU: {p.sku}</p>}
+                  </td>
+                  <td className="px-3 py-3 text-xs text-slate-500 whitespace-nowrap">{p.category ?? "-"}</td>
+                  <td className="px-3 py-3 text-xs text-slate-500 whitespace-nowrap">{p.discountClass ?? "-"}</td>
+                  <td className="px-3 py-3 text-xs text-slate-500 whitespace-nowrap">{p.promoType ?? "-"}</td>
+                  <td className="px-3 py-3 text-xs text-slate-500 whitespace-nowrap">{fmtRupiah(p.normalPrice)}</td>
+                  <td className="px-3 py-3 text-xs whitespace-nowrap">
+                    {p.promoPrice != null ? <span className="text-emerald-600 font-medium">{fmtRupiah(p.promoPrice)}</span> : "-"}
+                  </td>
+                  <td className="px-3 py-3 text-xs whitespace-nowrap">
+                    {p.discountPercent != null ? <span className="text-emerald-600 font-medium">{p.discountPercent}%</span> : "-"}
+                  </td>
+                  <td className="px-3 py-3 text-xs text-slate-500 max-w-40 truncate" title={p.eligibleClient ?? undefined}>{p.eligibleClient ?? "-"}</td>
+                  <td className="px-3 py-3 text-xs text-slate-500 max-w-48 truncate" title={p.validity ?? undefined}>{p.validity ?? "-"}</td>
+                  <td className="px-3 py-3 text-xs whitespace-nowrap">
+                    <p className="font-medium text-amber-700">{p.file.documentNumber ?? p.file.title}</p>
+                    <p className="text-slate-400">{fmtDate(p.file.startDate)} s/d {fmtDate(p.file.endDate)}</p>
+                  </td>
+                  <td className="px-3 py-3">
+                    <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-amber-400 transition-colors" />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
           {hasMore && (
-            <div ref={sentinelRef} className="flex items-center justify-center py-4 text-slate-400 text-sm gap-2 h-10">
+            <div ref={sentinelRef} className="flex items-center justify-center py-4 text-slate-400 text-sm gap-2 h-10 border-t border-slate-100">
               {loadingMore && <><Loader2 className="w-4 h-4 animate-spin" /> Memuat lagi...</>}
             </div>
           )}
