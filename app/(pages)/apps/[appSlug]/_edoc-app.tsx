@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   FolderOpen, Folder, FileText, Plus, Upload, Download, ChevronRight, Home, Loader2,
-  Archive, X, Info, Pencil, Trash2, AlertTriangle, Search, Check,
+  Archive, X, Info, Pencil, Trash2, AlertTriangle, Search, Check, Package,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
@@ -330,6 +330,13 @@ export function EDocApp() {
               s/d
               <input type="date" className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 text-slate-600 bg-white" value={searchValidTo} onChange={(e) => setSearchValidTo(e.target.value)} />
             </span>
+            <button
+              onClick={() => router.push(`/apps/${appSlug}/edoc-items`)}
+              className="flex items-center gap-1.5 text-xs border border-amber-200 bg-amber-50 text-amber-700 rounded-lg px-2 py-1.5 hover:bg-amber-100 transition-colors"
+              title="Cari promo item lintas semua file IM"
+            >
+              <Package className="w-3.5 h-3.5" /> Item / Promo Browser
+            </button>
           </div>
         )}
       </div>

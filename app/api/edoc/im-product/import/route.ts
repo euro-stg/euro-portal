@@ -42,33 +42,41 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: e instanceof Error ? e.message : "Gagal membaca file" }, { status: 400 });
     }
 
-    const created = await db.$transaction(
-      products.map((p) =>
-        db.eDocImProduct.create({
-          data: {
-            fileId,
-            itemName: p.itemName,
-            sku: p.sku,
-            category: p.category,
-            discountClass: p.discountClass,
-            normalPrice: p.normalPrice,
-            promoType: p.promoType,
-            promoDetail: p.promoDetail,
-            promoPrice: p.promoPrice,
-            discountPercent: p.discountPercent,
-            qty: p.qty,
-            imNumber: p.imNumber,
-            imSubject: p.imSubject,
-            validity: p.validity,
-            eligibleClient: p.eligibleClient,
-            keyConditions: p.keyConditions,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            extra: p.extra as any,
-            importedBy: userId,
-          },
-        })
-      )
-    );
+    // Delete-then-insert (2026-09-25) — sebelumnya import ulang cuma NAMBAH row baru di
+    // atas yang lama, jadi re-upload Excel yang sama/koreksi kecil bikin data dobel
+    // menumpuk. Sekarang re-import = replace total: hapus SEMUA item lama punya file ini
+    // dulu, baru masukkan yang baru dari Excel — 1 transaksi atomic (kalau create manapun
+    // gagal di tengah, delete-nya ikut di-rollback, tidak pernah nyisa "file tanpa item").
+    const created = await db.$transaction(async (tx) => {
+      await tx.eDocImProduct.deleteMany({ where: { fileId } });
+      return Promise.all(
+        products.map((p) =>
+          tx.eDocImProduct.create({
+            data: {
+              fileId,
+              itemName: p.itemName,
+              sku: p.sku,
+              category: p.category,
+              discountClass: p.discountClass,
+              normalPrice: p.normalPrice,
+              promoType: p.promoType,
+              promoDetail: p.promoDetail,
+              promoPrice: p.promoPrice,
+              discountPercent: p.discountPercent,
+              qty: p.qty,
+              imNumber: p.imNumber,
+              imSubject: p.imSubject,
+              validity: p.validity,
+              eligibleClient: p.eligibleClient,
+              keyConditions: p.keyConditions,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              extra: p.extra as any,
+              importedBy: userId,
+            },
+          })
+        )
+      );
+    });
 
     return NextResponse.json({ data: created, imported: created.length, warnings }, { status: 201 });
   } catch (err) {
