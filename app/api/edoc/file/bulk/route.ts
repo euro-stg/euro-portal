@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { unauthorized } from "@/lib/api-auth";
 import db from "@/lib/db/db";
-import { resolveFolderContentAccess, uploadEDocFileToFolder } from "@/lib/edoc";
+import { resolveFolderContentAccess, uploadEDocFileToFolder, extractDocumentNumberFromFilename } from "@/lib/edoc";
 
 export const maxDuration = 120;
 
@@ -73,6 +73,18 @@ export async function POST(request: Request) {
     const filename = `${ts}-${safeName}`;
     const buffer = await file.arrayBuffer();
 
+    // Auto-deteksi Document Number dari nama file asli (2026-09-25) — file arsip lama
+    // migrasi biasanya diberi nama "<nomor>_<dst> <judul bebas>.pdf". Best-effort: kalau
+    // tidak ketemu pola yang meyakinkan, atau nomornya sudah dipakai file lain, biarkan
+    // documentNumber kosong seperti biasa (bisa diisi manual belakangan lewat Edit) —
+    // tidak pernah menggagalkan upload cuma karena penomoran ini gagal/bentrok.
+    const detectedNumber = extractDocumentNumberFromFilename(title);
+    let documentNumber: string | null = null;
+    if (detectedNumber) {
+      const clash = await db.eDocFile.findFirst({ where: { documentNumber: detectedNumber, deletedAt: null } });
+      if (!clash) documentNumber = detectedNumber;
+    }
+
     // Error dari langkah upload ke Nextcloud SENGAJA ditangkap terpisah dan pesannya
     // ditampilkan apa adanya ke client (bukan "Internal Server Error" generik seperti
     // catch-all di bawah) — uploadToNextcloud sudah menyertakan status HTTP + body respons
@@ -100,6 +112,7 @@ export async function POST(request: Request) {
           uploadedBy: userId,
           fileUrl,
           bulkUploadKey: idempotencyKey,
+          documentNumber,
         },
       });
     } catch (e) {

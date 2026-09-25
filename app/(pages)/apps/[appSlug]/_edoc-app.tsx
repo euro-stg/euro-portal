@@ -78,6 +78,7 @@ export function EDocApp() {
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [showUploadFile, setShowUploadFile] = useState(false);
   const [showBulkUpload, setShowBulkUpload] = useState(false);
+  const [showBulkItemMatch, setShowBulkItemMatch] = useState(false);
   const [editingFolder, setEditingFolder] = useState<FolderItem | null>(null);
   const [deletingFolder, setDeletingFolder] = useState<FolderItem | null>(null);
 
@@ -370,6 +371,14 @@ export function EDocApp() {
               <Upload className="w-4 h-4" /> Bulk Upload
             </Button>
           )}
+          {/* Lintas folder (bukan cuma folder yang lagi dibuka) — sengaja gate-nya beda
+              dari Bulk Upload di atas (write-ACL 1 folder), pakai role Folder Creator
+              global saja, karena tool ini beroperasi ke SEMUA file Category IM sekaligus. */}
+          {me?.isFolderCreator && (
+            <Button onClick={() => setShowBulkItemMatch(true)} variant="outline" className="flex items-center gap-2">
+              <Package className="w-4 h-4" /> Cocokkan & Import Item
+            </Button>
+          )}
           {currentFolderId && canWriteCurrent && (
             <Button onClick={() => setShowUploadFile(true)} className="bg-amber-600 hover:bg-amber-700 text-white flex items-center gap-2">
               <Upload className="w-4 h-4" /> Upload File
@@ -594,6 +603,14 @@ export function EDocApp() {
           reference={reference}
           onClose={() => setShowBulkUpload(false)}
           onDone={(succeeded) => { setShowBulkUpload(false); void load(currentFolderId); showToast("success", `${succeeded} file berhasil di-bulk-upload`); }}
+          onError={(m) => showToast("error", m)}
+        />
+      )}
+
+      {showBulkItemMatch && (
+        <BulkItemMatchModal
+          onClose={() => setShowBulkItemMatch(false)}
+          onDone={() => { void load(currentFolderId); }}
           onError={(m) => showToast("error", m)}
         />
       )}
@@ -1569,6 +1586,160 @@ function BulkUploadModal({
             <Button onClick={() => onDone(succeededCount)} className="bg-amber-600 hover:bg-amber-700 text-white">Selesai</Button>
           )}
         </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ===================== Bulk Item Match Modal =====================
+// Cocokkan & Import Item (2026-09-25) — pelengkap fase migrasi: 1 Excel BESAR berisi
+// promo/item dari BANYAK file IM sekaligus, dicocokkan otomatis ke file yang tepat lewat
+// kolom "IM Number" <-> Document Number file (yang untuk file lama sekalipun bisa
+// di-backfill otomatis dari nama file aslinya di langkah yang sama — lihat
+// POST /api/edoc/im-product/bulk-import). Lintas SEMUA folder, tidak terikat folder yang
+// lagi dibuka, makanya tidak butuh folderId sama sekali.
+type BulkItemMatchResult = {
+  backfilled: { fileId: string; title: string; documentNumber: string }[];
+  matched: { documentNumber: string; fileId: string; title: string; itemsImported: number }[];
+  unmatched: { imNumber: string; rowCount: number }[];
+  skippedNoImNumber: number;
+  warnings: string[];
+};
+
+function BulkItemMatchModal({
+  onClose, onDone, onError,
+}: {
+  onClose: () => void; onDone: () => void; onError: (m: string) => void;
+}) {
+  const { appSlug } = useParams<{ appSlug: string }>();
+  const router = useRouter();
+  const [file, setFile] = useState<File | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [result, setResult] = useState<BulkItemMatchResult | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const submit = async () => {
+    if (!file) { onError("Pilih file Excel dulu"); return; }
+    setSubmitting(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/edoc/im-product/bulk-import", { method: "POST", body: fd });
+      const json = await res.json();
+      if (!res.ok) { onError(json.message || "Gagal import"); return; }
+      setResult(json);
+      onDone();
+    } catch {
+      onError("Koneksi terputus — coba lagi.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Modal open title="Cocokkan & Import Item (Migrasi)" onClose={onClose} boxClassName="max-w-2xl">
+      <div className="space-y-4">
+        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+          Upload 1 Excel berisi item/promo dari BANYAK file IM sekaligus (kolom &ldquo;IM Number&rdquo; per baris).
+          Tiap baris dicocokkan ke file yang Document Number-nya sama. File hasil Bulk Upload yang Document
+          Number-nya masih kosong akan diisi otomatis dulu dari nama file aslinya, baru dicocokkan.
+        </p>
+
+        {!result ? (
+          <>
+            <div>
+              <label className={labelCls}>File Excel <span className="text-red-500">*</span></label>
+              <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+              {file ? (
+                <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <FileText className="w-4 h-4 text-green-600 shrink-0" />
+                  <p className="text-sm font-medium text-green-800 truncate flex-1">{file.name}</p>
+                  <button type="button" onClick={() => setFile(null)} className="p-1 text-green-600 hover:text-red-500 transition-colors"><X className="w-4 h-4" /></button>
+                </div>
+              ) : (
+                <button type="button" onClick={() => fileRef.current?.click()} className="w-full flex items-center justify-center gap-2 p-4 border-2 border-dashed border-slate-200 rounded-lg text-slate-500 hover:border-amber-300 hover:text-amber-600 transition-colors">
+                  <Upload className="w-4 h-4" /> Klik untuk pilih file Excel
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-3 pt-2">
+              <Button onClick={submit} disabled={submitting} className="bg-amber-600 hover:bg-amber-700 text-white flex items-center gap-2">
+                {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                {submitting ? "Memproses..." : "Proses"}
+              </Button>
+              <Button variant="outline" onClick={onClose}>Batal</Button>
+            </div>
+          </>
+        ) : (
+          <div className="space-y-4">
+            {result.backfilled.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
+                  {result.backfilled.length} Document Number diisi otomatis
+                </p>
+                <div className="space-y-1 max-h-32 overflow-y-auto">
+                  {result.backfilled.map((b) => (
+                    <div key={b.fileId} className="text-xs bg-slate-50 rounded-lg p-2 flex items-center justify-between gap-2">
+                      <span className="truncate">{b.title}</span>
+                      <span className="font-mono text-slate-500 shrink-0">{b.documentNumber}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
+                {result.matched.length} file dapat item ({result.matched.reduce((s, m) => s + m.itemsImported, 0)} item total)
+              </p>
+              {result.matched.length === 0 ? (
+                <p className="text-sm text-slate-400">Tidak ada yang cocok.</p>
+              ) : (
+                <div className="space-y-1 max-h-40 overflow-y-auto">
+                  {result.matched.map((m) => (
+                    <button
+                      key={m.fileId}
+                      onClick={() => router.push(`/apps/${appSlug}/edoc-file/${m.fileId}`)}
+                      className="w-full text-xs bg-green-50 hover:bg-green-100 transition-colors rounded-lg p-2 flex items-center justify-between gap-2 text-left"
+                    >
+                      <span className="truncate">
+                        <span className="font-mono text-slate-500">{m.documentNumber}</span> — {m.title}
+                      </span>
+                      <span className="text-emerald-700 font-medium shrink-0">{m.itemsImported} item</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {result.unmatched.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-red-500 uppercase tracking-wide mb-1.5">
+                  {result.unmatched.length} IM Number tidak ketemu file-nya
+                </p>
+                <div className="space-y-1 max-h-32 overflow-y-auto">
+                  {result.unmatched.map((u) => (
+                    <div key={u.imNumber} className="text-xs bg-red-50 text-red-700 rounded-lg p-2 flex items-center justify-between gap-2">
+                      <span className="font-mono truncate">{u.imNumber}</span>
+                      <span className="shrink-0">{u.rowCount} baris</span>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-slate-400 mt-1">
+                  Cek Document Number file-file ini — kemungkinan belum sesuai, atau file-nya belum diupload.
+                </p>
+              </div>
+            )}
+
+            {result.skippedNoImNumber > 0 && (
+              <p className="text-xs text-slate-400">{result.skippedNoImNumber} baris dilewati (kolom IM Number kosong).</p>
+            )}
+
+            <div className="flex items-center gap-3 pt-2 border-t border-slate-100">
+              <Button onClick={onClose} className="bg-amber-600 hover:bg-amber-700 text-white">Selesai</Button>
+            </div>
+          </div>
+        )}
       </div>
     </Modal>
   );
