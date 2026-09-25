@@ -97,7 +97,7 @@ export default function EDocItemsPage() {
   }, [hasMore, loadMore]);
 
   return (
-    <div className="max-w-3xl">
+    <div>
       <div className="flex items-center gap-3 mb-6">
         <button onClick={() => router.push(`/apps/${appSlug}`)} className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors">
           <ArrowLeft className="w-4 h-4" />
