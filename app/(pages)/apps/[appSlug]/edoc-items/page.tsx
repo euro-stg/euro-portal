@@ -35,6 +35,7 @@ export default function EDocItemsPage() {
   const [validTo, setValidTo] = useState("");
 
   const [products, setProducts] = useState<Product[]>([]);
+  const [totalCount, setTotalCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [cursor, setCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
@@ -66,6 +67,7 @@ export default function EDocItemsPage() {
         setProducts(json.data ?? []);
         setHasMore(!!json.hasMore);
         setCursor(json.nextCursor ?? null);
+        setTotalCount(typeof json.totalCount === "number" ? json.totalCount : null);
       } catch { /* diamkan, list tetap seperti sebelumnya */ }
       finally { setLoading(false); }
     }, 350);
@@ -99,6 +101,9 @@ export default function EDocItemsPage() {
 
   return (
     <div>
+      {/* Sticky header (2026-09-25) — sama seperti daftar file utama: judul + filter tetap
+          kelihatan selagi daftar item di bawahnya di-scroll. top-14 = tinggi navbar. */}
+      <div className="sticky top-14 z-20 bg-white pb-2 -mx-4 sm:-mx-6 px-4 sm:px-6 pt-1">
       <div className="flex items-center gap-3 mb-6">
         <button onClick={() => router.push(`/apps/${appSlug}`)} className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors">
           <ArrowLeft className="w-4 h-4" />
@@ -142,6 +147,7 @@ export default function EDocItemsPage() {
         </div>
         <p className="text-xs text-slate-400">Filter tanggal berdasarkan Start/End Date file IM-nya (bukan teks &ldquo;Berlaku&rdquo; per item).</p>
       </div>
+      </div>
 
       {loading ? (
         <div className="flex items-center justify-center py-20 text-slate-400">
@@ -154,7 +160,11 @@ export default function EDocItemsPage() {
           <p className="text-slate-400 text-sm mt-1">Coba kata kunci atau filter lain.</p>
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-slate-200">
+        <div>
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">
+            {totalCount !== null ? `${totalCount} Item` : "Item"}
+          </p>
+          <div className="bg-white rounded-xl border border-slate-200">
           {/* Semua kolom tampil langsung (2026-09-25 — sempat dibuat popup detail per item,
               tapi user minta semua info langsung terlihat di list). Klik baris di mana
               saja tetap langsung buka file IM-nya (tidak ada lagi aksi yang bersaing). */}
@@ -208,6 +218,7 @@ export default function EDocItemsPage() {
               {loadingMore && <><Loader2 className="w-4 h-4 animate-spin" /> Memuat lagi...</>}
             </div>
           )}
+          </div>
         </div>
       )}
     </div>

@@ -101,7 +101,33 @@ export async function GET(request: Request) {
       return (blastFolderIdsByFile.get(p.file.id) ?? []).some((bid) => blastFolderAccess.get(bid)?.canRead);
     });
 
-    return NextResponse.json({ data: visible, hasMore, nextCursor });
+    // Total item yang BENAR-BENAR terlihat user ini untuk filter yang lagi aktif (2026-09-25
+    // — ditampilkan di atas list, sama seperti "N File" di daftar file folder) — cuma
+    // dihitung di halaman pertama (`!cursor`), query terpisah TANPA `take` (mencakup SEMUA
+    // yang cocok filter, bukan cuma 1 halaman), minim kolom, dengan ACL+Blast yang sama.
+    let totalCount: number | null = null;
+    if (!cursor) {
+      const allMatching = await db.eDocImProduct.findMany({
+        where: productWhere,
+        select: { id: true, file: { select: { id: true, folderId: true } } },
+      });
+      const allFolderAccess = await resolveFolderContentAccessBatch(userId, allMatching.map((p) => p.file.folderId));
+      const allBlastLinks = await db.eDocFileBlastFolder.findMany({
+        where: { fileId: { in: allMatching.map((p) => p.file.id) } },
+        select: { fileId: true, folderId: true },
+      });
+      const allBlastFolderIdsByFile = new Map<string, string[]>();
+      for (const link of allBlastLinks) {
+        allBlastFolderIdsByFile.set(link.fileId, [...(allBlastFolderIdsByFile.get(link.fileId) ?? []), link.folderId]);
+      }
+      const allBlastFolderAccess = await resolveFolderContentAccessBatch(userId, allBlastLinks.map((l) => l.folderId));
+      totalCount = allMatching.filter((p) => {
+        if (allFolderAccess.get(p.file.folderId)?.canRead) return true;
+        return (allBlastFolderIdsByFile.get(p.file.id) ?? []).some((bid) => allBlastFolderAccess.get(bid)?.canRead);
+      }).length;
+    }
+
+    return NextResponse.json({ data: visible, hasMore, nextCursor, totalCount });
   } catch (err) {
     console.error(err);
     return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
