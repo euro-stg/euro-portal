@@ -5,16 +5,21 @@ import { Loader2, Upload, Download, Package, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { Table } from "@/components/ui/table";
-import { ImProductDetailModal, type ImProductDetail } from "../../_im-product-detail-modal";
+
+type Product = {
+  id: string; itemName: string; sku: string | null; category: string | null; discountClass: string | null;
+  normalPrice: number | null; promoType: string | null; promoDetail: string | null;
+  promoPrice: number | null; discountPercent: number | null; qty: number | null;
+  validity: string | null; eligibleClient: string | null; keyConditions: string | null;
+};
 
 const fmtRupiah = (n: number | null) => (n == null ? "-" : `Rp${n.toLocaleString("id-ID")}`);
 const inputCls = "w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 bg-white transition-colors";
 
 export function ImProductSection({ fileId, uploaderId, bulkImported }: { fileId: string; uploaderId: string; bulkImported?: boolean }) {
   const [me, setMe] = useState<{ userId: string; isSuperadmin: boolean; isFolderCreator: boolean } | null>(null);
-  const [products, setProducts] = useState<ImProductDetail[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [search, setSearch] = useState("");
-  const [selected, setSelected] = useState<ImProductDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -129,27 +134,33 @@ export function ImProductSection({ fileId, uploaderId, bulkImported }: { fileId:
           {filteredProducts.length === 0 ? (
             <p className="text-sm text-slate-400 text-center py-6">Tidak ada item yang cocok dengan &ldquo;{search}&rdquo;.</p>
           ) : (
+            // Semua kolom tampil langsung di tabel (2026-09-25 — awalnya sempat dibuat
+            // popup detail per item, tapi user minta semua info langsung terlihat di list,
+            // bukan disembunyikan di balik klik). Teks panjang (Berlaku/Ketentuan/dst)
+            // di-wrap rapi (bukan dipotong+tooltip) dengan max-width per kolom; Table
+            // sendiri sudah scrollable horizontal (lihat components/ui/table.tsx) kalau
+            // total lebar kolom melebihi lebar layar.
             <div className="border border-slate-200 rounded-lg overflow-hidden">
               <Table>
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50">
-                    {["Item", "Category", "Discount Class", "Promo Type", "Normal", "Promo", "Diskon %", "Qty"].map((h, i) => (
+                    {["Item", "Category", "Discount Class", "Promo Type", "Normal", "Promo", "Diskon %", "Qty", "Berlaku", "Eligible Client", "Ketentuan"].map((h, i) => (
                       <th key={i} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {filteredProducts.map((p) => (
-                    <tr key={p.id} className="hover:bg-slate-50/60 transition-colors">
-                      <td className="px-3 py-2.5">
-                        <button onClick={() => setSelected(p)} className="text-sm font-medium text-slate-800 hover:text-amber-600 hover:underline transition-colors text-left">
-                          {p.itemName}
-                        </button>
+                    <tr key={p.id} className="hover:bg-slate-50/60 transition-colors align-top">
+                      <td className="px-3 py-2.5 min-w-32">
+                        <p className="text-sm font-medium text-slate-800">{p.itemName}</p>
                         {p.sku && <p className="text-xs font-mono text-slate-400">SKU: {p.sku}</p>}
                       </td>
                       <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">{p.category ?? "-"}</td>
                       <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">{p.discountClass ?? "-"}</td>
-                      <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">{p.promoType ?? "-"}</td>
+                      <td className="px-3 py-2.5 text-xs text-slate-600 max-w-48">
+                        {p.promoType ? <><b>{p.promoType}</b>{p.promoDetail ? ` — ${p.promoDetail}` : ""}</> : "-"}
+                      </td>
                       <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">{fmtRupiah(p.normalPrice)}</td>
                       <td className="px-3 py-2.5 text-xs whitespace-nowrap">
                         {p.promoPrice != null ? <span className="text-emerald-600 font-medium">{fmtRupiah(p.promoPrice)}</span> : "-"}
@@ -158,6 +169,9 @@ export function ImProductSection({ fileId, uploaderId, bulkImported }: { fileId:
                         {p.discountPercent != null ? <span className="text-emerald-600 font-medium">{p.discountPercent}%</span> : "-"}
                       </td>
                       <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">{p.qty ?? "-"}</td>
+                      <td className="px-3 py-2.5 text-xs text-slate-400 max-w-40">{p.validity ?? "-"}</td>
+                      <td className="px-3 py-2.5 text-xs text-slate-400 max-w-36">{p.eligibleClient ?? "-"}</td>
+                      <td className="px-3 py-2.5 text-xs text-slate-400 max-w-40">{p.keyConditions ?? "-"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -166,8 +180,6 @@ export function ImProductSection({ fileId, uploaderId, bulkImported }: { fileId:
           )}
         </>
       )}
-
-      {selected && <ImProductDetailModal product={selected} onClose={() => setSelected(null)} />}
     </div>
   );
 }
