@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, Check, Search } from "lucide-react";
+import { ChevronDown, Check, Search, X } from "lucide-react";
 
 export type MultiSelectOption = { id: string; name: string };
 
@@ -62,6 +62,21 @@ export function MultiSelect({ label, options, selected, onChange, placeholder = 
               className="w-full pl-7 pr-2 py-1.5 text-xs border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
             />
           </div>
+          {/* Uncheck All (2026-09-25) — berguna terutama setelah auto-checklist massal
+              (mis. pilih Business Unit ikut nge-centang banyak Branch sekaligus), biar
+              tidak perlu klik satu-satu buat batalkan semuanya. */}
+          {selected.length > 0 && (
+            <div className="flex items-center justify-between px-3 py-1.5 border-b border-slate-100 bg-slate-50/60">
+              <span className="text-xs text-slate-400">{selected.length} dipilih</span>
+              <button
+                type="button"
+                onClick={() => onChange([])}
+                className="flex items-center gap-1 text-xs text-red-500 hover:text-red-600 transition-colors"
+              >
+                <X className="w-3 h-3" /> Uncheck All
+              </button>
+            </div>
+          )}
           <div className="max-h-48 overflow-y-auto">
             {filtered.length === 0 ? (
               <p className="px-3 py-3 text-xs text-slate-400 text-center">Tidak ada opsi</p>
