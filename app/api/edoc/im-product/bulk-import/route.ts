@@ -11,8 +11,10 @@ export const maxDuration = 120;
 // biasa), dicocokkan ke file yang tepat lewat kolom "IM Number" di Excel <-> Document Number
 // file. Juga MENCAKUP file yang sudah lebih dulu di-bulk-upload sebelum fitur auto-nomor ada
 // (documentNumber masih kosong) — di-backfill dulu dari title-nya (title = nama file asli,
-// lihat extractDocumentNumberFromFilename) sebelum proses pencocokan jalan, jadi 1 langkah
-// ini sekaligus "perbaiki nomor yang kelupaan" + "isi item-nya".
+// lihat extractDocumentNumberFromFilename), DAN file yang documentNumber-nya sudah ke-set
+// tapi masih format lama (underscore, sebelum dikonversi ke slash — bug yang diperbaiki
+// sama hari) — diperbaiki dulu juga, sebelum proses pencocokan jalan. Jadi 1 langkah ini
+// sekaligus "perbaiki nomor yang kelupaan/salah format" + "isi item-nya".
 //
 // Akses: SENGAJA lebih ketat dari Bulk Upload biasa (yang cukup write-ACL 1 folder) — tool
 // ini beroperasi lintas SEMUA file Category IM sekaligus, tanpa terikat 1 folder, termasuk
@@ -39,7 +41,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: e instanceof Error ? e.message : "Gagal membaca file" }, { status: 400 });
     }
 
-    // ---------- Fase 1: backfill Document Number file lama yang masih kosong ----------
+    // ---------- Fase 1a: backfill Document Number file lama yang masih kosong ----------
     const candidates = await db.eDocFile.findMany({
       where: { deletedAt: null, documentNumber: null, category: { code: "IM" } },
       select: { id: true, title: true },
@@ -55,6 +57,29 @@ export async function POST(request: Request) {
       await db.eDocFile.update({ where: { id: c.id }, data: { documentNumber: detected } });
       usedNumbers.add(detected);
       backfilled.push({ fileId: c.id, title: c.title, documentNumber: detected });
+    }
+
+    // ---------- Fase 1b: perbaiki Document Number yang sudah kadung ke-set format lama
+    // (underscore, bukan slash) — bug di extractDocumentNumberFromFilename sempat
+    // menyimpan "001_Euromedica_..." apa adanya sebelum diperbaiki jadi "001/Euromedica/..."
+    // (2026-09-25, sama hari). Deteksi HATI-HATI: cuma dianggap "hasil auto-generate lama"
+    // kalau title file itu literally diawali "<documentNumber tersimpan> " — sinyal kuat
+    // bahwa angka itu memang berasal dari nama file (bukan diketik manual user lewat Edit,
+    // yang kebetulan mengandung underscore) — supaya tidak menimpa input manual siapapun.
+    const staleCandidates = await db.eDocFile.findMany({
+      where: { deletedAt: null, documentNumber: { not: null, contains: "_" }, category: { code: "IM" } },
+      select: { id: true, title: true, documentNumber: true },
+    });
+    const repaired: { fileId: string; title: string; oldDocumentNumber: string; documentNumber: string }[] = [];
+    for (const c of staleCandidates) {
+      const old = c.documentNumber as string;
+      if (!c.title.startsWith(`${old} `)) continue; // bukan hasil auto-generate, jangan disentuh
+      const corrected = extractDocumentNumberFromFilename(c.title);
+      if (!corrected || corrected === old || usedNumbers.has(corrected)) continue;
+      await db.eDocFile.update({ where: { id: c.id }, data: { documentNumber: corrected } });
+      usedNumbers.delete(old);
+      usedNumbers.add(corrected);
+      repaired.push({ fileId: c.id, title: c.title, oldDocumentNumber: old, documentNumber: corrected });
     }
 
     // ---------- Fase 2: kelompokkan baris Excel per IM Number, cari file yang cocok ----------
@@ -105,7 +130,7 @@ export async function POST(request: Request) {
       matched.push({ documentNumber: imNumber, fileId, title: file?.title ?? "-", itemsImported: created.length });
     }
 
-    return NextResponse.json({ backfilled, matched, unmatched, skippedNoImNumber, warnings }, { status: 201 });
+    return NextResponse.json({ backfilled, repaired, matched, unmatched, skippedNoImNumber, warnings }, { status: 201 });
   } catch (err) {
     console.error(err);
     return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });

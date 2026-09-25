@@ -1600,6 +1600,7 @@ function BulkUploadModal({
 // lagi dibuka, makanya tidak butuh folderId sama sekali.
 type BulkItemMatchResult = {
   backfilled: { fileId: string; title: string; documentNumber: string }[];
+  repaired: { fileId: string; title: string; oldDocumentNumber: string; documentNumber: string }[];
   matched: { documentNumber: string; fileId: string; title: string; itemsImported: number }[];
   unmatched: { imNumber: string; rowCount: number }[];
   skippedNoImNumber: number;
@@ -1682,6 +1683,22 @@ function BulkItemMatchModal({
                     <div key={b.fileId} className="text-xs bg-slate-50 rounded-lg p-2 flex items-center justify-between gap-2">
                       <span className="truncate">{b.title}</span>
                       <span className="font-mono text-slate-500 shrink-0">{b.documentNumber}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {result.repaired.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-1.5">
+                  {result.repaired.length} Document Number diperbaiki (format lama → slash)
+                </p>
+                <div className="space-y-1 max-h-32 overflow-y-auto">
+                  {result.repaired.map((r) => (
+                    <div key={r.fileId} className="text-xs bg-blue-50 rounded-lg p-2 flex items-center justify-between gap-2">
+                      <span className="truncate">{r.title}</span>
+                      <span className="font-mono text-slate-500 shrink-0">{r.oldDocumentNumber} → {r.documentNumber}</span>
                     </div>
                   ))}
                 </div>
