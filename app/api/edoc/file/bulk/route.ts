@@ -74,15 +74,24 @@ export async function POST(request: Request) {
     const buffer = await file.arrayBuffer();
 
     // Auto-deteksi Document Number dari nama file asli (2026-09-25) — file arsip lama
-    // migrasi biasanya diberi nama "<nomor>_<dst> <judul bebas>.pdf". Best-effort: kalau
-    // tidak ketemu pola yang meyakinkan, atau nomornya sudah dipakai file lain, biarkan
-    // documentNumber kosong seperti biasa (bisa diisi manual belakangan lewat Edit) —
-    // tidak pernah menggagalkan upload cuma karena penomoran ini gagal/bentrok.
+    // migrasi biasanya diberi nama "<nomor>_<dst> <judul bebas>.pdf". Kalau TIDAK ketemu
+    // pola yang meyakinkan sama sekali, documentNumber tetap kosong seperti biasa (tidak
+    // masalah, bisa diisi manual belakangan lewat Edit). TAPI kalau pola-nya KETEMU dan
+    // ternyata sudah dipakai file lain, itu tanda nyata ada dobel di arsip — file INI
+    // digagalkan dengan pesan jelas (2026-09-25, per feedback: jangan diam-diam kosongkan
+    // nomornya, karena dobel semacam ini gampang lolos tanpa disadari). Dicek SEBELUM
+    // upload ke Nextcloud, supaya file yang gagal tidak sempat ninggalin sampah fisik.
+    // File lain dalam batch yang sama TIDAK terpengaruh — tetap request terpisah per file.
     const detectedNumber = extractDocumentNumberFromFilename(title);
     let documentNumber: string | null = null;
     if (detectedNumber) {
-      const clash = await db.eDocFile.findFirst({ where: { documentNumber: detectedNumber, deletedAt: null } });
-      if (!clash) documentNumber = detectedNumber;
+      const clash = await db.eDocFile.findFirst({ where: { documentNumber: detectedNumber, deletedAt: null }, select: { id: true, title: true } });
+      if (clash) {
+        return NextResponse.json({
+          message: `Nomor dokumen "${detectedNumber}" (terdeteksi dari nama file) sudah dipakai file lain ("${clash.title}"). Cek apakah ini dobel di arsip — file ini TIDAK diupload.`,
+        }, { status: 409 });
+      }
+      documentNumber = detectedNumber;
     }
 
     // Error dari langkah upload ke Nextcloud SENGAJA ditangkap terpisah dan pesannya
