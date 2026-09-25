@@ -203,7 +203,7 @@ export default function EDocFileDetailPage() {
   if (!file) return null;
 
   return (
-    <div className="max-w-3xl">
+    <div>
       {toast && (
         <div className="fixed top-16 right-4 z-[90] min-w-72">
           <Alert variant={toast.variant} message={toast.message} />

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2, Upload, Download, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
+import { Table } from "@/components/ui/table";
 
 type Product = {
   id: string; itemName: string; sku: string | null; category: string | null; discountClass: string | null;
@@ -108,31 +109,42 @@ export function ImProductSection({ fileId, uploaderId, bulkImported }: { fileId:
       {products.length === 0 ? (
         <p className="text-sm text-slate-400">Belum ada produk/promo yang di-attach ke file ini. Download template untuk mulai isi datanya.</p>
       ) : (
-        <div className="space-y-2">
-          {products.map((p) => (
-            <div key={p.id} className="border border-slate-200 rounded-lg p-3">
-              <div className="flex items-center justify-between flex-wrap gap-1 mb-1">
-                <p className="text-sm font-medium text-slate-800">
-                  {p.itemName}
-                  {p.sku && <span className="ml-2 text-xs font-mono text-slate-400">SKU: {p.sku}</span>}
-                </p>
-                <div className="flex items-center gap-1.5 text-xs">
-                  {p.category && <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded">{p.category}</span>}
-                  {p.discountClass && <span className="bg-amber-50 text-amber-700 px-2 py-0.5 rounded">{p.discountClass}</span>}
-                </div>
-              </div>
-              <div className="text-xs text-slate-500 flex items-center gap-3 flex-wrap mb-1">
-                <span>Normal: {fmtRupiah(p.normalPrice)}</span>
-                {p.promoPrice != null && <span className="text-emerald-600 font-medium">Promo: {fmtRupiah(p.promoPrice)}</span>}
-                {p.discountPercent != null && <span className="text-emerald-600 font-medium">Diskon {p.discountPercent}%</span>}
-                {p.qty != null && <span>Qty: {p.qty}</span>}
-              </div>
-              {p.promoType && <p className="text-xs text-slate-600"><b>{p.promoType}</b>{p.promoDetail ? ` — ${p.promoDetail}` : ""}</p>}
-              {p.validity && <p className="text-xs text-slate-400 mt-1">Berlaku: {p.validity}</p>}
-              {p.eligibleClient && <p className="text-xs text-slate-400">Client: {p.eligibleClient}</p>}
-              {p.keyConditions && <p className="text-xs text-slate-400">Ketentuan: {p.keyConditions}</p>}
-            </div>
-          ))}
+        <div className="border border-slate-200 rounded-lg overflow-hidden">
+          <Table>
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50">
+                {["Item", "Category", "Discount Class", "Normal", "Promo", "Diskon %", "Qty", "Promo Type", "Berlaku", "Client", "Ketentuan"].map((h, i) => (
+                  <th key={i} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {products.map((p) => (
+                <tr key={p.id}>
+                  <td className="px-3 py-2.5">
+                    <p className="text-sm font-medium text-slate-800">{p.itemName}</p>
+                    {p.sku && <p className="text-xs font-mono text-slate-400">SKU: {p.sku}</p>}
+                  </td>
+                  <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">{p.category ?? "-"}</td>
+                  <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">{p.discountClass ?? "-"}</td>
+                  <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">{fmtRupiah(p.normalPrice)}</td>
+                  <td className="px-3 py-2.5 text-xs whitespace-nowrap">
+                    {p.promoPrice != null ? <span className="text-emerald-600 font-medium">{fmtRupiah(p.promoPrice)}</span> : "-"}
+                  </td>
+                  <td className="px-3 py-2.5 text-xs whitespace-nowrap">
+                    {p.discountPercent != null ? <span className="text-emerald-600 font-medium">{p.discountPercent}%</span> : "-"}
+                  </td>
+                  <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">{p.qty ?? "-"}</td>
+                  <td className="px-3 py-2.5 text-xs text-slate-600 max-w-48">
+                    {p.promoType ? <><b>{p.promoType}</b>{p.promoDetail ? ` — ${p.promoDetail}` : ""}</> : "-"}
+                  </td>
+                  <td className="px-3 py-2.5 text-xs text-slate-400 max-w-40 truncate" title={p.validity ?? undefined}>{p.validity ?? "-"}</td>
+                  <td className="px-3 py-2.5 text-xs text-slate-400 max-w-32 truncate" title={p.eligibleClient ?? undefined}>{p.eligibleClient ?? "-"}</td>
+                  <td className="px-3 py-2.5 text-xs text-slate-400 max-w-40 truncate" title={p.keyConditions ?? undefined}>{p.keyConditions ?? "-"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
         </div>
       )}
     </div>
