@@ -4,12 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Search, X, Loader2, Package, ChevronRight } from "lucide-react";
 import { Table } from "@/components/ui/table";
+import { ImProductDetailModal, type ImProductDetail } from "../_im-product-detail-modal";
 
-type Product = {
-  id: string; itemName: string; sku: string | null; category: string | null; discountClass: string | null;
-  normalPrice: number | null; promoType: string | null; promoDetail: string | null;
-  promoPrice: number | null; discountPercent: number | null; qty: number | null;
-  validity: string | null; eligibleClient: string | null; keyConditions: string | null;
+type Product = ImProductDetail & {
   file: { id: string; title: string; documentNumber: string | null; startDate: string | null; endDate: string | null };
 };
 
@@ -35,6 +32,7 @@ export default function EDocItemsPage() {
   const [validTo, setValidTo] = useState("");
 
   const [products, setProducts] = useState<Product[]>([]);
+  const [selected, setSelected] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [cursor, setCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
@@ -158,7 +156,7 @@ export default function EDocItemsPage() {
           <Table>
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">
-                {["Item", "Category", "Discount Class", "Promo Type", "Normal", "Promo", "Diskon %", "Eligible Client", "Berlaku (teks)", "Dokumen IM", ""].map((h, i) => (
+                {["Item", "Category", "Discount Class", "Promo Type", "Normal", "Promo", "Diskon %", "Dokumen IM", ""].map((h, i) => (
                   <th key={i} className="px-3 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -171,7 +169,15 @@ export default function EDocItemsPage() {
                   className="hover:bg-amber-50/50 transition-colors cursor-pointer group"
                 >
                   <td className="px-3 py-3">
-                    <p className="text-sm font-medium text-slate-800">{p.itemName}</p>
+                    {/* Klik nama = buka detail popup (stopPropagation, TIDAK ikut navigate
+                        ke file lewat klik baris) — klik di mana saja selain nama tetap
+                        langsung buka file IM-nya. */}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setSelected(p); }}
+                      className="text-sm font-medium text-slate-800 hover:text-amber-600 hover:underline transition-colors text-left"
+                    >
+                      {p.itemName}
+                    </button>
                     {p.sku && <p className="text-xs font-mono text-slate-400">SKU: {p.sku}</p>}
                   </td>
                   <td className="px-3 py-3 text-xs text-slate-500 whitespace-nowrap">{p.category ?? "-"}</td>
@@ -184,8 +190,6 @@ export default function EDocItemsPage() {
                   <td className="px-3 py-3 text-xs whitespace-nowrap">
                     {p.discountPercent != null ? <span className="text-emerald-600 font-medium">{p.discountPercent}%</span> : "-"}
                   </td>
-                  <td className="px-3 py-3 text-xs text-slate-500 max-w-40 truncate" title={p.eligibleClient ?? undefined}>{p.eligibleClient ?? "-"}</td>
-                  <td className="px-3 py-3 text-xs text-slate-500 max-w-48 truncate" title={p.validity ?? undefined}>{p.validity ?? "-"}</td>
                   <td className="px-3 py-3 text-xs whitespace-nowrap">
                     <p className="font-medium text-amber-700">{p.file.documentNumber ?? p.file.title}</p>
                     <p className="text-slate-400">{fmtDate(p.file.startDate)} s/d {fmtDate(p.file.endDate)}</p>
@@ -203,6 +207,15 @@ export default function EDocItemsPage() {
             </div>
           )}
         </div>
+      )}
+
+      {selected && (
+        <ImProductDetailModal
+          product={selected}
+          fileInfo={selected.file}
+          onOpenFile={() => router.push(`/apps/${appSlug}/edoc-file/${selected.file.id}`)}
+          onClose={() => setSelected(null)}
+        />
       )}
     </div>
   );

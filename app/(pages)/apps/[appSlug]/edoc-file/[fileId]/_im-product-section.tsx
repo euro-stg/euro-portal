@@ -1,23 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Loader2, Upload, Download, Package } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Loader2, Upload, Download, Package, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { Table } from "@/components/ui/table";
-
-type Product = {
-  id: string; itemName: string; sku: string | null; category: string | null; discountClass: string | null;
-  normalPrice: number | null; promoType: string | null; promoDetail: string | null;
-  promoPrice: number | null; discountPercent: number | null; qty: number | null;
-  validity: string | null; eligibleClient: string | null; keyConditions: string | null;
-};
+import { ImProductDetailModal, type ImProductDetail } from "../../_im-product-detail-modal";
 
 const fmtRupiah = (n: number | null) => (n == null ? "-" : `Rp${n.toLocaleString("id-ID")}`);
+const inputCls = "w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 bg-white transition-colors";
 
 export function ImProductSection({ fileId, uploaderId, bulkImported }: { fileId: string; uploaderId: string; bulkImported?: boolean }) {
   const [me, setMe] = useState<{ userId: string; isSuperadmin: boolean; isFolderCreator: boolean } | null>(null);
-  const [products, setProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<ImProductDetail[]>([]);
+  const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState<ImProductDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -43,6 +40,15 @@ export function ImProductSection({ fileId, uploaderId, bulkImported }: { fileId:
   }, [fileId]);
 
   useEffect(() => { void load(); }, [load]);
+
+  // Search item DALAM file ini saja (2026-09-25) — daftar sudah termuat semua sekaligus
+  // (biasanya jumlahnya wajar per file, beda dari Item Browser lintas semua file yang
+  // butuh pagination), jadi cukup filter client-side, tidak perlu request baru ke server.
+  const filteredProducts = useMemo(() => {
+    if (!search.trim()) return products;
+    const s = search.trim().toLowerCase();
+    return products.filter((p) => p.itemName.toLowerCase().includes(s) || (p.sku ?? "").toLowerCase().includes(s));
+  }, [products, search]);
 
   // Folder Creator manapun boleh ikut lengkapi item promo untuk file hasil Bulk Import
   // (2026-09-21) — bukan cuma uploader aslinya, sama seperti canEditFileMetadata di server.
@@ -109,44 +115,59 @@ export function ImProductSection({ fileId, uploaderId, bulkImported }: { fileId:
       {products.length === 0 ? (
         <p className="text-sm text-slate-400">Belum ada produk/promo yang di-attach ke file ini. Download template untuk mulai isi datanya.</p>
       ) : (
-        <div className="border border-slate-200 rounded-lg overflow-hidden">
-          <Table>
-            <thead>
-              <tr className="border-b border-slate-200 bg-slate-50">
-                {["Item", "Category", "Discount Class", "Normal", "Promo", "Diskon %", "Qty", "Promo Type", "Berlaku", "Client", "Ketentuan"].map((h, i) => (
-                  <th key={i} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {products.map((p) => (
-                <tr key={p.id}>
-                  <td className="px-3 py-2.5">
-                    <p className="text-sm font-medium text-slate-800">{p.itemName}</p>
-                    {p.sku && <p className="text-xs font-mono text-slate-400">SKU: {p.sku}</p>}
-                  </td>
-                  <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">{p.category ?? "-"}</td>
-                  <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">{p.discountClass ?? "-"}</td>
-                  <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">{fmtRupiah(p.normalPrice)}</td>
-                  <td className="px-3 py-2.5 text-xs whitespace-nowrap">
-                    {p.promoPrice != null ? <span className="text-emerald-600 font-medium">{fmtRupiah(p.promoPrice)}</span> : "-"}
-                  </td>
-                  <td className="px-3 py-2.5 text-xs whitespace-nowrap">
-                    {p.discountPercent != null ? <span className="text-emerald-600 font-medium">{p.discountPercent}%</span> : "-"}
-                  </td>
-                  <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">{p.qty ?? "-"}</td>
-                  <td className="px-3 py-2.5 text-xs text-slate-600 max-w-48">
-                    {p.promoType ? <><b>{p.promoType}</b>{p.promoDetail ? ` — ${p.promoDetail}` : ""}</> : "-"}
-                  </td>
-                  <td className="px-3 py-2.5 text-xs text-slate-400 max-w-40 truncate" title={p.validity ?? undefined}>{p.validity ?? "-"}</td>
-                  <td className="px-3 py-2.5 text-xs text-slate-400 max-w-32 truncate" title={p.eligibleClient ?? undefined}>{p.eligibleClient ?? "-"}</td>
-                  <td className="px-3 py-2.5 text-xs text-slate-400 max-w-40 truncate" title={p.keyConditions ?? undefined}>{p.keyConditions ?? "-"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-        </div>
+        <>
+          <div className="relative mb-3">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input className={`${inputCls} pl-9 pr-9`} placeholder="Cari item/SKU dalam file ini..." value={search} onChange={(e) => setSearch(e.target.value)} />
+            {search && (
+              <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-red-500 transition-colors">
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
+          {filteredProducts.length === 0 ? (
+            <p className="text-sm text-slate-400 text-center py-6">Tidak ada item yang cocok dengan &ldquo;{search}&rdquo;.</p>
+          ) : (
+            <div className="border border-slate-200 rounded-lg overflow-hidden">
+              <Table>
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50">
+                    {["Item", "Category", "Discount Class", "Promo Type", "Normal", "Promo", "Diskon %", "Qty"].map((h, i) => (
+                      <th key={i} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredProducts.map((p) => (
+                    <tr key={p.id} className="hover:bg-slate-50/60 transition-colors">
+                      <td className="px-3 py-2.5">
+                        <button onClick={() => setSelected(p)} className="text-sm font-medium text-slate-800 hover:text-amber-600 hover:underline transition-colors text-left">
+                          {p.itemName}
+                        </button>
+                        {p.sku && <p className="text-xs font-mono text-slate-400">SKU: {p.sku}</p>}
+                      </td>
+                      <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">{p.category ?? "-"}</td>
+                      <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">{p.discountClass ?? "-"}</td>
+                      <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">{p.promoType ?? "-"}</td>
+                      <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">{fmtRupiah(p.normalPrice)}</td>
+                      <td className="px-3 py-2.5 text-xs whitespace-nowrap">
+                        {p.promoPrice != null ? <span className="text-emerald-600 font-medium">{fmtRupiah(p.promoPrice)}</span> : "-"}
+                      </td>
+                      <td className="px-3 py-2.5 text-xs whitespace-nowrap">
+                        {p.discountPercent != null ? <span className="text-emerald-600 font-medium">{p.discountPercent}%</span> : "-"}
+                      </td>
+                      <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">{p.qty ?? "-"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            </div>
+          )}
+        </>
       )}
+
+      {selected && <ImProductDetailModal product={selected} onClose={() => setSelected(null)} />}
     </div>
   );
 }
