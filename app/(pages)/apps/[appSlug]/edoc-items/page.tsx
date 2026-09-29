@@ -31,6 +31,7 @@ export default function EDocItemsPage() {
   const [discountClass, setDiscountClass] = useState("");
   const [promoType, setPromoType] = useState("");
   const [eligibleClient, setEligibleClient] = useState("");
+  const [imNumber, setImNumber] = useState("");
   const [validFrom, setValidFrom] = useState("");
   const [validTo, setValidTo] = useState("");
 
@@ -51,11 +52,12 @@ export default function EDocItemsPage() {
     if (discountClass.trim()) p.set("discountClass", discountClass.trim());
     if (promoType.trim()) p.set("promoType", promoType.trim());
     if (eligibleClient.trim()) p.set("eligibleClient", eligibleClient.trim());
+    if (imNumber.trim()) p.set("imNumber", imNumber.trim());
     if (validFrom) p.set("validFrom", validFrom);
     if (validTo) p.set("validTo", validTo);
     if (withCursor) p.set("cursor", withCursor);
     return p.toString();
-  }, [q, category, discountClass, promoType, eligibleClient, validFrom, validTo]);
+  }, [q, category, discountClass, promoType, eligibleClient, imNumber, validFrom, validTo]);
 
   // Debounce ringan — tiap kali filter berubah, mulai lagi dari halaman pertama.
   useEffect(() => {
@@ -124,7 +126,7 @@ export default function EDocItemsPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
             className={`${inputCls} pl-9 pr-9`}
-            placeholder="Cari nama item, SKU, IM Number, Eligible Client, atau diskon % (mis. 20%)..."
+            placeholder="Cari nama item, SKU, Eligible Client, atau diskon % (mis. 20%)..."
             value={q} onChange={(e) => setQ(e.target.value)}
           />
           {q && (
@@ -138,6 +140,7 @@ export default function EDocItemsPage() {
           <input className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 text-slate-600 bg-white w-32" placeholder="Discount Class" value={discountClass} onChange={(e) => setDiscountClass(e.target.value)} />
           <input className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 text-slate-600 bg-white w-32" placeholder="Promo Type" value={promoType} onChange={(e) => setPromoType(e.target.value)} />
           <input className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 text-slate-600 bg-white w-36" placeholder="Eligible Client" value={eligibleClient} onChange={(e) => setEligibleClient(e.target.value)} />
+          <input className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 text-slate-600 bg-white w-36" placeholder="IM Number" value={imNumber} onChange={(e) => setImNumber(e.target.value)} />
           <span className="flex items-center gap-1.5 text-xs text-slate-500">
             Masih berlaku:
             <input type="date" className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 text-slate-600 bg-white" value={validFrom} onChange={(e) => setValidFrom(e.target.value)} />

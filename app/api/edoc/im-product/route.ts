@@ -38,6 +38,7 @@ export async function GET(request: Request) {
     const discountClass = searchParams.get("discountClass")?.trim() || "";
     const promoType = searchParams.get("promoType")?.trim() || "";
     const eligibleClient = searchParams.get("eligibleClient")?.trim() || "";
+    const imNumber = searchParams.get("imNumber")?.trim() || "";
     const validFrom = searchParams.get("validFrom") || "";
     const validTo = searchParams.get("validTo") || "";
     const cursor = searchParams.get("cursor");
@@ -57,21 +58,23 @@ export async function GET(request: Request) {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const productWhere: any = { file: fileWhere };
-    // q juga mencocokkan IM Number & Eligible Client (2026-09-29) — sebelumnya cuma
-    // itemName/sku, jadi tidak bisa "cari nomor IM X lagi ada promo apa" dari 1 kotak
-    // pencarian yang sama; kolom Eligible Client sendiri sudah ada filter terpisah (tetap
-    // dipertahankan untuk filter presisi), ini cuma menambah cakupan kotak pencarian utama.
+    // q juga mencocokkan Eligible Client (2026-09-29) — kotak filter terpisahnya sendiri
+    // tetap ada (untuk filter presisi), ini cuma menambah cakupan kotak pencarian utama.
+    // IM Number SENGAJA TIDAK ikut di sini (dicoba sebentar, lalu di-revert atas permintaan
+    // user) — dipisah jadi kotak filter sendiri di bawah, konsisten dengan Category/
+    // Discount Class/Promo Type/Eligible Client yang semuanya juga kotak terpisah, bukan
+    // bagian dari pencarian bebas.
     if (q) {
       productWhere.OR = [
         { itemName: { contains: q, mode: "insensitive" } },
         { sku: { contains: q, mode: "insensitive" } },
-        { imNumber: { contains: q, mode: "insensitive" } },
         { eligibleClient: { contains: q, mode: "insensitive" } },
       ];
     }
     if (category) productWhere.category = { contains: category, mode: "insensitive" };
     if (discountClass) productWhere.discountClass = { contains: discountClass, mode: "insensitive" };
     if (promoType) productWhere.promoType = { contains: promoType, mode: "insensitive" };
+    if (imNumber) productWhere.imNumber = { contains: imNumber, mode: "insensitive" };
     if (eligibleClient) productWhere.eligibleClient = { contains: eligibleClient, mode: "insensitive" };
     const percentMatch = q.match(/^(\d+(?:\.\d+)?)\s*%?$/);
     if (percentMatch) {
