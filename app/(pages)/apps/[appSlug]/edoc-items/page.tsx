@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Search, X, Loader2, Package, ChevronRight } from "lucide-react";
-import { Table } from "@/components/ui/table";
 
 type Product = {
   id: string; itemName: string; sku: string | null; category: string | null; discountClass: string | null;
@@ -92,26 +91,36 @@ export default function EDocItemsPage() {
     }
   }, [hasMore, cursor, buildParams]);
 
+  // Sentinel infinite-scroll (2026-09-29): root diarahkan ke kotak tabel yang sekarang
+  // scroll sendiri (lihat scrollContainerRef di bawah), bukan lagi viewport halaman — kalau
+  // tidak, sentinel yang ada DI DALAM kotak scroll tidak akan pernah terdeteksi "mendekati
+  // viewport" karena viewport bukan lagi konteks scroll yang relevan untuknya.
   const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const el = sentinelRef.current;
     if (!el || !hasMore) return;
-    const observer = new IntersectionObserver((entries) => { if (entries[0]?.isIntersecting) void loadMore(); }, { rootMargin: "200px" });
+    const observer = new IntersectionObserver((entries) => { if (entries[0]?.isIntersecting) void loadMore(); }, { root: scrollContainerRef.current, rootMargin: "200px" });
     observer.observe(el);
     return () => observer.disconnect();
   }, [hasMore, loadMore]);
 
-  // Header tabel dibuat sticky (2026-09-29) supaya nama kolom tetap kelihatan selagi baris
-  // item di-scroll ke bawah — nempel tepat di bawah kotak judul+filter di atasnya, yang
-  // tingginya sendiri berubah-ubah (wrap beda di layar sempit), makanya diukur via ref,
-  // bukan di-hardcode. NAVBAR_H = tinggi navbar atas (top-14 = 3.5rem = 56px).
+  // Tinggi kotak tabel dibatasi (dihitung dari sisa layar setelah navbar + kotak judul/
+  // filter di atasnya, yang tingginya sendiri berubah-ubah tergantung wrap di layar sempit,
+  // makanya diukur via ref bukan di-hardcode) supaya kotak tabel scroll SENDIRI secara
+  // internal dengan header yang sungguhan menempel (sticky top-0 di dalam kotaknya sendiri).
+  // Dicoba dulu pakai sticky thead langsung di halaman (tanpa kotak scroll terbatas) tapi
+  // itu bug — tabrakan/overlap dengan isi tabel, karena wrapper overflow-x-auto (buat
+  // scroll horizontal) ikut jadi "parent scroll" untuk sticky tanpa punya batas tinggi
+  // sendiri, jadi posisi sticky-nya salah hitung. Kotak dengan tinggi terbatas + satu
+  // wrapper overflow-auto (bukan dua wrapper bersarang) adalah pola yang teruji beres.
   const NAVBAR_H = 56;
   const filterBoxRef = useRef<HTMLDivElement | null>(null);
-  const [tableHeaderTop, setTableHeaderTop] = useState(NAVBAR_H);
+  const [spaceAboveTable, setSpaceAboveTable] = useState(NAVBAR_H);
   useEffect(() => {
     const el = filterBoxRef.current;
     if (!el) return;
-    const update = () => setTableHeaderTop(NAVBAR_H + el.getBoundingClientRect().height);
+    const update = () => setSpaceAboveTable(NAVBAR_H + el.getBoundingClientRect().height);
     update();
     const ro = new ResizeObserver(update);
     ro.observe(el);
@@ -185,62 +194,69 @@ export default function EDocItemsPage() {
           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">
             {totalCount !== null ? `${totalCount} Item` : "Item"}
           </p>
-          <div className="bg-white rounded-xl border border-slate-200">
-          {/* Semua kolom tampil langsung (2026-09-25 — sempat dibuat popup detail per item,
-              tapi user minta semua info langsung terlihat di list). Klik baris di mana
-              saja tetap langsung buka file IM-nya (tidak ada lagi aksi yang bersaing). */}
-          <Table>
-            <thead className="sticky z-10" style={{ top: tableHeaderTop }}>
-              <tr className="border-b border-slate-200 bg-slate-50">
-                {["Item", "Subject", "Category", "Discount Class", "Promo Type", "Qty", "Normal", "Promo", "Diskon %", "Berlaku", "Eligible Client", "Ketentuan", "Dokumen IM", ""].map((h, i) => (
-                  <th key={i} className="px-3 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap bg-slate-50">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {products.map((p) => (
-                <tr
-                  key={p.id}
-                  onClick={() => router.push(`/apps/${appSlug}/edoc-file/${p.file.id}`)}
-                  className="hover:bg-amber-50/50 transition-colors cursor-pointer group align-top"
-                >
-                  <td className="px-3 py-3 min-w-32">
-                    <p className="text-sm font-medium text-slate-800">{p.itemName}</p>
-                    {p.sku && <p className="text-xs font-mono text-slate-400">SKU: {p.sku}</p>}
-                  </td>
-                  <td className="px-3 py-3 text-xs text-slate-400 max-w-48">{p.imSubject ?? "-"}</td>
-                  <td className="px-3 py-3 text-xs text-slate-500 whitespace-nowrap">{p.category ?? "-"}</td>
-                  <td className="px-3 py-3 text-xs text-slate-500 whitespace-nowrap">{p.discountClass ?? "-"}</td>
-                  <td className="px-3 py-3 text-xs text-slate-600 max-w-48">
-                    {p.promoType ? <><b>{p.promoType}</b>{p.promoDetail ? ` — ${p.promoDetail}` : ""}</> : "-"}
-                  </td>
-                  <td className="px-3 py-3 text-xs text-slate-500 whitespace-nowrap">{p.qty ?? "-"}</td>
-                  <td className="px-3 py-3 text-xs text-slate-500 whitespace-nowrap">{fmtRupiah(p.normalPrice)}</td>
-                  <td className="px-3 py-3 text-xs whitespace-nowrap">
-                    {p.promoPrice != null ? <span className="text-emerald-600 font-medium">{fmtRupiah(p.promoPrice)}</span> : "-"}
-                  </td>
-                  <td className="px-3 py-3 text-xs whitespace-nowrap">
-                    {p.discountPercent != null ? <span className="text-emerald-600 font-medium">{p.discountPercent}%</span> : "-"}
-                  </td>
-                  <td className="px-3 py-3 text-xs text-slate-400 max-w-40">{p.validity ?? "-"}</td>
-                  <td className="px-3 py-3 text-xs text-slate-400 max-w-36">{p.eligibleClient ?? "-"}</td>
-                  <td className="px-3 py-3 text-xs text-slate-400 max-w-40">{p.keyConditions ?? "-"}</td>
-                  <td className="px-3 py-3 text-xs whitespace-nowrap">
-                    <p className="font-medium text-amber-700">{p.file.documentNumber ?? p.file.title}</p>
-                    <p className="text-slate-400">{fmtDate(p.file.startDate)} s/d {fmtDate(p.file.endDate)}</p>
-                  </td>
-                  <td className="px-3 py-3">
-                    <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-amber-400 transition-colors" />
-                  </td>
+          {/* Satu wrapper overflow-auto (horizontal DAN vertical sekaligus) supaya thead
+              sticky top-0 di dalamnya beres tanpa ambigu — lihat catatan di atas kenapa
+              nested-wrapper (Table biasa) tidak dipakai di sini. */}
+          <div
+            ref={scrollContainerRef}
+            className="bg-white rounded-xl border border-slate-200 overflow-auto"
+            style={{ maxHeight: `calc(100vh - ${spaceAboveTable + 64}px)` }}
+          >
+            {/* Semua kolom tampil langsung (2026-09-25 — sempat dibuat popup detail per item,
+                tapi user minta semua info langsung terlihat di list). Klik baris di mana
+                saja tetap langsung buka file IM-nya (tidak ada lagi aksi yang bersaing). */}
+            <table className="w-full text-sm border-collapse">
+              <thead className="sticky top-0 z-10">
+                <tr className="border-b border-slate-200 bg-slate-50">
+                  {["Item", "Subject", "Category", "Discount Class", "Promo Type", "Qty", "Normal", "Promo", "Diskon %", "Berlaku", "Eligible Client", "Ketentuan", "Dokumen IM", ""].map((h, i) => (
+                    <th key={i} className="px-3 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap bg-slate-50">{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </Table>
-          {hasMore && (
-            <div ref={sentinelRef} className="flex items-center justify-center py-4 text-slate-400 text-sm gap-2 h-10 border-t border-slate-100">
-              {loadingMore && <><Loader2 className="w-4 h-4 animate-spin" /> Memuat lagi...</>}
-            </div>
-          )}
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {products.map((p) => (
+                  <tr
+                    key={p.id}
+                    onClick={() => router.push(`/apps/${appSlug}/edoc-file/${p.file.id}`)}
+                    className="hover:bg-amber-50/50 transition-colors cursor-pointer group align-top"
+                  >
+                    <td className="px-3 py-3 min-w-32">
+                      <p className="text-sm font-medium text-slate-800">{p.itemName}</p>
+                      {p.sku && <p className="text-xs font-mono text-slate-400">SKU: {p.sku}</p>}
+                    </td>
+                    <td className="px-3 py-3 text-xs text-slate-400 max-w-48">{p.imSubject ?? "-"}</td>
+                    <td className="px-3 py-3 text-xs text-slate-500 whitespace-nowrap">{p.category ?? "-"}</td>
+                    <td className="px-3 py-3 text-xs text-slate-500 whitespace-nowrap">{p.discountClass ?? "-"}</td>
+                    <td className="px-3 py-3 text-xs text-slate-600 max-w-48">
+                      {p.promoType ? <><b>{p.promoType}</b>{p.promoDetail ? ` — ${p.promoDetail}` : ""}</> : "-"}
+                    </td>
+                    <td className="px-3 py-3 text-xs text-slate-500 whitespace-nowrap">{p.qty ?? "-"}</td>
+                    <td className="px-3 py-3 text-xs text-slate-500 whitespace-nowrap">{fmtRupiah(p.normalPrice)}</td>
+                    <td className="px-3 py-3 text-xs whitespace-nowrap">
+                      {p.promoPrice != null ? <span className="text-emerald-600 font-medium">{fmtRupiah(p.promoPrice)}</span> : "-"}
+                    </td>
+                    <td className="px-3 py-3 text-xs whitespace-nowrap">
+                      {p.discountPercent != null ? <span className="text-emerald-600 font-medium">{p.discountPercent}%</span> : "-"}
+                    </td>
+                    <td className="px-3 py-3 text-xs text-slate-400 max-w-40">{p.validity ?? "-"}</td>
+                    <td className="px-3 py-3 text-xs text-slate-400 max-w-36">{p.eligibleClient ?? "-"}</td>
+                    <td className="px-3 py-3 text-xs text-slate-400 max-w-40">{p.keyConditions ?? "-"}</td>
+                    <td className="px-3 py-3 text-xs whitespace-nowrap">
+                      <p className="font-medium text-amber-700">{p.file.documentNumber ?? p.file.title}</p>
+                      <p className="text-slate-400">{fmtDate(p.file.startDate)} s/d {fmtDate(p.file.endDate)}</p>
+                    </td>
+                    <td className="px-3 py-3">
+                      <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-amber-400 transition-colors" />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {hasMore && (
+              <div ref={sentinelRef} className="flex items-center justify-center py-4 text-slate-400 text-sm gap-2 h-10 border-t border-slate-100">
+                {loadingMore && <><Loader2 className="w-4 h-4 animate-spin" /> Memuat lagi...</>}
+              </div>
+            )}
           </div>
         </div>
       )}
