@@ -9,7 +9,7 @@ type Product = {
   id: string; itemName: string; sku: string | null; category: string | null; discountClass: string | null;
   normalPrice: number | null; promoType: string | null; promoDetail: string | null;
   promoPrice: number | null; discountPercent: number | null; qty: number | null;
-  validity: string | null; eligibleClient: string | null; keyConditions: string | null;
+  imNumber: string | null; validity: string | null; eligibleClient: string | null; keyConditions: string | null;
   file: { id: string; title: string; documentNumber: string | null; startDate: string | null; endDate: string | null };
 };
 
@@ -124,7 +124,7 @@ export default function EDocItemsPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
             className={`${inputCls} pl-9 pr-9`}
-            placeholder="Cari nama item, SKU, atau diskon % (mis. 20%)..."
+            placeholder="Cari nama item, SKU, IM Number, Eligible Client, atau diskon % (mis. 20%)..."
             value={q} onChange={(e) => setQ(e.target.value)}
           />
           {q && (
@@ -171,7 +171,7 @@ export default function EDocItemsPage() {
           <Table>
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">
-                {["Item", "Category", "Discount Class", "Promo Type", "Normal", "Promo", "Diskon %", "Berlaku", "Eligible Client", "Ketentuan", "Dokumen IM", ""].map((h, i) => (
+                {["Item", "Category", "Discount Class", "Promo Type", "Normal", "Promo", "Diskon %", "Berlaku", "Eligible Client", "Ketentuan", "IM Number", "Dokumen IM", ""].map((h, i) => (
                   <th key={i} className="px-3 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -202,6 +202,12 @@ export default function EDocItemsPage() {
                   <td className="px-3 py-3 text-xs text-slate-400 max-w-40">{p.validity ?? "-"}</td>
                   <td className="px-3 py-3 text-xs text-slate-400 max-w-36">{p.eligibleClient ?? "-"}</td>
                   <td className="px-3 py-3 text-xs text-slate-400 max-w-40">{p.keyConditions ?? "-"}</td>
+                  {/* Merah kalau IM Number di Excel-nya beda dari Document Number file yang
+                      sekarang jadi tempatnya nyantol — sinyal data patut dicek ulang, bukan
+                      error keras (item tetap ke-import & tampil apa adanya). */}
+                  <td className={`px-3 py-3 text-xs font-mono whitespace-nowrap ${p.imNumber && p.imNumber !== p.file.documentNumber ? "text-red-500" : "text-slate-400"}`}>
+                    {p.imNumber ?? "-"}
+                  </td>
                   <td className="px-3 py-3 text-xs whitespace-nowrap">
                     <p className="font-medium text-amber-700">{p.file.documentNumber ?? p.file.title}</p>
                     <p className="text-slate-400">{fmtDate(p.file.startDate)} s/d {fmtDate(p.file.endDate)}</p>
