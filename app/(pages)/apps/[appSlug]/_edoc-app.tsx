@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
-  FolderOpen, Folder, FileText, Plus, Upload, Download, ChevronRight, Home, Loader2,
+  FolderOpen, Folder, FileText, Plus, Upload, Download, ChevronRight, ChevronDown, Home, Loader2,
   Archive, X, Info, Pencil, Trash2, AlertTriangle, Search, Check, Package,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -956,62 +956,104 @@ function DeleteFolderModal({
 // SUDAH dipilih, karena nama folder bisa sama di lokasi berbeda (nama saja bisa bikin
 // bingung folder mana yang sebenarnya kepilih).
 export type BlastFolderOption = { id: string; name: string; path: string };
-type BlastSearchResult = { id: string; name: string; breadcrumb: Breadcrumb[] };
+type FlatFolder = { id: string; name: string; parentFolderId: string | null };
+type FolderTreeNode = FlatFolder & { children: FolderTreeNode[] };
+
+function buildFolderTree(flat: FlatFolder[]): FolderTreeNode[] {
+  const byId = new Map<string, FolderTreeNode>();
+  for (const f of flat) byId.set(f.id, { ...f, children: [] });
+  const roots: FolderTreeNode[] = [];
+  for (const node of byId.values()) {
+    const parent = node.parentFolderId ? byId.get(node.parentFolderId) : undefined;
+    if (parent) parent.children.push(node); else roots.push(node);
+  }
+  const sortRec = (nodes: FolderTreeNode[]) => {
+    nodes.sort((a, b) => a.name.localeCompare(b.name));
+    nodes.forEach((n) => sortRec(n.children));
+  };
+  sortRec(roots);
+  return roots;
+}
 
 // Folder MANAPUN bisa jadi tujuan Blast (bebas, tidak dicek akses — keputusan eksplisit
 // user) — file yang sama ikut muncul di folder-folder ini juga (link, bukan disalin
-// fisik). Picker-nya browsing folder-demi-folder ala halaman utama E Doc (breadcrumb +
-// tile, klik masuk ke child), plus kotak cari cepat untuk lompat langsung by nama. Bisa
-// pilih beberapa folder sekaligus (modal tetap terbuka setelah "Pilih folder ini").
+// fisik). Picker-nya tree expandable (2026-09-29 — sebelumnya browsing folder-demi-folder
+// ala halaman utama E Doc; user minta bisa langsung centang tanpa masuk satu-persatu):
+// seluruh folder diambil sekali (flat) lalu dibangun jadi tree di client, tiap folder
+// punya panah expand/collapse (kalau ada anak) + checkbox pilih. Kotak cari memfilter tree
+// ke folder yang cocok + leluhurnya (auto-expand), supaya folder dalam tetap bisa
+// ditemukan tanpa scroll manual. Bisa pilih beberapa folder sekaligus.
 export function BlastFolderPicker({ selected, onChange }: { selected: BlastFolderOption[]; onChange: (v: BlastFolderOption[]) => void }) {
   const [open, setOpen] = useState(false);
-  const [breadcrumb, setBreadcrumb] = useState<Breadcrumb[]>([]);
-  const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
-  const [children, setChildren] = useState<Breadcrumb[]>([]);
   const [loading, setLoading] = useState(false);
+  const [flatFolders, setFlatFolders] = useState<FlatFolder[]>([]);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<BlastSearchResult[]>([]);
-  const [searching, setSearching] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setLoading(true);
-    fetch(`/api/edoc/folder/search?parentFolderId=${currentFolderId ?? "root"}`)
+    fetch("/api/edoc/folder/search?tree=1")
       .then((r) => r.json())
-      .then((j) => setChildren(j.data ?? []))
+      .then((j) => setFlatFolders(j.data ?? []))
       .finally(() => setLoading(false));
-  }, [open, currentFolderId]);
+  }, [open]);
 
-  useEffect(() => {
-    if (!query.trim()) { setSearchResults([]); return; }
-    setSearching(true);
-    const t = setTimeout(async () => {
-      try {
-        const res = await fetch(`/api/edoc/folder/search?q=${encodeURIComponent(query.trim())}`);
-        const json = await res.json();
-        setSearchResults(json.data ?? []);
-      } finally { setSearching(false); }
-    }, 300);
-    return () => clearTimeout(t);
-  }, [query]);
+  const byId = new Map(flatFolders.map((f) => [f.id, f]));
+  const tree = buildFolderTree(flatFolders);
 
-  const enterFolder = (f: Breadcrumb) => { setBreadcrumb((b) => [...b, f]); setCurrentFolderId(f.id); };
-  const goToBreadcrumb = (index: number) => {
-    if (index === -1) { setBreadcrumb([]); setCurrentFolderId(null); return; }
-    const next = breadcrumb.slice(0, index + 1);
-    setBreadcrumb(next);
-    setCurrentFolderId(next[next.length - 1].id);
-  };
-  const jumpToSearchResult = (f: BlastSearchResult) => {
-    setBreadcrumb(f.breadcrumb);
-    setCurrentFolderId(f.id);
-    setQuery(""); setSearchResults([]);
+  const getPath = (id: string): string => {
+    const parts: string[] = [];
+    let cur: FlatFolder | undefined = byId.get(id);
+    while (cur) { parts.unshift(cur.name); cur = cur.parentFolderId ? byId.get(cur.parentFolderId) : undefined; }
+    return parts.join(" / ");
   };
 
-  const add = (f: BlastFolderOption) => { if (!selected.some((s) => s.id === f.id)) onChange([...selected, f]); };
+  const add = (id: string) => { if (!selected.some((s) => s.id === id)) onChange([...selected, { id, name: byId.get(id)?.name ?? "", path: getPath(id) }]); };
   const remove = (id: string) => onChange(selected.filter((s) => s.id !== id));
+  const toggleExpand = (id: string) => setExpandedIds((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
 
-  const currentIsSelected = currentFolderId != null && selected.some((s) => s.id === currentFolderId);
+  // Saat cari: tampilkan folder yang cocok + SELURUH leluhurnya (biar tetap kelihatan
+  // konteksnya folder itu ada di mana), auto-expand supaya tidak perlu klik panah manual.
+  const searchActive = query.trim().length > 0;
+  const keepIds = (() => {
+    if (!searchActive) return null;
+    const q = query.trim().toLowerCase();
+    const keep = new Set<string>();
+    for (const f of flatFolders) {
+      if (f.name.toLowerCase().includes(q)) {
+        let cur: FlatFolder | undefined = f;
+        while (cur) { keep.add(cur.id); cur = cur.parentFolderId ? byId.get(cur.parentFolderId) : undefined; }
+      }
+    }
+    return keep;
+  })();
+
+  const renderNode = (node: FolderTreeNode, depth: number): React.ReactNode => {
+    if (keepIds && !keepIds.has(node.id)) return null;
+    const hasChildren = node.children.length > 0;
+    const isExpanded = searchActive ? true : expandedIds.has(node.id);
+    const isSelected = selected.some((s) => s.id === node.id);
+    return (
+      <div key={node.id}>
+        <div className="flex items-center gap-1 py-1 rounded hover:bg-amber-50/50" style={{ paddingLeft: depth * 18 }}>
+          {hasChildren ? (
+            <button type="button" onClick={() => toggleExpand(node.id)} className="p-0.5 text-slate-400 hover:text-amber-600 transition-colors shrink-0">
+              {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+            </button>
+          ) : (
+            <span className="w-[18px] shrink-0" />
+          )}
+          <label className="flex items-center gap-1.5 flex-1 min-w-0 cursor-pointer">
+            <input type="checkbox" checked={isSelected} onChange={() => (isSelected ? remove(node.id) : add(node.id))} className="shrink-0 accent-amber-600" />
+            <Folder className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+            <span className="text-sm text-slate-700 truncate">{node.name}</span>
+          </label>
+        </div>
+        {hasChildren && isExpanded && <div>{node.children.map((c) => renderNode(c, depth + 1))}</div>}
+      </div>
+    );
+  };
 
   return (
     <div>
@@ -1033,65 +1075,21 @@ export function BlastFolderPicker({ selected, onChange }: { selected: BlastFolde
       <Modal open={open} title="Pilih Folder Tujuan Blast" onClose={() => setOpen(false)} boxClassName="max-w-xl">
         <div className="space-y-3">
           <div className="relative">
-            <input className={inputCls} placeholder="Cari nama folder untuk lompat langsung..." value={query} onChange={(e) => setQuery(e.target.value)} />
-            {query.trim() && (
-              <div className="absolute z-10 top-full mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                {searching ? (
-                  <p className="px-3 py-2 text-sm text-slate-400">Mencari...</p>
-                ) : searchResults.length === 0 ? (
-                  <p className="px-3 py-2 text-sm text-slate-400">Tidak ditemukan</p>
-                ) : (
-                  searchResults.map((f) => (
-                    <button key={f.id} type="button" onClick={() => jumpToSearchResult(f)} className="w-full text-left px-3 py-2 hover:bg-amber-50 transition-colors">
-                      <p className="text-sm text-slate-700">{f.name}</p>
-                      <p className="text-xs text-slate-400 truncate">{f.breadcrumb.slice(0, -1).map((b) => b.name).join(" / ") || "Root"}</p>
-                    </button>
-                  ))
-                )}
-              </div>
-            )}
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input className={`${inputCls} pl-9`} placeholder="Cari nama folder untuk filter tree..." value={query} onChange={(e) => setQuery(e.target.value)} />
           </div>
 
-          <div className="flex items-center gap-1.5 text-sm flex-wrap border-b border-slate-100 pb-2">
-            <button onClick={() => goToBreadcrumb(-1)} className="flex items-center gap-1 text-slate-500 hover:text-amber-600 transition-colors shrink-0">
-              <Home className="w-3.5 h-3.5" /> E Document
-            </button>
-            {breadcrumb.map((b, i) => (
-              <span key={b.id} className="flex items-center gap-1.5 min-w-0">
-                <ChevronRight className="w-3.5 h-3.5 text-slate-300 shrink-0" />
-                <button onClick={() => goToBreadcrumb(i)} className={`truncate hover:text-amber-600 transition-colors ${i === breadcrumb.length - 1 ? "text-slate-800 font-medium" : "text-slate-500"}`}>
-                  {b.name}
-                </button>
-              </span>
-            ))}
-          </div>
-
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-slate-400">{currentFolderId ? "Folder saat ini bisa dipilih, atau klik salah satu di bawah untuk masuk lebih dalam." : "Pilih folder di bawah untuk mulai menelusuri."}</p>
-            {currentFolderId && (
-              <Button
-                type="button" size="sm" disabled={currentIsSelected}
-                onClick={() => add({ id: currentFolderId, name: breadcrumb[breadcrumb.length - 1]?.name ?? "", path: breadcrumb.map((b) => b.name).join(" / ") })}
-                className="bg-amber-600 hover:bg-amber-700 text-white shrink-0"
-              >
-                {currentIsSelected ? "Sudah dipilih" : "+ Pilih folder ini"}
-              </Button>
-            )}
-          </div>
+          <p className="text-xs text-slate-400">Klik panah untuk buka sub-folder, centang folder yang mau jadi tujuan Blast.</p>
 
           {loading ? (
             <div className="flex items-center justify-center py-8 text-slate-400"><Loader2 className="w-5 h-5 animate-spin" /></div>
-          ) : children.length === 0 ? (
-            <p className="text-sm text-slate-400 text-center py-6">Tidak ada sub-folder di sini.</p>
+          ) : tree.length === 0 ? (
+            <p className="text-sm text-slate-400 text-center py-6">Belum ada folder.</p>
+          ) : searchActive && keepIds?.size === 0 ? (
+            <p className="text-sm text-slate-400 text-center py-6">Tidak ada folder yang cocok dengan &ldquo;{query}&rdquo;.</p>
           ) : (
-            <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto">
-              {children.map((f) => (
-                <button key={f.id} type="button" onClick={() => enterFolder(f)} className="flex items-center gap-2 border border-slate-200 rounded-lg px-3 py-2 text-left hover:border-amber-300 hover:bg-amber-50/50 transition-colors">
-                  <Folder className="w-4 h-4 text-amber-500 shrink-0" />
-                  <span className="text-sm text-slate-700 truncate flex-1">{f.name}</span>
-                  {selected.some((s) => s.id === f.id) && <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />}
-                </button>
-              ))}
+            <div className="max-h-72 overflow-y-auto border border-slate-100 rounded-lg px-2 py-1">
+              {tree.map((n) => renderNode(n, 0))}
             </div>
           )}
 

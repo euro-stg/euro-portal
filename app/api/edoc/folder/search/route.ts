@@ -9,12 +9,13 @@ const RESULT_LIMIT = 20;
 // Folder picker untuk fitur "Blast" (lihat POST /api/edoc/file) — BEBAS folder manapun
 // (tidak dicek akses WRITE/READ terhadap folder tujuan — keputusan eksplisit user
 // 2026-09-21). Cuma folder Obsolete yang tidak ditampilkan (tidak boleh jadi tujuan blast,
-// sama seperti tidak boleh upload langsung ke situ). Dua mode:
-//   ?q=<teks>            -> cari nama folder di seluruh tree (lompat langsung)
-//   ?parentFolderId=<id> -> list anak LANGSUNG dari folder itu (mode browsing — id kosong
-//                           string ("root") berarti level teratas), untuk UI navigasi
-//                           folder-demi-folder ala halaman utama E Doc, TANPA filter ACL
-//                           (beda dari GET /api/edoc/folder biasa yang memang menyaring ACL).
+// sama seperti tidak boleh upload langsung ke situ). Tiga mode:
+//   ?tree=1               -> SELURUH folder (flat, dengan parentFolderId), untuk dibangun
+//                            jadi tree expandable di client (2026-09-29 — menggantikan
+//                            navigasi folder-demi-folder yang lama, lihat BlastFolderPicker).
+//   ?q=<teks>              -> cari nama folder di seluruh tree (dipakai untuk filter tree)
+//   ?parentFolderId=<id>  -> (LEGACY, sudah tidak dipakai UI manapun sejak tree mode ada,
+//                            dibiarkan untuk kompatibilitas) list anak LANGSUNG dari folder itu.
 export async function GET(request: Request) {
   try {
     const session = await auth();
@@ -23,6 +24,16 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const q = searchParams.get("q")?.trim() || "";
     const parentFolderId = searchParams.get("parentFolderId");
+    const tree = searchParams.get("tree");
+
+    if (tree) {
+      const all = await db.eDocFolder.findMany({
+        where: { deletedAt: null, type: { not: "OBSOLETE" } },
+        select: { id: true, name: true, parentFolderId: true },
+        orderBy: { name: "asc" },
+      });
+      return NextResponse.json({ data: all });
+    }
 
     if (parentFolderId !== null) {
       const targetParentId = parentFolderId === "root" || parentFolderId === "" ? null : parentFolderId;

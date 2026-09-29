@@ -9,7 +9,7 @@ type Product = {
   id: string; itemName: string; sku: string | null; category: string | null; discountClass: string | null;
   normalPrice: number | null; promoType: string | null; promoDetail: string | null;
   promoPrice: number | null; discountPercent: number | null; qty: number | null;
-  imNumber: string | null; imSubject: string | null; validity: string | null; eligibleClient: string | null; keyConditions: string | null;
+  imSubject: string | null; validity: string | null; eligibleClient: string | null; keyConditions: string | null;
   file: { id: string; title: string; documentNumber: string | null; startDate: string | null; endDate: string | null };
 };
 
@@ -101,11 +101,29 @@ export default function EDocItemsPage() {
     return () => observer.disconnect();
   }, [hasMore, loadMore]);
 
+  // Header tabel dibuat sticky (2026-09-29) supaya nama kolom tetap kelihatan selagi baris
+  // item di-scroll ke bawah — nempel tepat di bawah kotak judul+filter di atasnya, yang
+  // tingginya sendiri berubah-ubah (wrap beda di layar sempit), makanya diukur via ref,
+  // bukan di-hardcode. NAVBAR_H = tinggi navbar atas (top-14 = 3.5rem = 56px).
+  const NAVBAR_H = 56;
+  const filterBoxRef = useRef<HTMLDivElement | null>(null);
+  const [tableHeaderTop, setTableHeaderTop] = useState(NAVBAR_H);
+  useEffect(() => {
+    const el = filterBoxRef.current;
+    if (!el) return;
+    const update = () => setTableHeaderTop(NAVBAR_H + el.getBoundingClientRect().height);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    window.addEventListener("resize", update);
+    return () => { ro.disconnect(); window.removeEventListener("resize", update); };
+  }, []);
+
   return (
     <div>
       {/* Sticky header (2026-09-25) — sama seperti daftar file utama: judul + filter tetap
           kelihatan selagi daftar item di bawahnya di-scroll. top-14 = tinggi navbar. */}
-      <div className="sticky top-14 z-20 bg-white pb-2 -mx-4 sm:-mx-6 px-4 sm:px-6 pt-1">
+      <div ref={filterBoxRef} className="sticky top-14 z-20 bg-white pb-2 -mx-4 sm:-mx-6 px-4 sm:px-6 pt-1">
       <div className="flex items-center gap-3 mb-6">
         <button onClick={() => router.push(`/apps/${appSlug}`)} className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors">
           <ArrowLeft className="w-4 h-4" />
@@ -172,10 +190,10 @@ export default function EDocItemsPage() {
               tapi user minta semua info langsung terlihat di list). Klik baris di mana
               saja tetap langsung buka file IM-nya (tidak ada lagi aksi yang bersaing). */}
           <Table>
-            <thead>
+            <thead className="sticky z-10" style={{ top: tableHeaderTop }}>
               <tr className="border-b border-slate-200 bg-slate-50">
-                {["Item", "Subject", "Category", "Discount Class", "Promo Type", "Qty", "Normal", "Promo", "Diskon %", "Berlaku", "Eligible Client", "Ketentuan", "IM Number", "Dokumen IM", ""].map((h, i) => (
-                  <th key={i} className="px-3 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
+                {["Item", "Subject", "Category", "Discount Class", "Promo Type", "Qty", "Normal", "Promo", "Diskon %", "Berlaku", "Eligible Client", "Ketentuan", "Dokumen IM", ""].map((h, i) => (
+                  <th key={i} className="px-3 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap bg-slate-50">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -207,12 +225,6 @@ export default function EDocItemsPage() {
                   <td className="px-3 py-3 text-xs text-slate-400 max-w-40">{p.validity ?? "-"}</td>
                   <td className="px-3 py-3 text-xs text-slate-400 max-w-36">{p.eligibleClient ?? "-"}</td>
                   <td className="px-3 py-3 text-xs text-slate-400 max-w-40">{p.keyConditions ?? "-"}</td>
-                  {/* Merah kalau IM Number di Excel-nya beda dari Document Number file yang
-                      sekarang jadi tempatnya nyantol — sinyal data patut dicek ulang, bukan
-                      error keras (item tetap ke-import & tampil apa adanya). */}
-                  <td className={`px-3 py-3 text-xs font-mono whitespace-nowrap ${p.imNumber && p.imNumber !== p.file.documentNumber ? "text-red-500" : "text-slate-400"}`}>
-                    {p.imNumber ?? "-"}
-                  </td>
                   <td className="px-3 py-3 text-xs whitespace-nowrap">
                     <p className="font-medium text-amber-700">{p.file.documentNumber ?? p.file.title}</p>
                     <p className="text-slate-400">{fmtDate(p.file.startDate)} s/d {fmtDate(p.file.endDate)}</p>
