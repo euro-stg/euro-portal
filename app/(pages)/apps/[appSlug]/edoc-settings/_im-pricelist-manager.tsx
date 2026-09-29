@@ -1,117 +1,126 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Loader2, Upload, Download, Tags } from "lucide-react";
+import { Loader2, Upload, Download, Tags, FileSpreadsheet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-type PricelistItem = {
-  id: string; itemName: string; category: string | null; discountClass: string | null;
-  packaging: string | null; normalPrice: number | null; notes: string | null; updatedAt: string;
+type PricelistFile = {
+  id: string; businessUnitCode: string; fileName: string; uploadedAt: string;
+  uploader: { id: string; name: string | null } | null;
 };
+type BusinessUnit = { id: string; code: string; name: string; status: string };
 
-const fmtRupiah = (n: number | null) => (n == null ? "-" : `Rp${n.toLocaleString("id-ID")}`);
+const fmtDateTime = (d: string) => new Date(d).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" });
 
-// Master Pricelist Category IM — sumber tab "Pricelist" yang dibundel ke template
-// "Download Template" di halaman detail tiap file IM. Import Excel di sini meng-upsert
-// by nama item (re-import tidak menduplikasi, cukup update baris yang sudah ada).
-export function ImPricelistManager({ onError, onSuccess }: { onError: (m: string) => void; onSuccess: (m: string) => void }) {
-  const [items, setItems] = useState<PricelistItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [importing, setImporting] = useState(false);
+// Master Pricelist Category IM — SIFATNYA LAMPIRAN FILE PER BUSINESS UNIT (2026-09-29, revisi
+// dari desain sebelumnya yang sempat memparsing isi Excel jadi item terstruktur). Tidak ada
+// parsing sama sekali di sini — admin cukup pilih BU, lihat file yang sedang aktif (kalau ada),
+// download untuk cek isinya, atau upload file baru untuk MENGGANTI yang lama. User yang sedang
+// import item ke sebuah file IM bisa download file BU-nya sendiri sebagai acuan (lihat tombol
+// "Download Pricelist" di halaman Import Item).
+export function ImPricelistManager({
+  businessUnits, onError, onSuccess,
+}: {
+  businessUnits: BusinessUnit[]; onError: (m: string) => void; onSuccess: (m: string) => void;
+}) {
+  const activeBUs = businessUnits.filter((b) => b.status === "active");
+  const [selectedBU, setSelectedBU] = useState("");
+  const [file, setFile] = useState<PricelistFile | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [downloading, setDownloading] = useState(false);
-  const importRef = useRef<HTMLInputElement>(null);
+  const uploadRef = useRef<HTMLInputElement>(null);
 
-  const load = useCallback(async () => {
+  // Default ke BU pertama begitu daftar BU termuat — biar tidak kosong melompong saat halaman dibuka.
+  useEffect(() => { if (!selectedBU && activeBUs.length > 0) setSelectedBU(activeBUs[0].code); }, [activeBUs, selectedBU]);
+
+  const load = useCallback(async (bu: string) => {
+    if (!bu) { setFile(null); return; }
     setLoading(true);
     try {
-      const res = await fetch("/api/edoc/im-pricelist");
+      const res = await fetch(`/api/edoc/im-pricelist?businessUnitCode=${encodeURIComponent(bu)}`);
       const json = await res.json();
-      setItems(res.ok ? (json.data ?? []) : []);
+      setFile(res.ok ? (json.data ?? null) : null);
     } finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void load(selectedBU); }, [selectedBU, load]);
 
-  const handleImport = async (file: File) => {
-    setImporting(true);
+  const handleUpload = async (f: File) => {
+    if (!selectedBU) { onError("Pilih Business Unit dulu"); return; }
+    setUploading(true);
     try {
       const fd = new FormData();
-      fd.append("file", file);
+      fd.append("file", f);
+      fd.append("businessUnitCode", selectedBU);
       const res = await fetch("/api/edoc/im-pricelist", { method: "PUT", body: fd });
       const json = await res.json();
-      if (!res.ok) { onError(json.message || "Gagal import"); return; }
-      onSuccess(`${json.imported} item pricelist berhasil diimport/diperbarui`);
-      void load();
+      if (!res.ok) { onError(json.message || "Gagal upload"); return; }
+      onSuccess(`File pricelist ${selectedBU} berhasil diupload`);
+      void load(selectedBU);
     } finally {
-      setImporting(false);
-      if (importRef.current) importRef.current.value = "";
+      setUploading(false);
+      if (uploadRef.current) uploadRef.current.value = "";
     }
   };
 
-  const handleDownloadTemplate = async () => {
+  const handleDownload = async () => {
     setDownloading(true);
     try {
-      const res = await fetch("/api/edoc/im-pricelist/template");
-      if (!res.ok) { onError("Gagal download template"); return; }
+      const res = await fetch(`/api/edoc/im-pricelist/download?businessUnitCode=${encodeURIComponent(selectedBU)}`);
+      if (!res.ok) { const json = await res.json().catch(() => null); onError(json?.message || "Gagal download"); return; }
       const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
+      const cd = res.headers.get("Content-Disposition") || "";
+      const match = cd.match(/filename="?([^"]+)"?/);
+      const objUrl = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = url;
-      a.download = "Template Master Pricelist.xlsx";
+      a.href = objUrl;
+      a.download = match?.[1] || (file?.fileName ?? "Master Pricelist.xlsx");
       a.click();
-      URL.revokeObjectURL(url);
+      URL.revokeObjectURL(objUrl);
     } finally { setDownloading(false); }
   };
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-6">
-      <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
-        <div className="flex items-center gap-2"><Tags className="w-4 h-4 text-amber-600" /><p className="text-sm font-semibold text-slate-700">Master Pricelist (Category IM)</p></div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" disabled={downloading} onClick={handleDownloadTemplate} className="flex items-center gap-2">
-            {downloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} Download Template
-          </Button>
-          <input ref={importRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleImport(f); }} />
-          <Button variant="outline" size="sm" disabled={importing} onClick={() => importRef.current?.click()} className="flex items-center gap-2">
-            {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} Import Excel
-          </Button>
-        </div>
-      </div>
+      <div className="flex items-center gap-2 mb-1"><Tags className="w-4 h-4 text-amber-600" /><p className="text-sm font-semibold text-slate-700">Master Pricelist (Category IM)</p></div>
       <p className="text-xs text-slate-400 mb-4">
-        Sumber data untuk tab &ldquo;Pricelist&rdquo; yang otomatis dibundel ke tombol &ldquo;Download Template&rdquo; di halaman detail tiap file Category IM.
-        &ldquo;Download Template&rdquo; di sini berisi data yang sudah ada (kalau ada) — tinggal edit/tambah baris lalu upload ulang. Item dengan nama yang sama akan diperbarui, bukan diduplikasi.
+        Terpisah per Business Unit — pilih BU dulu, lalu upload file Excel pricelist-nya. Upload ulang akan MENGGANTI file
+        sebelumnya. File ini murni lampiran referensi (tidak diparsing/divalidasi) — user yang import item ke file IM bisa
+        download file BU-nya sendiri sebagai acuan mengisi template.
       </p>
 
-      {loading ? (
+      <div className="flex items-center gap-2 flex-wrap mb-4">
+        <select className="text-sm border border-slate-200 rounded-lg px-3 py-2 text-slate-700 bg-white" value={selectedBU} onChange={(e) => setSelectedBU(e.target.value)}>
+          <option value="">Pilih Business Unit...</option>
+          {activeBUs.map((b) => <option key={b.code} value={b.code}>{b.code} — {b.name}</option>)}
+        </select>
+        <input ref={uploadRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleUpload(f); }} />
+        <Button variant="outline" size="sm" disabled={!selectedBU || uploading} onClick={() => uploadRef.current?.click()} className="flex items-center gap-2">
+          {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} {file ? "Ganti File" : "Upload Excel"}
+        </Button>
+      </div>
+
+      {!selectedBU ? (
+        <p className="text-sm text-slate-400">Pilih Business Unit untuk melihat/mengelola file pricelist-nya.</p>
+      ) : loading ? (
         <div className="flex items-center justify-center py-6 text-slate-400"><Loader2 className="w-5 h-5 animate-spin" /></div>
-      ) : items.length === 0 ? (
-        <p className="text-sm text-slate-400">Belum ada data pricelist.</p>
+      ) : !file ? (
+        <p className="text-sm text-slate-400">Belum ada file pricelist untuk {selectedBU}.</p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="text-left text-slate-400 border-b border-slate-100">
-                <th className="py-1.5 pr-3 font-medium">Item Name</th>
-                <th className="py-1.5 pr-3 font-medium">Category</th>
-                <th className="py-1.5 pr-3 font-medium">Discount Class</th>
-                <th className="py-1.5 pr-3 font-medium">Packaging</th>
-                <th className="py-1.5 pr-3 font-medium">Harga Normal</th>
-                <th className="py-1.5 font-medium">Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((p) => (
-                <tr key={p.id} className="border-b border-slate-50">
-                  <td className="py-1.5 pr-3 text-slate-700">{p.itemName}</td>
-                  <td className="py-1.5 pr-3 text-slate-500">{p.category ?? "-"}</td>
-                  <td className="py-1.5 pr-3 text-slate-500">{p.discountClass ?? "-"}</td>
-                  <td className="py-1.5 pr-3 text-slate-500">{p.packaging ?? "-"}</td>
-                  <td className="py-1.5 pr-3 text-slate-500">{fmtRupiah(p.normalPrice)}</td>
-                  <td className="py-1.5 text-slate-400">{p.notes ?? "-"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="flex items-center justify-between px-3 py-2.5 bg-slate-50 rounded-lg">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <FileSpreadsheet className="w-5 h-5 text-emerald-600 shrink-0" />
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-slate-700 truncate">{file.fileName}</p>
+              <p className="text-xs text-slate-400">
+                Diupload {fmtDateTime(file.uploadedAt)}{file.uploader?.name ? ` oleh ${file.uploader.name}` : ""}
+              </p>
+            </div>
+          </div>
+          <Button variant="outline" size="sm" disabled={downloading} onClick={handleDownload} className="flex items-center gap-2 shrink-0">
+            {downloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} Download
+          </Button>
         </div>
       )}
     </div>

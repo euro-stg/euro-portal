@@ -409,7 +409,7 @@ export default function EDocFileDetailPage() {
       <FeedbackSection fileId={fileId} uploaderId={file.uploader.id} />
 
       {file.category?.code === "IM" && file.requiresItemImport && (
-        <ImProductSection fileId={fileId} uploaderId={file.uploader.id} bulkImported={file.bulkImported} />
+        <ImProductSection fileId={fileId} uploaderId={file.uploader.id} bulkImported={file.bulkImported} businessUnitCodes={file.businessUnitCodes} />
       )}
 
       {showEditModal && reference && (

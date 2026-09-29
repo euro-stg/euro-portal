@@ -9,7 +9,7 @@ type Product = {
   id: string; itemName: string; sku: string | null; category: string | null; discountClass: string | null;
   normalPrice: number | null; promoType: string | null; promoDetail: string | null;
   promoPrice: number | null; discountPercent: number | null; qty: number | null;
-  imNumber: string | null; validity: string | null; eligibleClient: string | null; keyConditions: string | null;
+  imNumber: string | null; imSubject: string | null; validity: string | null; eligibleClient: string | null; keyConditions: string | null;
   file: { id: string; title: string; documentNumber: string | null; startDate: string | null; endDate: string | null };
 };
 
@@ -174,7 +174,7 @@ export default function EDocItemsPage() {
           <Table>
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">
-                {["Item", "Category", "Discount Class", "Promo Type", "Normal", "Promo", "Diskon %", "Berlaku", "Eligible Client", "Ketentuan", "IM Number", "Dokumen IM", ""].map((h, i) => (
+                {["Item", "Subject", "Category", "Discount Class", "Promo Type", "Qty", "Normal", "Promo", "Diskon %", "Berlaku", "Eligible Client", "Ketentuan", "IM Number", "Dokumen IM", ""].map((h, i) => (
                   <th key={i} className="px-3 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -190,11 +190,13 @@ export default function EDocItemsPage() {
                     <p className="text-sm font-medium text-slate-800">{p.itemName}</p>
                     {p.sku && <p className="text-xs font-mono text-slate-400">SKU: {p.sku}</p>}
                   </td>
+                  <td className="px-3 py-3 text-xs text-slate-400 max-w-48">{p.imSubject ?? "-"}</td>
                   <td className="px-3 py-3 text-xs text-slate-500 whitespace-nowrap">{p.category ?? "-"}</td>
                   <td className="px-3 py-3 text-xs text-slate-500 whitespace-nowrap">{p.discountClass ?? "-"}</td>
                   <td className="px-3 py-3 text-xs text-slate-600 max-w-48">
                     {p.promoType ? <><b>{p.promoType}</b>{p.promoDetail ? ` — ${p.promoDetail}` : ""}</> : "-"}
                   </td>
+                  <td className="px-3 py-3 text-xs text-slate-500 whitespace-nowrap">{p.qty ?? "-"}</td>
                   <td className="px-3 py-3 text-xs text-slate-500 whitespace-nowrap">{fmtRupiah(p.normalPrice)}</td>
                   <td className="px-3 py-3 text-xs whitespace-nowrap">
                     {p.promoPrice != null ? <span className="text-emerald-600 font-medium">{fmtRupiah(p.promoPrice)}</span> : "-"}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, Upload, Download, Package, Search, X } from "lucide-react";
+import { Loader2, Upload, Download, Package, Search, X, FileSpreadsheet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { Table } from "@/components/ui/table";
@@ -16,13 +16,14 @@ type Product = {
 const fmtRupiah = (n: number | null) => (n == null ? "-" : `Rp${n.toLocaleString("id-ID")}`);
 const inputCls = "w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 bg-white transition-colors";
 
-export function ImProductSection({ fileId, uploaderId, bulkImported }: { fileId: string; uploaderId: string; bulkImported?: boolean }) {
+export function ImProductSection({ fileId, uploaderId, bulkImported, businessUnitCodes }: { fileId: string; uploaderId: string; bulkImported?: boolean; businessUnitCodes?: string[] }) {
   const [me, setMe] = useState<{ userId: string; isSuperadmin: boolean; isFolderCreator: boolean } | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [downloadingPricelistFor, setDownloadingPricelistFor] = useState<string | null>(null);
   const importRef = useRef<HTMLInputElement>(null);
   const [toast, setToast] = useState<{ variant: "success" | "error"; message: string } | null>(null);
   const toastTimer = useRef<NodeJS.Timeout | null>(null);
@@ -94,6 +95,26 @@ export function ImProductSection({ fileId, uploaderId, bulkImported }: { fileId:
     } finally { setDownloading(false); }
   };
 
+  // "Download Pricelist" per Business Unit file ini (2026-09-29) — murni acuan manual untuk
+  // bantu isi template item, bukan divalidasi/dicocokkan otomatis. Satu tombol per BU kalau
+  // file-nya di-tag ke lebih dari satu Business Unit.
+  const handleDownloadPricelist = async (code: string) => {
+    setDownloadingPricelistFor(code);
+    try {
+      const res = await fetch(`/api/edoc/im-pricelist/download?businessUnitCode=${encodeURIComponent(code)}`);
+      if (!res.ok) { const json = await res.json().catch(() => null); showToast("error", json?.message || "Gagal download pricelist"); return; }
+      const blob = await res.blob();
+      const cd = res.headers.get("Content-Disposition") || "";
+      const match = cd.match(/filename="?([^"]+)"?/);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = match?.[1] || `Master Pricelist ${code}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally { setDownloadingPricelistFor(null); }
+  };
+
   if (loading) return null;
 
   return (
@@ -105,10 +126,19 @@ export function ImProductSection({ fileId, uploaderId, bulkImported }: { fileId:
           <Package className="w-4 h-4 text-amber-600" /> Produk / Promo Terkait
         </p>
         {canManage && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Button variant="outline" size="sm" disabled={downloading} onClick={handleDownloadTemplate} className="flex items-center gap-2">
               {downloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} Download Template
             </Button>
+            {(businessUnitCodes ?? []).map((code) => (
+              <Button
+                key={code} variant="outline" size="sm" disabled={downloadingPricelistFor === code}
+                onClick={() => handleDownloadPricelist(code)} className="flex items-center gap-2"
+                title={`Download referensi Master Pricelist Business Unit ${code}`}
+              >
+                {downloadingPricelistFor === code ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />} Pricelist {code}
+              </Button>
+            ))}
             <input ref={importRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleImport(f); }} />
             <Button variant="outline" size="sm" disabled={importing} onClick={() => importRef.current?.click()} className="flex items-center gap-2">
               {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} Import Excel

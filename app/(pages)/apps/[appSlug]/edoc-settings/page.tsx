@@ -113,7 +113,7 @@ export default function EDocSettingsPage() {
 
       <div>
         <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">8. Master Pricelist (Category IM)</p>
-        <ImPricelistManager onError={(m) => showToast("error", m)} onSuccess={(m) => showToast("success", m)} />
+        <ImPricelistManager businessUnits={businessUnits} onError={(m) => showToast("error", m)} onSuccess={(m) => showToast("success", m)} />
       </div>
     </div>
   );

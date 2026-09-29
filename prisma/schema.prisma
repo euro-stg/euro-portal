@@ -81,7 +81,7 @@ model User {
   edocApproverRole            EDocDocumentApprover?   @relation("EDocDocumentApproverUser")
   edocApproverAssigned        EDocDocumentApprover[]  @relation("EDocDocumentApproverAssignedBy")
   edocImProductsImported      EDocImProduct[]         @relation("EDocImProductImporter")
-  edocImPricelistItemsUpdated EDocImPricelistItem[]   @relation("EDocImPricelistItemUpdatedBy")
+  edocImPricelistFilesUploaded EDocImPricelistFile[]  @relation("EDocImPricelistFileUploadedBy")
   edocFileBlastFoldersCreated EDocFileBlastFolder[]   @relation("EDocFileBlastFolderCreatedBy")
   edocFeedbacksCreated        EDocFeedback[]          @relation("EDocFeedbackCreator")
   edocFeedbackResponses       EDocFeedbackResponse[]  @relation("EDocFeedbackResponder")
@@ -1244,22 +1244,21 @@ model EDocImProduct {
   @@index([sku])
 }
 
-// Master Pricelist Category IM — sumber kebenaran nama item/kategori/harga normal, dikelola
-// admin lewat import Excel. Dipakai untuk mengisi tab "Pricelist" pada template yang
-// di-download user (app/lib/edoc.ts: generateImProductTemplate), supaya selalu up-to-date
-// tanpa user perlu tahu di mana master data ini disimpan.
-model EDocImPricelistItem {
-  id            String   @id @default(cuid())
-  itemName      String   @unique
-  category      String?
-  discountClass String?
-  packaging     String?
-  normalPrice   Float?
-  notes         String?  @db.Text
-  updatedAt     DateTime @updatedAt
-  updatedBy     String
+// Master Pricelist Category IM — sifatnya cuma LAMPIRAN FILE per Business Unit (2026-09-29,
+// sebelumnya sempat berupa daftar item ter-parsing di DB — direvisi lagi hari yang sama:
+// tidak perlu diparsing sama sekali, cukup simpan file Excel-nya). Admin upload/ganti file per
+// BU di Pengaturan; user yang sedang import item ke sebuah file IM bisa download file BU-nya
+// sebagai acuan mengisi template item, murni referensi, tidak divalidasi/dicocokkan otomatis.
+// Satu file per BU — upload ulang MENGGANTI file sebelumnya, bukan riwayat/versi.
+model EDocImPricelistFile {
+  id               String   @id @default(cuid())
+  businessUnitCode String   @unique // kode EDocBusinessUnit, plain string ref seperti pola lain di schema ini
+  fileName         String
+  fileUrl          String
+  uploadedAt       DateTime @updatedAt
+  uploadedBy       String
 
-  updater User @relation("EDocImPricelistItemUpdatedBy", fields: [updatedBy], references: [id])
+  uploader User @relation("EDocImPricelistFileUploadedBy", fields: [uploadedBy], references: [id])
 }
 
 // Feedback: at most one per file, owned by the file's uploader (not Folder Creator, not a
