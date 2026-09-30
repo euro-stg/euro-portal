@@ -25,3 +25,21 @@ export async function getNotifConfig(): Promise<NotifConfig> {
 export function invalidateNotifCache() {
   cache = null;
 }
+
+// Toggle "Blast Email" E Document (2026-09-30) — proteksi testing, admin bisa matikan
+// sementara supaya percobaan approve tidak nyasar email ke user asli. Dicek hanya saat
+// approval (jarang), jadi tidak perlu cache seperti getNotifConfig di atas.
+const EDOC_BLAST_EMAIL_KEY = "edoc.blastEmail.enabled";
+
+export async function getEdocBlastEmailEnabled(): Promise<boolean> {
+  const row = await db.systemConfig.findUnique({ where: { key: EDOC_BLAST_EMAIL_KEY } });
+  return row?.value !== "false";
+}
+
+export async function setEdocBlastEmailEnabled(enabled: boolean, updatedBy: string): Promise<void> {
+  await db.systemConfig.upsert({
+    where: { key: EDOC_BLAST_EMAIL_KEY },
+    create: { key: EDOC_BLAST_EMAIL_KEY, value: String(enabled), updatedBy },
+    update: { value: String(enabled), updatedBy },
+  });
+}

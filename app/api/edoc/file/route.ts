@@ -153,6 +153,12 @@ export async function POST(request: Request) {
     const endDateRaw = formData.get("endDate") as string | null;
     const obsoleteDestinationFolderId = (formData.get("obsoleteDestinationFolderId") as string | null) || null;
     const blastFolderIds = formData.getAll("blastFolderIds").map(String).filter(Boolean);
+    // Kriteria Email Blast (2026-09-30) — independen dari blastFolderIds di atas, lihat
+    // catatan di schema.prisma EDocFile.notify*.
+    const notifyBranchIds = formData.getAll("notifyBranchIds").map(String).filter(Boolean);
+    const notifyOrgIds = formData.getAll("notifyOrgIds").map(String).filter(Boolean);
+    const notifyPositionIds = formData.getAll("notifyPositionIds").map(String).filter(Boolean);
+    const notifyBusinessUnitCodes = formData.getAll("notifyBusinessUnitCodes").map(String).filter(Boolean);
     // Document Number/approval sekarang WAJIB untuk semua file — tidak lagi opsional dari
     // client (dihapus dari form upload 2026-09-18), selalu true terlepas dari apa yang
     // dikirim.
@@ -247,6 +253,10 @@ export async function POST(request: Request) {
         businessUnitCodes,
         branchIds,
         organizationId,
+        notifyBranchIds,
+        notifyOrgIds,
+        notifyPositionIds,
+        notifyBusinessUnitCodes,
         startDate: startDateRaw ? new Date(startDateRaw) : null,
         endDate,
         obsoleteDestinationFolderId,

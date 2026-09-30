@@ -4,7 +4,7 @@ import { unauthorized } from "@/lib/api-auth";
 import db from "@/lib/db/db";
 import {
   isSuperadmin, isEDocDocumentApprover, generateEDocNumber,
-  downloadEDocFile, stampEDocPdf, uploadEDocFileToFolder,
+  downloadEDocFile, stampEDocPdf, uploadEDocFileToFolder, sendBlastEmailNotification,
 } from "@/lib/edoc";
 
 // Approve = generate Document Number (via Number Format Builder milik Category file ini),
@@ -100,6 +100,13 @@ export async function POST(
         },
       });
     });
+
+    // Blast Email (2026-09-30) — HANYA di flow approval normal ini (file bulk-imported tidak
+    // pernah lewat sini, nomornya di-set langsung tanpa approve). Tidak pernah menggagalkan
+    // response approve ini sendiri (fungsinya sudah self-catching), tapi tetap dibungkus
+    // .catch() di sini juga sebagai lapisan pertahanan kedua.
+    const origin = process.env.NEXT_PUBLIC_APP_URL ?? new URL(request.url).origin;
+    await sendBlastEmailNotification(id, origin).catch((e) => console.error("[edoc] blast email gagal:", e));
 
     return NextResponse.json({ data: updated });
   } catch (err) {

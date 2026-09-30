@@ -10,7 +10,7 @@ import { Modal } from "@/components/ui/modal";
 import { Alert } from "@/components/ui/alert";
 import { FeedbackSection } from "./_feedback-section";
 import { ImProductSection } from "./_im-product-section";
-import { BlastFolderPicker, type BlastFolderOption } from "../../_edoc-app";
+import { BlastFolderPicker, type BlastFolderOption, BlastEmailCriteriaEditor, type BlastEmailCriteriaValue } from "../../_edoc-app";
 import { MultiSelect, type MultiSelectOption } from "../../_edoc-multiselect";
 
 type FileDetail = {
@@ -29,7 +29,7 @@ type FileDetail = {
   revisions: { id: string; previousFileUrl: string; replacedAt: string; replacer: { name: string | null } }[];
 };
 type Reference = {
-  branches: MultiSelectOption[]; businessUnits: { code: string; name: string }[];
+  branches: MultiSelectOption[]; positions: MultiSelectOption[]; businessUnits: { code: string; name: string }[];
   organizations: { id: string; name: string; code: string | null }[];
   categories: { id: string; code: string; name: string; categoryTypes: { id: string; code: string; name: string }[] }[];
   branchPrefixMappings: { prefix: string; businessUnitCodes: string[] }[];
@@ -61,6 +61,8 @@ export default function EDocFileDetailPage() {
   const [isDocumentApprover, setIsDocumentApprover] = useState(false);
   const [blastFolders, setBlastFolders] = useState<BlastFolderOption[]>([]);
   const [blastSaving, setBlastSaving] = useState(false);
+  const [notifyCriteria, setNotifyCriteria] = useState<BlastEmailCriteriaValue>({ branchIds: [], orgIds: [], positionIds: [], businessUnitCodes: [] });
+  const [notifySaving, setNotifySaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [approveNote, setApproveNote] = useState("");
   const [approving, setApproving] = useState(false);
@@ -101,7 +103,13 @@ export default function EDocFileDetailPage() {
     setBlastFolders(res.ok ? (json.data ?? []) : []);
   }, [fileId]);
 
-  useEffect(() => { void load(); void loadBlast(); }, [load, loadBlast]);
+  const loadNotifyCriteria = useCallback(async () => {
+    const res = await fetch(`/api/edoc/file/${fileId}/notify`);
+    const json = await res.json().catch(() => ({}));
+    if (res.ok && json.data) setNotifyCriteria(json.data);
+  }, [fileId]);
+
+  useEffect(() => { void load(); void loadBlast(); void loadNotifyCriteria(); }, [load, loadBlast, loadNotifyCriteria]);
   useEffect(() => {
     fetch("/api/edoc/reference").then((r) => r.json()).then(setReference).catch(() => {});
   }, []);
@@ -128,6 +136,21 @@ export default function EDocFileDetailPage() {
     } finally {
       setBlastSaving(false);
       void loadBlast();
+    }
+  };
+
+  // Full-replace (bukan diff seperti Blast folder) — cocok karena bentuknya cuma 4 array
+  // sederhana, bukan daftar entitas yang tiap barisnya perlu POST/DELETE sendiri-sendiri.
+  const handleNotifyCriteriaChange = async (next: BlastEmailCriteriaValue) => {
+    setNotifyCriteria(next);
+    setNotifySaving(true);
+    try {
+      const res = await fetch(`/api/edoc/file/${fileId}/notify`, {
+        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(next),
+      });
+      if (!res.ok) { const j = await res.json().catch(() => ({})); showToast("error", j.message || "Gagal menyimpan kriteria email blast"); }
+    } finally {
+      setNotifySaving(false);
     }
   };
 
@@ -296,6 +319,19 @@ export default function EDocFileDetailPage() {
               </div>
             ) : null}
             <p className="text-xs text-slate-400 mt-1">File ini juga muncul di folder di atas (link, bukan disalin) — hilang otomatis dari semua kalau file expired/Obsolete/dihapus.</p>
+          </div>
+        )}
+
+        {canManageBlast && reference && (
+          <div className="pt-2 border-t border-slate-100">
+            <p className="text-xs font-medium text-slate-500 mb-1.5">
+              Kriteria Email Blast {notifySaving && <Loader2 className="w-3 h-3 animate-spin inline" />}
+            </p>
+            <BlastEmailCriteriaEditor reference={reference} value={notifyCriteria} onChange={handleNotifyCriteriaChange} />
+            <p className="text-xs text-slate-400 mt-1">
+              Independen dari Blast folder di atas — kalau nomor dokumen berhasil di-generate (approval normal), user yang
+              cocok kriteria ini akan di-email. Kosongkan semua kalau tidak perlu ada yang di-email.
+            </p>
           </div>
         )}
 

@@ -979,6 +979,18 @@ model EDocFile {
   branchIds         String[] @default([]) // Talenta branch ids, plain strings like elsewhere in this schema
   organizationId    String? // plain string ref to Organization.id (like Role.defaultOrgId), source for the ORG_DEPT_CODE number-format token
 
+  // "Kriteria Email Blast" (2026-09-30) — GENUINELY INDEPENDENT dari Blast folder
+  // (EDocFileBlastFolder) dan dari businessUnitCodes/branchIds di atas (yang cuma tag
+  // metadata file, bukan target notifikasi). Diisi manual oleh uploader/Folder Creator,
+  // dipakai HANYA untuk resolve siapa yang di-email saat file di-approve lewat flow
+  // normal (bukan bulk) — lihat resolveNotifyRecipients()/sendBlastEmailNotification()
+  // di app/lib/edoc.ts. Kosong semua = tidak ada yang di-email, terlepas dari Blast
+  // folder ada/tidaknya.
+  notifyBranchIds         String[] @default([])
+  notifyOrgIds            String[] @default([])
+  notifyPositionIds       String[] @default([])
+  notifyBusinessUnitCodes String[] @default([])
+
   startDate DateTime?
   // endDate juga berfungsi ganda sebagai pemicu auto-pindah-ke-Obsolete (dulu field
   // terpisah "expiryDate" — digabung 2026-09-14 karena user menganggap End Date sudah

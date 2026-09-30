@@ -7,6 +7,7 @@ import { CategoryFormatManager } from "./_category-format-manager";
 import { CounterManager } from "./_counter-manager";
 import { ImPricelistManager } from "./_im-pricelist-manager";
 import { BusinessUnitManager, BranchPrefixMappingManager } from "./_business-unit-manager";
+import { BlastEmailSetting } from "./_blast-email-setting";
 
 type UserOption = { id: string; name: string | null; employeeId: string; jobPositionName: string | null };
 type AssignedRow = { id: string; userId: string; assignedAt: string; user: UserOption };
@@ -63,6 +64,11 @@ export default function EDocSettingsPage() {
           Contoh hasil akhir: Document Number <span className="font-mono bg-white px-1.5 py-0.5 rounded">486/Euromedica/IM/BUS/VII/2026</span>,
           {" "}MOC Number <span className="font-mono bg-white px-1.5 py-0.5 rounded">626/MOC/IM/regular/486</span>.
         </p>
+      </div>
+
+      <div>
+        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Notifikasi</p>
+        <BlastEmailSetting onError={(m) => showToast("error", m)} onSuccess={(m) => showToast("success", m)} />
       </div>
 
       <div>

@@ -1102,6 +1102,33 @@ export function BlastFolderPicker({ selected, onChange }: { selected: BlastFolde
   );
 }
 
+// ===================== Blast Email Criteria Editor =====================
+
+// "Kriteria Email Blast" (2026-09-30) — GENUINELY INDEPENDEN dari BlastFolderPicker di
+// atas (folder tujuan Blast tidak menentukan siapa yang di-email, dan sebaliknya). Kalau
+// nomor dokumen berhasil di-generate lewat flow approval normal, user yang cocok kriteria
+// ini (OR antar semua nilai di semua dimensi, sama seperti ACL folder) akan di-email.
+// Kosongkan semua = tidak ada yang di-email untuk file ini.
+export type BlastEmailCriteriaValue = { branchIds: string[]; orgIds: string[]; positionIds: string[]; businessUnitCodes: string[] };
+
+export function BlastEmailCriteriaEditor({
+  reference, value, onChange,
+}: {
+  reference: Reference; value: BlastEmailCriteriaValue; onChange: (v: BlastEmailCriteriaValue) => void;
+}) {
+  const orgOptions: MultiSelectOption[] = reference.organizations.map((o) => ({ id: o.id, name: o.code ? `${o.code} — ${o.name}` : o.name }));
+  const buOptions: MultiSelectOption[] = reference.businessUnits.map((b) => ({ id: b.code, name: b.name }));
+
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      <MultiSelect label="Branch" options={reference.branches} selected={value.branchIds} onChange={(v) => onChange({ ...value, branchIds: v })} />
+      <MultiSelect label="Organisasi" options={orgOptions} selected={value.orgIds} onChange={(v) => onChange({ ...value, orgIds: v })} />
+      <MultiSelect label="Jabatan" options={reference.positions} selected={value.positionIds} onChange={(v) => onChange({ ...value, positionIds: v })} />
+      <MultiSelect label="Business Unit" options={buOptions} selected={value.businessUnitCodes} onChange={(v) => onChange({ ...value, businessUnitCodes: v })} />
+    </div>
+  );
+}
+
 // ===================== Upload File Modal =====================
 
 function UploadFileModal({
@@ -1118,6 +1145,7 @@ function UploadFileModal({
   const [branchIds, setBranchIds] = useState<string[]>([]);
   const [blastEnabled, setBlastEnabled] = useState(false);
   const [blastFolders, setBlastFolders] = useState<BlastFolderOption[]>([]);
+  const [notifyCriteria, setNotifyCriteria] = useState<BlastEmailCriteriaValue>({ branchIds: [], orgIds: [], positionIds: [], businessUnitCodes: [] });
   const [organizationId, setOrganizationId] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -1210,6 +1238,12 @@ function UploadFileModal({
       businessUnitCodes.forEach((code) => fd.append("businessUnitCodes", code));
       branchIds.forEach((id) => fd.append("branchIds", id));
       if (blastEnabled) blastFolders.forEach((f) => fd.append("blastFolderIds", f.id));
+      // Kriteria Email Blast — independen dari toggle blastEnabled di atas (blast folder
+      // dan email blast dua hal yang genuinely terpisah).
+      notifyCriteria.branchIds.forEach((v) => fd.append("notifyBranchIds", v));
+      notifyCriteria.orgIds.forEach((v) => fd.append("notifyOrgIds", v));
+      notifyCriteria.positionIds.forEach((v) => fd.append("notifyPositionIds", v));
+      notifyCriteria.businessUnitCodes.forEach((v) => fd.append("notifyBusinessUnitCodes", v));
       if (organizationId) fd.append("organizationId", organizationId);
       if (startDate) fd.append("startDate", startDate);
       if (endDate) fd.append("endDate", endDate);
@@ -1295,6 +1329,15 @@ function UploadFileModal({
               </p>
             </div>
           )}
+        </div>
+
+        <div>
+          <label className={labelCls}>Kriteria Email Blast (opsional)</label>
+          <p className="text-xs text-slate-400 mb-2">
+            Independen dari Blast folder di atas — kalau nomor dokumen berhasil di-generate, user yang cocok kriteria ini akan
+            di-email. Kosongkan semua kalau tidak perlu ada yang di-email.
+          </p>
+          <BlastEmailCriteriaEditor reference={reference} value={notifyCriteria} onChange={setNotifyCriteria} />
         </div>
 
         <div>
