@@ -83,28 +83,36 @@ export async function POST(request: Request) {
     }
 
     // ---------- Fase 2: kelompokkan baris Excel per IM Number, cari file yang cocok ----------
-    const byNumber = new Map<string, string>(); // documentNumber -> fileId
+    // Case-insensitive (2026-09-30) — Excel sering diketik manual ("Euromedica" vs
+    // "EUROMEDICA" di Document Number asli), jadi dicocokkan lewat key huruf kecil semua,
+    // tapi casing ASLI tetap disimpan untuk ditampilkan (documentNumber asli file utk
+    // matched, teks asli Excel utk unmatched) supaya tidak membingungkan di hasil akhir.
+    const byNumber = new Map<string, { fileId: string; documentNumber: string }>(); // documentNumber.toLowerCase() -> {fileId, documentNumber asli}
     for (const f of await db.eDocFile.findMany({
       where: { deletedAt: null, documentNumber: { not: null }, category: { code: "IM" } },
       select: { id: true, documentNumber: true },
     })) {
-      byNumber.set(f.documentNumber as string, f.id);
+      byNumber.set((f.documentNumber as string).toLowerCase(), { fileId: f.id, documentNumber: f.documentNumber as string });
     }
 
-    const groups = new Map<string, typeof products>();
+    const groups = new Map<string, { original: string; rows: typeof products }>();
     let skippedNoImNumber = 0;
     for (const p of products) {
-      const key = p.imNumber?.trim();
-      if (!key) { skippedNoImNumber++; continue; }
-      groups.set(key, [...(groups.get(key) ?? []), p]);
+      const raw = p.imNumber?.trim();
+      if (!raw) { skippedNoImNumber++; continue; }
+      const key = raw.toLowerCase();
+      const existing = groups.get(key);
+      if (existing) existing.rows.push(p);
+      else groups.set(key, { original: raw, rows: [p] });
     }
 
     const matched: { documentNumber: string; fileId: string; title: string; itemsImported: number }[] = [];
     const unmatched: { imNumber: string; rowCount: number }[] = [];
 
-    for (const [imNumber, rows] of groups) {
-      const fileId = byNumber.get(imNumber);
-      if (!fileId) { unmatched.push({ imNumber, rowCount: rows.length }); continue; }
+    for (const [key, { original, rows }] of groups) {
+      const match = byNumber.get(key);
+      if (!match) { unmatched.push({ imNumber: original, rowCount: rows.length }); continue; }
+      const { fileId, documentNumber } = match;
 
       // Delete-then-insert per file — sama seperti /api/edoc/im-product/import biasa,
       // supaya konsisten kalau tool ini dijalankan berulang (re-run aman, tidak numpuk).
@@ -127,7 +135,7 @@ export async function POST(request: Request) {
       });
 
       const file = await db.eDocFile.findUnique({ where: { id: fileId }, select: { title: true } });
-      matched.push({ documentNumber: imNumber, fileId, title: file?.title ?? "-", itemsImported: created.length });
+      matched.push({ documentNumber, fileId, title: file?.title ?? "-", itemsImported: created.length });
     }
 
     return NextResponse.json({ backfilled, repaired, matched, unmatched, skippedNoImNumber, warnings }, { status: 201 });
