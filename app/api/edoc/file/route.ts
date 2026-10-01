@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { unauthorized } from "@/lib/api-auth";
 import db from "@/lib/db/db";
-import { resolveFolderContentAccess, relocateExpiredFiles, uploadEDocFileToFolder, parseImProductImport, isSuperadmin, isEDocDocumentApprover } from "@/lib/edoc";
+import { resolveFolderContentAccess, uploadEDocFileToFolder, parseImProductImport, isSuperadmin, isEDocDocumentApprover } from "@/lib/edoc";
 
 export const maxDuration = 60;
 
@@ -11,9 +11,10 @@ const PAGE_SIZE = 30;
 // List file dalam satu folder, dengan cursor pagination (2026-09-22 — folder hasil Bulk
 // Import bisa berisi ratusan file, sebelumnya semua dimuat sekaligus tanpa batas). Filter
 // endDate adalah sumber kebenaran visibility — selalu diterapkan terlepas dari apakah
-// physical move (relocateExpiredFiles) sudah jalan atau belum, supaya file yang sudah
-// lewat endDate langsung hilang dari pandangan. (endDate dulu punya pasangan field
-// terpisah "expiryDate" — digabung 2026-09-14.)
+// physical move (relocateExpiredFiles, sekarang dipanggil dari GET /api/edoc/me, bukan di
+// sini lagi — lihat catatan di sana) sudah jalan atau belum, supaya file yang sudah lewat
+// endDate langsung hilang dari pandangan. (endDate dulu punya pasangan field terpisah
+// "expiryDate" — digabung 2026-09-14.)
 //
 // Cursor cuma jalan di atas `ownFiles` (file yang folderId-nya PERSIS folder ini) — Blast
 // links (file dari folder lain yang ditautkan ke sini) SENGAJA cuma diambil di halaman
@@ -35,10 +36,6 @@ export async function GET(request: Request) {
     const access = await resolveFolderContentAccess(userId, folderId);
     if (!access.folder) return NextResponse.json({ message: "Folder tidak ditemukan" }, { status: 404 });
     if (!access.canRead) return NextResponse.json({ message: "Folder tidak ditemukan" }, { status: 404 }); // hidden, not 403
-
-    // Housekeeping — tidak mempengaruhi hasil query di bawah (filter endDate independen).
-    // Cuma dijalankan di halaman pertama — tidak perlu diulang tiap "load more".
-    if (!cursor) await relocateExpiredFiles(folderId).catch((e) => console.error("[edoc] relocateExpiredFiles gagal", e));
 
     const fileSelect = {
       id: true, title: true, description: true, categoryId: true, categoryTypeId: true,

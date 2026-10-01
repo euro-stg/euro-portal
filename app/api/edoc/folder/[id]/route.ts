@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { unauthorized } from "@/lib/api-auth";
 import db from "@/lib/db/db";
-import { isSuperadmin, renameEDocFolder, FOLDER_ACL_SELECT, getEDocFolderSubtreeCounts, deleteEDocFolderRecursive } from "@/lib/edoc";
+import { isSuperadmin, renameEDocFolder, FOLDER_ACL_SELECT, getEDocFolderSubtreeCounts, deleteEDocFolderRecursive, getFilesReferencingFolderAsObsoleteDestination } from "@/lib/edoc";
 
 // Ambil detail 1 folder termasuk 8 field ACL mentah — dipakai untuk mengisi form Edit
 // Folder. Berbeda dari GET list (/api/edoc/folder) yang menyembunyikan ACL mentah dan
@@ -142,6 +142,26 @@ export async function DELETE(
     const superadmin = await isSuperadmin(userId);
     if (!superadmin && folder.createdBy !== userId) {
       return NextResponse.json({ message: "Hanya pembuat folder atau superadmin yang bisa menghapus folder ini" }, { status: 403 });
+    }
+
+    // Hard block (2026-10-01, temuan nyata dari user) — folder (atau salah satu
+    // turunannya) yang masih jadi tujuan Obsolete yang DITUNJUK file lain (meski file itu
+    // sendiri belum/tidak sedang berada di dalam folder ini) TIDAK BOLEH dihapus sama
+    // sekali, bukan sekadar diwarning — kalau dipaksa hapus, referensi itu jadi menggantung
+    // dan relocateExpiredFiles bisa diam-diam "memindahkan" file ke folder yang sudah tidak
+    // ada begitu file itu expired nanti. Beda dari warning folderCount/fileCount di bawah
+    // (yang BOLEH dilanjutkan via confirm) — ini sama sekali tidak bisa dilewati sampai
+    // admin memindahkan tujuan Obsolete file-file itu dulu.
+    const referencingFiles = await getFilesReferencingFolderAsObsoleteDestination(id);
+    if (referencingFiles.length > 0) {
+      return NextResponse.json(
+        {
+          message: `Folder ini tidak bisa dihapus — masih jadi tujuan Obsolete untuk ${referencingFiles.length} file (${referencingFiles.map((f) => f.title).join(", ")}). Ubah dulu tujuan Obsolete file-file itu sebelum menghapus folder ini.`,
+          blockedByObsoleteReferences: true,
+          referencingFiles,
+        },
+        { status: 409 }
+      );
     }
 
     const { folderCount, fileCount } = await getEDocFolderSubtreeCounts(id);

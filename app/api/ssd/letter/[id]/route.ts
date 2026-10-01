@@ -117,8 +117,20 @@ export async function DELETE(
     if (letter.status !== "DRAFT")
       return NextResponse.json({ message: "Hanya surat berstatus DRAFT yang bisa dihapus" }, { status: 400 });
 
+    // Urutan disamakan dengan E Doc (2026-10-01, sebelumnya kebalik — DB ditandai terhapus
+    // DULU baru coba hapus fisik, kegagalan fisiknya didiamkan total lewat .catch(() => {})
+    // — kalau Nextcloud lagi mati, user melihat "Dihapus" sukses padahal file fisiknya jadi
+    // yatim/orphan selamanya). Sekarang: hapus fisik DULU, DB cuma ditandai terhapus kalau
+    // itu benar-benar berhasil (atau tidak ada file sama sekali).
+    if (letter.fileDraft) {
+      try {
+        await deleteFromNextcloud(letter.fileDraft);
+      } catch (e) {
+        console.error("[ssd] gagal menghapus file fisik di Nextcloud", e);
+        return NextResponse.json({ message: e instanceof Error ? e.message : "Gagal menghapus file di Nextcloud — surat TIDAK ditandai terhapus, coba lagi nanti" }, { status: 502 });
+      }
+    }
     await db.ssdLetter.update({ where: { id }, data: { deletedAt: new Date() } });
-    if (letter.fileDraft) await deleteFromNextcloud(letter.fileDraft).catch(() => {});
     return NextResponse.json({ message: "Dihapus" });
   } catch (err) {
     console.error(err);

@@ -16,9 +16,11 @@ import {
 
 // List langsung anak-anak dari parentFolderId (null/absen = level root). Folder yang
 // tidak diakses user disembunyikan total dari hasil — tidak ada entry "terkunci". Folder
-// Obsolete secara khusus disembunyikan dari SIAPAPUN selain pembuat/superadmin, terlepas
-// dari ACL-nya sendiri (dipertegas 2026-09-15 — sebelumnya cuma browse-ke-isinya yang
-// diblokir absolut, tapi tile-nya sendiri masih bisa muncul di listing).
+// Obsolete TIDAK lagi diperlakukan khusus di sini (2026-10-01 — sebelumnya disembunyikan
+// absolut dari siapapun selain pembuat/superadmin terlepas dari ACL-nya sendiri; direvisi
+// karena user eksplisit minta bisa diatur siapa yang boleh lihat, sama seperti folder
+// biasa — lihat catatan lengkap di canBrowseFolderContents). Sekarang mengikuti ACL
+// biasa seperti folder NORMAL.
 export async function GET(request: Request) {
   try {
     const session = await auth();
@@ -59,11 +61,6 @@ export async function GET(request: Request) {
         let access: EDocAccess;
         if (superadmin || isOwner) {
           access = { canRead: true, canWrite: true };
-        } else if (f.type === "OBSOLETE") {
-          // Folder Obsolete tersembunyi TOTAL dari listing untuk siapapun selain
-          // pembuat/superadmin — bukan cuma diblokir saat browse ke isinya. Konsisten
-          // dengan absolute override yang sudah ada di canBrowseFolderContents.
-          access = { canRead: false, canWrite: false };
         } else {
           access = resolveAccessStep(parentAccess, f, profile!);
         }

@@ -102,8 +102,21 @@ export async function DELETE(
       return NextResponse.json({ message: "File yang sudah di-approve (punya Document Number resmi) tidak bisa dihapus" }, { status: 409 });
     }
 
+    // Urutan disamakan dengan Upload/Move (2026-10-01, sebelumnya kebalik — DB ditandai
+    // terhapus DULU baru coba hapus fisik, kegagalan fisiknya didiamkan lewat .catch() —
+    // kalau Nextcloud lagi mati, user melihat "File dihapus" sukses padahal file fisiknya
+    // jadi yatim/orphan selamanya, tidak pernah ketahuan/dibersihkan). Sekarang: hapus fisik
+    // DULU, DB cuma ditandai terhapus kalau itu benar-benar berhasil — konsisten dengan
+    // uploadEDocFileToFolder (upload dulu baru insert DB) dan moveEDocFile (move dulu baru
+    // update DB). deleteEDocFile sendiri sudah menganggap 404 (file sudah tidak ada) sebagai
+    // sukses, jadi file yang kebetulan sudah hilang duluan tetap bisa ditandai terhapus.
+    try {
+      await deleteEDocFile(file.fileUrl);
+    } catch (e) {
+      console.error("[edoc] gagal menghapus file fisik di Nextcloud", e);
+      return NextResponse.json({ message: e instanceof Error ? e.message : "Gagal menghapus file di Nextcloud — file TIDAK ditandai terhapus, coba lagi nanti" }, { status: 502 });
+    }
     await db.eDocFile.update({ where: { id }, data: { deletedAt: new Date() } });
-    await deleteEDocFile(file.fileUrl).catch((e) => console.error("[edoc] gagal menghapus file fisik di Nextcloud", e));
 
     return NextResponse.json({ message: "File dihapus" });
   } catch (err) {

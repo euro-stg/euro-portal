@@ -913,6 +913,7 @@ function DeleteFolderModal({
 }) {
   const [checking, setChecking] = useState(true);
   const [counts, setCounts] = useState<{ folderCount: number; fileCount: number } | null>(null);
+  const [blocked, setBlocked] = useState<{ message: string; referencingFiles: { id: string; title: string }[] } | null>(null);
   const [confirmText, setConfirmText] = useState("");
   const [deleting, setDeleting] = useState(false);
 
@@ -924,6 +925,13 @@ function DeleteFolderModal({
         // folderCount/fileCount sebelum menampilkan dialog konfirmasi yang sesuai.
         const res = await fetch(`/api/edoc/folder/${folder.id}`, { method: "DELETE" });
         const json = await res.json().catch(() => ({}));
+        // Hard block (2026-10-01) — folder masih jadi tujuan Obsolete file lain, sama sekali
+        // tidak bisa dihapus (bukan tinggal konfirmasi ketik DELETE seperti kasus biasa).
+        if (res.status === 409 && json.blockedByObsoleteReferences) {
+          setBlocked({ message: json.message, referencingFiles: json.referencingFiles ?? [] });
+          setChecking(false);
+          return;
+        }
         if (res.status === 409 && json.requiresConfirm) {
           setCounts({ folderCount: json.folderCount ?? 0, fileCount: json.fileCount ?? 0 });
           setChecking(false);
@@ -955,6 +963,27 @@ function DeleteFolderModal({
     return (
       <Modal open title="Hapus Folder" onClose={onClose}>
         <div className="flex items-center justify-center py-8 text-slate-400"><Loader2 className="w-5 h-5 animate-spin" /></div>
+      </Modal>
+    );
+  }
+  if (blocked) {
+    return (
+      <Modal open title="Folder Tidak Bisa Dihapus" onClose={onClose}>
+        <div className="space-y-4">
+          <div className="flex items-start gap-3 bg-red-50 border border-red-100 rounded-lg p-3">
+            <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+            <div className="text-sm text-red-700">
+              <p>{blocked.message}</p>
+              {blocked.referencingFiles.length > 0 && (
+                <ul className="list-disc list-inside mt-2">
+                  {blocked.referencingFiles.map((f) => <li key={f.id}>{f.title}</li>)}
+                </ul>
+              )}
+              <p className="mt-2 text-xs text-red-600">Ubah tujuan Obsolete file-file di atas lewat Edit Metadata dulu, baru folder ini bisa dihapus.</p>
+            </div>
+          </div>
+          <div className="flex justify-end"><Button variant="outline" onClick={onClose}>Tutup</Button></div>
+        </div>
       </Modal>
     );
   }
