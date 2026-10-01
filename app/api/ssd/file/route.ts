@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { deleteFromNextcloud } from "@/lib/nextcloud";
+import { deleteFromNextcloud, fetchFromNextcloud } from "@/lib/nextcloud";
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -9,19 +9,12 @@ export async function GET(req: NextRequest) {
   const path = req.nextUrl.searchParams.get("path");
   if (!path) return NextResponse.json({ message: "Path wajib diisi" }, { status: 400 });
 
-  const user = process.env.NEXTCLOUD_USER;
-  const pass = process.env.NEXTCLOUD_PASS;
-  const base = process.env.NEXTCLOUD_URL ?? "https://drive.euromedicagroup.co.id";
-
-  if (!user || !pass) return NextResponse.json({ message: "Nextcloud belum dikonfigurasi" }, { status: 503 });
-
-  const url = `${base}/remote.php/dav/files/${user}/${path}`;
-
-  const res = await fetch(url, {
-    headers: {
-      Authorization: "Basic " + Buffer.from(`${user}:${pass}`).toString("base64"),
-    },
-  });
+  // Sebelumnya bangun URL Nextcloud manual di sini — menduplikasi logic yang sudah ada di
+  // app/lib/nextcloud.ts DAN sekaligus bypass auto-failover ke NEXTCLOUD_URL_ALTERNATIF
+  // (ditemukan 2026-10-01: E Doc tetap bisa muat file saat domain utama down, SSD/EU tidak,
+  // karena route ini & EU yang serupa tidak ikut lewat getNextcloudBaseUrl()). Diganti pakai
+  // fetchFromNextcloud yang sudah failover-aware, sama persis yang dipakai E Doc.
+  const res = await fetchFromNextcloud(path);
 
   if (!res.ok) {
     return NextResponse.json({ message: `File tidak ditemukan (${res.status})` }, { status: res.status });
