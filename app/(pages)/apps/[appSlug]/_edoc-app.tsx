@@ -442,7 +442,7 @@ export function EDocApp() {
                   {searchResults.files.map((file) => (
                     <button
                       key={file.id}
-                      onClick={() => router.push(`/apps/${appSlug}/edoc-file/${file.id}`)}
+                      onClick={() => router.push(`/apps/${appSlug}/edoc-file/${file.id}?fromFolderId=${file.folderId}`)}
                       className="w-full flex items-center gap-4 px-5 py-3.5 hover:bg-slate-50 transition-colors text-left group"
                     >
                       <div className="w-9 h-9 rounded-lg bg-red-50 flex items-center justify-center shrink-0">
@@ -562,7 +562,14 @@ export function EDocApp() {
                 return (
                 <button
                   key={file.id}
-                  onClick={() => router.push(`/apps/${appSlug}/edoc-file/${file.id}`)}
+                  // fromFolderId = folder yang SEDANG di-browse saat file ini diklik (2026-10-01,
+                  // perbaikan bug nyata: file hasil Blast yang dibuka dari folder tujuan Blast-nya
+                  // sebelumnya selalu "Back" ke folder ASLI file itu (file.folderId), bukan balik
+                  // ke folder Blast tempat user tadi benar-benar browsing — bikin orang harus
+                  // navigasi ulang dari awal buat cek file lain di folder yang sama). Halaman detail
+                  // file memprioritaskan ini kalau ada, fallback ke file.folderId kalau tidak
+                  // (akses langsung/bookmark, tidak lewat browsing).
+                  onClick={() => router.push(`/apps/${appSlug}/edoc-file/${file.id}?fromFolderId=${currentFolderId}`)}
                   className="w-full flex items-center gap-4 px-5 py-3.5 hover:bg-slate-50 transition-colors text-left group"
                 >
                   <span

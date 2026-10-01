@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft, FileText, Download, Upload, Loader2, CheckCircle2, XCircle, Hash, History, Clock, Trash2, Radio, Pencil,
 } from "lucide-react";
@@ -44,13 +44,24 @@ const STATUS_COLOR: Record<string, string> = { DRAFT: "bg-slate-100 text-slate-6
 export default function EDocFileDetailPage() {
   const { appSlug, fileId } = useParams<{ appSlug: string; fileId: string }>();
   const router = useRouter();
-  // "Back" ke folder asal file ini, bukan ke root E Document (2026-09-22) — folder
-  // navigation di EDocApp murni state client, tidak pernah masuk browser history, jadi
-  // router.back() polos selalu mendarat di root, bukan folder yang lagi dibuka user
-  // sebelumnya. file.folderId sendiri (bukan query param) yang dipakai — selalu ada begitu
-  // file-nya sudah termuat, jadi tetap benar dilihat dari mana pun halaman ini dibuka
-  // (klik dari list, dari search, atau link langsung).
-  const backToFolder = (folderId: string) => router.push(`/apps/${appSlug}?folderId=${folderId}`);
+  const searchParams = useSearchParams();
+  // "Back" ke folder tempat user SEBENARNYA browsing saat membuka file ini, bukan ke root
+  // E Document (2026-09-22) — folder navigation di EDocApp murni state client, tidak pernah
+  // masuk browser history, jadi router.back() polos selalu mendarat di root.
+  //
+  // Diperbaiki 2026-10-01 (bug nyata dilaporkan user): sebelumnya SELALU pakai file.folderId
+  // (folder ASLI/primary file ini) — benar untuk kasus biasa, tapi SALAH kalau file ini
+  // dibuka dari folder tujuan Blast (mis. file aslinya di HO, di-blast ke ESC/IM — user
+  // browsing ESC/IM, buka file itu, klik Back, malah dilempar ke HO alih-alih balik ke
+  // ESC/IM tempat dia tadi benar-benar berada, bikin dia harus navigasi ulang dari awal
+  // buat cek file lain di folder yang sama). Sekarang pakai `fromFolderId` dari query
+  // string KALAU ADA (diisi oleh pemanggil — lihat _edoc-app.tsx, dikirim saat file diklik
+  // dari daftar folder biasa maupun dari hasil search, berisi folder yang SEDANG di-browse
+  // saat itu, apapun jenisnya — primary atau Blast, sama-sama valid lewat breadcrumb
+  // endpoint yang generic), fallback ke file.folderId kalau tidak ada (akses langsung/
+  // bookmark/dari Item Browser, yang memang tidak datang dari sesi browsing folder).
+  const fromFolderId = searchParams.get("fromFolderId");
+  const backToFolder = (folderId: string) => router.push(`/apps/${appSlug}?folderId=${fromFolderId || folderId}`);
 
   const [file, setFile] = useState<FileDetail | null>(null);
   const [reference, setReference] = useState<Reference | null>(null);
