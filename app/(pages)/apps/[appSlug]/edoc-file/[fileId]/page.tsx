@@ -11,6 +11,7 @@ import { Alert } from "@/components/ui/alert";
 import { FeedbackSection } from "./_feedback-section";
 import { ImProductSection } from "./_im-product-section";
 import { BlastFolderPicker, type BlastFolderOption, BlastEmailCriteriaEditor, type BlastEmailCriteriaValue } from "../../_edoc-app";
+import { MoveFileButton } from "./_move-file-modal";
 import { MultiSelect, type MultiSelectOption } from "../../_edoc-multiselect";
 
 type FileDetail = {
@@ -57,6 +58,7 @@ export default function EDocFileDetailPage() {
   const [canDelete, setCanDelete] = useState(false);
   const [canManageBlast, setCanManageBlast] = useState(false);
   const [canEditMetadata, setCanEditMetadata] = useState(false);
+  const [canMove, setCanMove] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [isDocumentApprover, setIsDocumentApprover] = useState(false);
   const [blastFolders, setBlastFolders] = useState<BlastFolderOption[]>([]);
@@ -93,6 +95,7 @@ export default function EDocFileDetailPage() {
       setCanDelete(!!json.canDelete);
       setCanManageBlast(!!json.canManageBlast);
       setCanEditMetadata(!!json.canEditMetadata);
+      setCanMove(!!json.canMove);
       setIsDocumentApprover(!!json.isDocumentApprover);
     } finally { setLoading(false); }
   }, [fileId]);
@@ -341,6 +344,12 @@ export default function EDocFileDetailPage() {
               <Download className="w-4 h-4" /> Lihat / Download PDF
             </Button>
           </a>
+          {canMove && (
+            <MoveFileButton
+              fileId={fileId} currentFolderId={file.folderId}
+              onMoved={() => { showToast("success", "File berhasil dipindahkan"); void load(); }}
+            />
+          )}
           {canWrite && (
             <>
               <input

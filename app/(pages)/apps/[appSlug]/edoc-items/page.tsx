@@ -28,8 +28,6 @@ export default function EDocItemsPage() {
   const [q, setQ] = useState("");
   const [category, setCategory] = useState("");
   const [discountClass, setDiscountClass] = useState("");
-  const [promoType, setPromoType] = useState("");
-  const [eligibleClient, setEligibleClient] = useState("");
   const [imNumber, setImNumber] = useState("");
   const [validFrom, setValidFrom] = useState("");
   const [validTo, setValidTo] = useState("");
@@ -49,14 +47,12 @@ export default function EDocItemsPage() {
     if (q.trim()) p.set("q", q.trim());
     if (category.trim()) p.set("category", category.trim());
     if (discountClass.trim()) p.set("discountClass", discountClass.trim());
-    if (promoType.trim()) p.set("promoType", promoType.trim());
-    if (eligibleClient.trim()) p.set("eligibleClient", eligibleClient.trim());
     if (imNumber.trim()) p.set("imNumber", imNumber.trim());
     if (validFrom) p.set("validFrom", validFrom);
     if (validTo) p.set("validTo", validTo);
     if (withCursor) p.set("cursor", withCursor);
     return p.toString();
-  }, [q, category, discountClass, promoType, eligibleClient, imNumber, validFrom, validTo]);
+  }, [q, category, discountClass, imNumber, validFrom, validTo]);
 
   // Debounce ringan — tiap kali filter berubah, mulai lagi dari halaman pertama.
   useEffect(() => {
@@ -165,11 +161,9 @@ export default function EDocItemsPage() {
         <div className="flex items-center gap-2 flex-wrap">
           <input className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 text-slate-600 bg-white w-32" placeholder="Category" value={category} onChange={(e) => setCategory(e.target.value)} />
           <input className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 text-slate-600 bg-white w-32" placeholder="Discount Class" value={discountClass} onChange={(e) => setDiscountClass(e.target.value)} />
-          <input className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 text-slate-600 bg-white w-32" placeholder="Promo Type" value={promoType} onChange={(e) => setPromoType(e.target.value)} />
-          <input className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 text-slate-600 bg-white w-36" placeholder="Eligible Client" value={eligibleClient} onChange={(e) => setEligibleClient(e.target.value)} />
           <input className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 text-slate-600 bg-white w-36" placeholder="IM Number" value={imNumber} onChange={(e) => setImNumber(e.target.value)} />
           <span className="flex items-center gap-1.5 text-xs text-slate-500">
-            Masih berlaku:
+            IM Effective Date:
             <input type="date" className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 text-slate-600 bg-white" value={validFrom} onChange={(e) => setValidFrom(e.target.value)} />
             s/d
             <input type="date" className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 text-slate-600 bg-white" value={validTo} onChange={(e) => setValidTo(e.target.value)} />

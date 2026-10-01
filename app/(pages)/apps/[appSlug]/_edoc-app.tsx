@@ -956,10 +956,10 @@ function DeleteFolderModal({
 // SUDAH dipilih, karena nama folder bisa sama di lokasi berbeda (nama saja bisa bikin
 // bingung folder mana yang sebenarnya kepilih).
 export type BlastFolderOption = { id: string; name: string; path: string };
-type FlatFolder = { id: string; name: string; parentFolderId: string | null };
-type FolderTreeNode = FlatFolder & { children: FolderTreeNode[] };
+export type FlatFolder = { id: string; name: string; parentFolderId: string | null };
+export type FolderTreeNode = FlatFolder & { children: FolderTreeNode[] };
 
-function buildFolderTree(flat: FlatFolder[]): FolderTreeNode[] {
+export function buildFolderTree(flat: FlatFolder[]): FolderTreeNode[] {
   const byId = new Map<string, FolderTreeNode>();
   for (const f of flat) byId.set(f.id, { ...f, children: [] });
   const roots: FolderTreeNode[] = [];
@@ -1640,6 +1640,7 @@ function BulkUploadModal({
 // POST /api/edoc/im-product/bulk-import). Lintas SEMUA folder, tidak terikat folder yang
 // lagi dibuka, makanya tidak butuh folderId sama sekali.
 type BulkItemMatchResult = {
+  itemImportFlagBackfilled: number;
   backfilled: { fileId: string; title: string; documentNumber: string }[];
   repaired: { fileId: string; title: string; oldDocumentNumber: string; documentNumber: string }[];
   matched: { documentNumber: string; fileId: string; title: string; itemsImported: number }[];
@@ -1714,6 +1715,13 @@ function BulkItemMatchModal({
           </>
         ) : (
           <div className="space-y-4">
+            {result.itemImportFlagBackfilled > 0 && (
+              <p className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+                {result.itemImportFlagBackfilled} file bulk IM lama ditandai &ldquo;wajib item promo&rdquo; (section Produk/Promo Terkait
+                sekarang tampil di halaman detail file-nya).
+              </p>
+            )}
+
             {result.backfilled.length > 0 && (
               <div>
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">

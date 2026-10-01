@@ -41,6 +41,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: e instanceof Error ? e.message : "Gagal membaca file" }, { status: 400 });
     }
 
+    // ---------- Fase 0: backfill requiresItemImport=true untuk file bulk IM lama yang
+    // masih false (2026-09-30 — item promo dijadikan wajib untuk bulk upload Category IM,
+    // baik yang baru maupun yang sudah terlanjur diupload sebelum aturan ini ada). Cuma
+    // menyalakan flag-nya (efeknya: section "Produk/Promo Terkait" jadi tampil di halaman
+    // detail file) — TIDAK menghapus/mengganggu file yang kebetulan sudah punya item.
+    const itemImportFlagBackfilled = await db.eDocFile.updateMany({
+      where: { deletedAt: null, bulkImported: true, requiresItemImport: false, category: { code: "IM" } },
+      data: { requiresItemImport: true },
+    });
+
     // ---------- Fase 1a: backfill Document Number file lama yang masih kosong ----------
     const candidates = await db.eDocFile.findMany({
       where: { deletedAt: null, documentNumber: null, category: { code: "IM" } },
@@ -138,7 +148,10 @@ export async function POST(request: Request) {
       matched.push({ documentNumber, fileId, title: file?.title ?? "-", itemsImported: created.length });
     }
 
-    return NextResponse.json({ backfilled, repaired, matched, unmatched, skippedNoImNumber, warnings }, { status: 201 });
+    return NextResponse.json({
+      itemImportFlagBackfilled: itemImportFlagBackfilled.count,
+      backfilled, repaired, matched, unmatched, skippedNoImNumber, warnings,
+    }, { status: 201 });
   } catch (err) {
     console.error(err);
     return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });

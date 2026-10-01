@@ -53,9 +53,14 @@ export async function GET(
     // canEditMetadata — biar sesama Folder Creator bisa kolaboratif melengkapi Blast juga,
     // bukan cuma metadata dasar).
     const canManageBlast = superadmin || file.uploadedBy === userId || canEditMetadata;
+    // Move File (2026-09-30) — sama filosofinya seperti Blast (murni soal lokasi, tidak
+    // menyentuh isi/status resmi), TAPI sengaja tidak diperluas ke folder-ACL-write seperti
+    // canManageBlast/canEditMetadata (dikonfirmasi user: cuma uploader file ini atau
+    // superadmin, titik).
+    const canMove = superadmin || file.uploadedBy === userId;
 
     return NextResponse.json({
-      data: file, canWrite: canManage, canDelete: canManage, canManageBlast, canEditMetadata,
+      data: file, canWrite: canManage, canDelete: canManage, canManageBlast, canEditMetadata, canMove,
       isDocumentApprover: approver || superadmin,
     });
   } catch (err) {

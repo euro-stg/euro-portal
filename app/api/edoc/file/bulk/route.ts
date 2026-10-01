@@ -116,6 +116,12 @@ export async function POST(request: Request) {
           title,
           categoryId,
           requiresNumber: false,
+          // "Item promo" WAJIB untuk bulk upload Category IM (2026-09-30, sebelumnya opsional
+          // via checkbox yang bahkan tidak ada di Bulk Upload sama sekali — selalu false).
+          // Efeknya: section "Produk/Promo Terkait" di halaman detail file langsung tampil
+          // (sebelumnya disembunyikan total kalau flag ini false), jadi kelihatan jelas kalau
+          // item-nya belum dilengkapi. Kategori lain tidak terpengaruh (flag tetap false).
+          requiresItemImport: category.code === "IM",
           status: "RELEASE",
           bulkImported: true,
           uploadedBy: userId,
