@@ -10,11 +10,13 @@ const PAGE_SIZE = 30;
 
 // List file dalam satu folder, dengan cursor pagination (2026-09-22 — folder hasil Bulk
 // Import bisa berisi ratusan file, sebelumnya semua dimuat sekaligus tanpa batas). Filter
-// endDate adalah sumber kebenaran visibility — selalu diterapkan terlepas dari apakah
-// physical move (relocateExpiredFiles, sekarang dipanggil dari GET /api/edoc/me, bukan di
-// sini lagi — lihat catatan di sana) sudah jalan atau belum, supaya file yang sudah lewat
-// endDate langsung hilang dari pandangan. (endDate dulu punya pasangan field terpisah
-// "expiryDate" — digabung 2026-09-14.)
+// endDate adalah sumber kebenaran visibility di folder NORMAL — diterapkan terlepas dari
+// apakah physical move (relocateExpiredFiles, sekarang dipanggil dari GET /api/edoc/me,
+// bukan di sini lagi — lihat catatan di sana) sudah jalan atau belum, supaya file yang
+// sudah lewat endDate langsung hilang dari pandangan folder asalnya. (endDate dulu punya
+// pasangan field terpisah "expiryDate" — digabung 2026-09-14.) TAPI filter ini SENGAJA
+// dilewati saat folder yang di-browse adalah folder Obsolete itu sendiri (2026-10-01) —
+// lihat catatan di visibilityFilter di bawah.
 //
 // Cursor cuma jalan di atas `ownFiles` (file yang folderId-nya PERSIS folder ini) — Blast
 // links (file dari folder lain yang ditautkan ke sini) SENGAJA cuma diambil di halaman
@@ -45,7 +47,15 @@ export async function GET(request: Request) {
       category: { select: { id: true, code: true, name: true } },
       categoryType: { select: { id: true, code: true, name: true } },
     } as const;
-    const visibilityFilter = { deletedAt: null, OR: [{ endDate: null }, { endDate: { gt: new Date() } }] };
+    // Filter endDate SENGAJA tidak berlaku saat browsing MASUK ke folder Obsolete itu
+    // sendiri (2026-10-01, bug nyata ditemukan user: file yang sudah benar-benar
+    // direlokasi ke folder Obsolete-nya tetap tidak kelihatan SAMA SEKALI di situ juga,
+    // karena filter ini sebelumnya diterapkan buta ke SEMUA folder tanpa kecuali —
+    // termasuk arsip tujuannya sendiri, yang justru TUJUANNYA memang menyimpan file yang
+    // sudah expired supaya tetap bisa dilihat, bukan disembunyikan lagi).
+    const visibilityFilter = access.folder.type === "OBSOLETE"
+      ? { deletedAt: null }
+      : { deletedAt: null, OR: [{ endDate: null }, { endDate: { gt: new Date() } }] };
 
     // Isi listing = file yang folderId-nya PERSIS folder ini, DITAMBAH (halaman pertama
     // saja) file dari folder lain yang "Blast" ke sini (link, bukan copy — lihat
