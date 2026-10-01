@@ -12,13 +12,7 @@ const PAGE_SIZE = 30;
 //                  lewat canViewFile, jadi TIDAK perlu re-check ACL lagi di sini).
 //   (default, tanpa fileId) -> mode "Item/Promo Browser" (2026-09-25) — cari/filter promo
 //                  lintas SEMUA file IM sekaligus, dengan cursor pagination. Folder-ACL
-//                  check-nya (resolveFolderContentAccessBatch) SEKARANG Blast-aware juga
-//                  (diperbaiki 2026-09-25, sama hari — laporan nyata: file folder asalnya
-//                  HO tapi di-blast ke folder ESL, user ESL seharusnya tetap bisa cari
-//                  item-nya di sini, sama seperti dia sudah bisa buka file-nya langsung di
-//                  halaman detail lewat resolveFileReadAccess. Awalnya sengaja disederhanakan
-//                  tanpa Blast — ternyata itu memang dipakai, jadi disamakan dengan pola
-//                  union access di GET /api/edoc/search).
+//                  check-nya (resolveFolderContentAccessBatch) Blast-aware juga.
 export async function GET(request: Request) {
   try {
     const session = await auth();
@@ -83,25 +77,31 @@ export async function GET(request: Request) {
       productWhere.OR = [...(productWhere.OR ?? []), { discountPercent: Number(percentMatch[1]) }];
     }
 
-    const candidates = await db.eDocImProduct.findMany({
+    // Bug nyata ditemukan 2026-10-01 (dilaporkan user, lewat testing akun biasa — bukan
+    // superadmin): versi SEBELUMNYA mengambil PAGE_SIZE kandidat TERBARU dulu (take di DB,
+    // orderBy importedAt desc), BARU menyaring ACL di memory sesudahnya — kalau item yang
+    // boleh dilihat user ini kebetulan tidak ada di antara 30 item terbaru SE-SISTEM (mis.
+    // user/folder lain baru saja import lebih banyak), halaman pertama bisa tampil KOSONG
+    // SAMA SEKALI buat user itu walau dia punya banyak item yang sebenarnya bisa dia lihat
+    // lebih jauh di bawah — dan karena UI menampilkan empty-state (bukan sentinel infinite-
+    // scroll) saat list kosong, "load more" otomatis tidak pernah terpicu, jadi macet
+    // selamanya KECUALI user mengubah filter (search) yang kebetulan mempersempit kandidat
+    // sampai item miliknya ikut ke-include di halaman pertama. Superadmin tidak pernah
+    // kena karena ACL-nya selalu lolos semua, jadi "page" dan "visible" selalu sama persis.
+    //
+    // Fix: ACL+Blast SEKARANG dihitung terhadap SELURUH kandidat yang cocok filter (bukan
+    // cuma 1 halaman), baru pagination (cursor/take) diterapkan DI ATAS daftar yang sudah
+    // benar-benar correct-ACL itu — supaya tiap halaman dijamin berisi item yang BENAR bisa
+    // dilihat user ini, bukan "kebetulan ada di top-N global lalu lolos ACL".
+    const allMatching = await db.eDocImProduct.findMany({
       where: productWhere,
       include: { file: { select: { id: true, title: true, documentNumber: true, status: true, folderId: true, startDate: true, endDate: true } } },
       orderBy: [{ importedAt: "desc" }, { id: "desc" }],
-      take: PAGE_SIZE + 1,
-      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     });
-    const hasMore = candidates.length > PAGE_SIZE;
-    const page = candidates.slice(0, PAGE_SIZE);
-    const nextCursor = hasMore ? page[page.length - 1]?.id ?? null : null;
 
-    // "Aktif" (RELEASE + belum expired + bukan Obsolete) BUKAN berarti user ini boleh
-    // melihatnya — folder ACL yang menentukan itu, lewat SALAH SATU dari: folder asal file
-    // itu sendiri, ATAU folder manapun yang jadi tujuan Blast-nya (union, sama seperti
-    // resolveFileReadAccess) — bukan cuma folder asal saja.
-    const folderAccess = await resolveFolderContentAccessBatch(userId, page.map((p) => p.file.folderId));
-
+    const folderAccess = await resolveFolderContentAccessBatch(userId, allMatching.map((p) => p.file.folderId));
     const blastLinks = await db.eDocFileBlastFolder.findMany({
-      where: { fileId: { in: page.map((p) => p.file.id) } },
+      where: { fileId: { in: allMatching.map((p) => p.file.id) } },
       select: { fileId: true, folderId: true },
     });
     const blastFolderIdsByFile = new Map<string, string[]>();
@@ -110,36 +110,24 @@ export async function GET(request: Request) {
     }
     const blastFolderAccess = await resolveFolderContentAccessBatch(userId, blastLinks.map((l) => l.folderId));
 
-    const visible = page.filter((p) => {
+    // "Aktif" (RELEASE + belum expired + bukan Obsolete) BUKAN berarti user ini boleh
+    // melihatnya — folder ACL yang menentukan itu, lewat SALAH SATU dari: folder asal file
+    // itu sendiri, ATAU folder manapun yang jadi tujuan Blast-nya (union, sama seperti
+    // resolveFileReadAccess) — bukan cuma folder asal saja.
+    const visibleAll = allMatching.filter((p) => {
       if (folderAccess.get(p.file.folderId)?.canRead) return true;
       return (blastFolderIdsByFile.get(p.file.id) ?? []).some((bid) => blastFolderAccess.get(bid)?.canRead);
     });
 
-    // Total item yang BENAR-BENAR terlihat user ini untuk filter yang lagi aktif (2026-09-25
-    // — ditampilkan di atas list, sama seperti "N File" di daftar file folder) — cuma
-    // dihitung di halaman pertama (`!cursor`), query terpisah TANPA `take` (mencakup SEMUA
-    // yang cocok filter, bukan cuma 1 halaman), minim kolom, dengan ACL+Blast yang sama.
-    let totalCount: number | null = null;
-    if (!cursor) {
-      const allMatching = await db.eDocImProduct.findMany({
-        where: productWhere,
-        select: { id: true, file: { select: { id: true, folderId: true } } },
-      });
-      const allFolderAccess = await resolveFolderContentAccessBatch(userId, allMatching.map((p) => p.file.folderId));
-      const allBlastLinks = await db.eDocFileBlastFolder.findMany({
-        where: { fileId: { in: allMatching.map((p) => p.file.id) } },
-        select: { fileId: true, folderId: true },
-      });
-      const allBlastFolderIdsByFile = new Map<string, string[]>();
-      for (const link of allBlastLinks) {
-        allBlastFolderIdsByFile.set(link.fileId, [...(allBlastFolderIdsByFile.get(link.fileId) ?? []), link.folderId]);
-      }
-      const allBlastFolderAccess = await resolveFolderContentAccessBatch(userId, allBlastLinks.map((l) => l.folderId));
-      totalCount = allMatching.filter((p) => {
-        if (allFolderAccess.get(p.file.folderId)?.canRead) return true;
-        return (allBlastFolderIdsByFile.get(p.file.id) ?? []).some((bid) => allBlastFolderAccess.get(bid)?.canRead);
-      }).length;
-    }
+    const startIndex = cursor ? visibleAll.findIndex((p) => p.id === cursor) + 1 : 0;
+    const pageSlice = visibleAll.slice(startIndex, startIndex + PAGE_SIZE + 1);
+    const hasMore = pageSlice.length > PAGE_SIZE;
+    const visible = pageSlice.slice(0, PAGE_SIZE);
+    const nextCursor = hasMore ? visible[visible.length - 1]?.id ?? null : null;
+
+    // Total item yang BENAR-BENAR terlihat user ini untuk filter yang lagi aktif — cuma
+    // dikirim di halaman pertama (`!cursor`), sama seperti "N File" di daftar file folder.
+    const totalCount = cursor ? null : visibleAll.length;
 
     return NextResponse.json({ data: visible, hasMore, nextCursor, totalCount });
   } catch (err) {
