@@ -11,6 +11,14 @@ const HEALTH_CHECK_TIMEOUT_MS = 4000;
 const HEALTH_CACHE_TTL_MS = 60_000; // re-cek tiap 60 detik — cukup cepat untuk pulih dari
 // downtime sementara, cukup jarang untuk tidak membebani setiap request dengan health-check.
 let cachedBase: { url: string; ts: number } | null = null;
+// Single-flight (2026-10-01, fix bug nyata ditemukan di production): tanpa ini, kalau
+// BANYAK request datang bersamaan pas cache lagi kosong (mis. 1 halaman muat banyak
+// gambar sekaligus), MASING-MASING request independen menjalankan health-check-nya
+// sendiri-sendiri secara paralel — di bawah beban begitu, sebagian pengecekan ke domain
+// yang sebenarnya sehat ikut lambat & keburu timeout 4 detik juga, jadi salah jatuh balik
+// ke domain yang mati untuk request itu. Dengan ini, SATU health-check saja yang jalan;
+// semua request lain yang datang saat itu tinggal nebeng hasil yang sama.
+let inFlightCheck: Promise<string> | null = null;
 
 // status.php adalah endpoint bawaan Nextcloud yang publik TANPA auth, dirancang memang
 // untuk load-balancer/health-check semacam ini — lebih murah dari PROPFIND ke WebDAV yang
@@ -42,20 +50,33 @@ export async function getNextcloudBaseUrl(): Promise<string> {
 
   if (cachedBase && Date.now() - cachedBase.ts < HEALTH_CACHE_TTL_MS) return cachedBase.url;
 
-  // Cek primary & alternatif PARALEL (bukan berurutan) — kalau sequential, worst-case saat
-  // KEDUANYA down jadi 2x HEALTH_CHECK_TIMEOUT_MS (request yang kena cache-miss nunggu
-  // sampai 8 detik). Paralel menurunkan worst-case jadi cuma 1x timeout (~4 detik), dengan
-  // ongkos: primary yang sehat pun tetap ikut ping alternatif sekali per 60 detik (murah,
-  // 1 request /status.php tambahan, jauh lebih murah daripada nambah 4 detik ke request
-  // user yang apes kena cache-miss pas kedua domain mati).
-  const [primaryOk, altOk] = await Promise.all([isNextcloudReachable(PRIMARY_BASE), isNextcloudReachable(ALT_BASE)]);
-  const chosen = primaryOk ? PRIMARY_BASE : altOk ? ALT_BASE : PRIMARY_BASE;
+  // Request lain yang datang SAAT pengecekan sedang berjalan nebeng promise yang sama
+  // persis, bukan ikut menjalankan pengecekannya sendiri-sendiri (lihat catatan di
+  // deklarasi inFlightCheck).
+  if (inFlightCheck) return inFlightCheck;
 
-  if (chosen !== cachedBase?.url) {
-    console.log(`[nextcloud] base URL aktif: ${chosen}${chosen === ALT_BASE ? " (alternatif — primary sedang down)" : ""}`);
+  inFlightCheck = (async () => {
+    // Cek primary & alternatif PARALEL (bukan berurutan) — kalau sequential, worst-case saat
+    // KEDUANYA down jadi 2x HEALTH_CHECK_TIMEOUT_MS (request yang kena cache-miss nunggu
+    // sampai 8 detik). Paralel menurunkan worst-case jadi cuma 1x timeout (~4 detik), dengan
+    // ongkos: primary yang sehat pun tetap ikut ping alternatif sekali per 60 detik (murah,
+    // 1 request /status.php tambahan, jauh lebih murah daripada nambah 4 detik ke request
+    // user yang apes kena cache-miss pas kedua domain mati).
+    const [primaryOk, altOk] = await Promise.all([isNextcloudReachable(PRIMARY_BASE), isNextcloudReachable(ALT_BASE)]);
+    const chosen = primaryOk ? PRIMARY_BASE : altOk ? ALT_BASE : PRIMARY_BASE;
+
+    if (chosen !== cachedBase?.url) {
+      console.log(`[nextcloud] base URL aktif: ${chosen}${chosen === ALT_BASE ? " (alternatif — primary sedang down)" : ""}`);
+    }
+    cachedBase = { url: chosen, ts: Date.now() };
+    return chosen;
+  })();
+
+  try {
+    return await inFlightCheck;
+  } finally {
+    inFlightCheck = null;
   }
-  cachedBase = { url: chosen, ts: Date.now() };
-  return chosen;
 }
 
 function authHeader(): string {
