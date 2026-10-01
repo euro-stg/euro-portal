@@ -59,9 +59,19 @@ export default function EDocFileDetailPage() {
   // dari daftar folder biasa maupun dari hasil search, berisi folder yang SEDANG di-browse
   // saat itu, apapun jenisnya — primary atau Blast, sama-sama valid lewat breadcrumb
   // endpoint yang generic), fallback ke file.folderId kalau tidak ada (akses langsung/
-  // bookmark/dari Item Browser, yang memang tidak datang dari sesi browsing folder).
+  // bookmark, yang memang tidak datang dari sesi browsing folder).
+  //
+  // `fromItemBrowser` (2026-10-01, follow-up request sama hari) — Item/Promo Browser bukan
+  // folder sama sekali (daftar lintas folder), jadi tidak bisa dipakaikan mekanisme
+  // `?folderId=` di atas. Kalau file ini dibuka dari sana (ditandai lewat query string ini,
+  // dikirim oleh edoc-items/page.tsx), Back kembali ke halaman Item Browser itu sendiri,
+  // bukan ke folder manapun — prioritas PALING TINGGI, dicek sebelum fromFolderId/file.folderId.
   const fromFolderId = searchParams.get("fromFolderId");
-  const backToFolder = (folderId: string) => router.push(`/apps/${appSlug}?folderId=${fromFolderId || folderId}`);
+  const fromItemBrowser = searchParams.get("fromItemBrowser") === "1";
+  const backToFolder = (folderId: string) => {
+    if (fromItemBrowser) { router.push(`/apps/${appSlug}/edoc-items`); return; }
+    router.push(`/apps/${appSlug}?folderId=${fromFolderId || folderId}`);
+  };
 
   const [file, setFile] = useState<FileDetail | null>(null);
   const [reference, setReference] = useState<Reference | null>(null);

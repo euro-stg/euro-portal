@@ -211,7 +211,9 @@ export default function EDocItemsPage() {
                 {products.map((p) => (
                   <tr
                     key={p.id}
-                    onClick={() => router.push(`/apps/${appSlug}/edoc-file/${p.file.id}`)}
+                    // fromItemBrowser (2026-10-01) — supaya tombol Back di halaman detail file
+                    // kembali ke sini (Item Browser), bukan ke folder asli file itu.
+                    onClick={() => router.push(`/apps/${appSlug}/edoc-file/${p.file.id}?fromItemBrowser=1`)}
                     className="hover:bg-amber-50/50 transition-colors cursor-pointer group align-top"
                   >
                     <td className="px-3 py-3 min-w-32">
