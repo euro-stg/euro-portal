@@ -4,19 +4,20 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   FolderOpen, Folder, FileText, Plus, Upload, Download, ChevronRight, ChevronDown, Home, Loader2,
-  Archive, X, Info, Pencil, Trash2, AlertTriangle, Search, Check, Package,
+  Archive, X, Info, Pencil, Trash2, AlertTriangle, Search, Check, Package, FolderInput,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { Alert } from "@/components/ui/alert";
 import { MultiSelect, type MultiSelectOption } from "./_edoc-multiselect";
+import { buildFolderTree, type FlatFolder, type FolderTreeNode, FolderTreeSingleSelectBody } from "./_edoc-folder-tree-picker";
 
 type Me = { userId: string; isSuperadmin: boolean; isFolderCreator: boolean; isDocumentApprover: boolean; businessUnits: string[] };
 type FolderItem = { id: string; name: string; type: string; createdBy: string; createdAt: string; canRead: boolean; canWrite: boolean };
 type FileItem = {
   id: string; title: string; description: string | null; fileUrl: string;
   requiresNumber: boolean; documentNumber: string | null; mocNumber: string | null; status: string;
-  bulkImported?: boolean;
+  bulkImported?: boolean; uploadedBy: string;
   startDate: string | null; endDate: string | null; createdAt: string; isBlasted?: boolean;
   category: { id: string; code: string; name: string } | null;
   categoryType: { id: string; code: string; name: string } | null;
@@ -74,6 +75,14 @@ export function EDocApp() {
   const [loadingMoreFiles, setLoadingMoreFiles] = useState(false);
   const [totalFileCount, setTotalFileCount] = useState<number | null>(null);
   const [canWriteCurrent, setCanWriteCurrent] = useState(false);
+  // "Pindahkan N File" massal (2026-09-30) — checkbox pilih-banyak di daftar file folder
+  // ini. File yang bukan milik user ini (dan user bukan superadmin) checkbox-nya disabled
+  // dari awal, bukan dibiarkan terpilih lalu gagal belakangan — sama persis izin per-file
+  // di POST /api/edoc/file/[id]/move (uploader file itu sendiri, atau superadmin).
+  const [selectedFileIds, setSelectedFileIds] = useState<Set<string>>(new Set());
+  const [showBulkMove, setShowBulkMove] = useState(false);
+  const canMoveFile = (file: FileItem) => !!me && (me.isSuperadmin || file.uploadedBy === me.userId);
+  const toggleFileSelected = (id: string) => setSelectedFileIds((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   const [loading, setLoading] = useState(true);
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [showUploadFile, setShowUploadFile] = useState(false);
@@ -135,6 +144,7 @@ export function EDocApp() {
 
   const load = useCallback(async (folderId: string | null) => {
     setLoading(true);
+    setSelectedFileIds(new Set()); // pindah folder -> pilihan lama (folder berbeda) tidak relevan lagi
     try {
       const folderQs = folderId ? `?parentFolderId=${folderId}` : "";
       const folderRes = await fetch(`/api/edoc/folder${folderQs}`);
@@ -532,16 +542,36 @@ export function EDocApp() {
             <div>
               {/* Total file di folder ini (2026-09-22) — dihitung server-side terpisah dari
                   daftar yang dipaginate, jadi tetap akurat meski baru sebagian ter-load. */}
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">
-                {totalFileCount !== null ? `${totalFileCount} File` : "File"}
-              </p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
+                  {totalFileCount !== null ? `${totalFileCount} File` : "File"}
+                </p>
+                {selectedFileIds.size > 0 && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-500">{selectedFileIds.size} dipilih</span>
+                    <button onClick={() => setSelectedFileIds(new Set())} className="text-xs text-slate-400 hover:text-red-500 transition-colors">Batalkan</button>
+                    <Button size="sm" onClick={() => setShowBulkMove(true)} className="bg-amber-600 hover:bg-amber-700 text-white flex items-center gap-1.5">
+                      <FolderInput className="w-3.5 h-3.5" /> Pindahkan {selectedFileIds.size} File
+                    </Button>
+                  </div>
+                )}
+              </div>
               <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-50">
-              {files.map((file) => (
+              {files.map((file) => {
+                const movable = canMoveFile(file);
+                return (
                 <button
                   key={file.id}
                   onClick={() => router.push(`/apps/${appSlug}/edoc-file/${file.id}`)}
                   className="w-full flex items-center gap-4 px-5 py-3.5 hover:bg-slate-50 transition-colors text-left group"
                 >
+                  <span
+                    role="checkbox" aria-checked={selectedFileIds.has(file.id)} title={movable ? undefined : "Bukan pembuat file ini"}
+                    onClick={(e) => { e.stopPropagation(); if (movable) toggleFileSelected(file.id); }}
+                    className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${!movable ? "border-slate-200 bg-slate-50 cursor-not-allowed" : selectedFileIds.has(file.id) ? "bg-amber-600 border-amber-600 cursor-pointer" : "border-slate-300 cursor-pointer"}`}
+                  >
+                    {selectedFileIds.has(file.id) && <Check className="w-3 h-3 text-white" />}
+                  </span>
                   <div className="w-9 h-9 rounded-lg bg-red-50 flex items-center justify-center shrink-0">
                     <FileText className="w-4 h-4 text-red-400" />
                   </div>
@@ -561,7 +591,8 @@ export function EDocApp() {
                   </div>
                   <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-amber-400 shrink-0 transition-colors" />
                 </button>
-              ))}
+                );
+              })}
               {/* Sentinel infinite scroll — begitu masuk viewport, batch berikutnya
                   dimuat otomatis (lihat loadMoreFiles/IntersectionObserver di atas).
                   Spinner cuma tampil selagi benar-benar fetching (loadingMoreFiles) —
@@ -611,6 +642,25 @@ export function EDocApp() {
         <BulkItemMatchModal
           onClose={() => setShowBulkItemMatch(false)}
           onDone={() => { void load(currentFolderId); }}
+          onError={(m) => showToast("error", m)}
+        />
+      )}
+
+      {showBulkMove && currentFolderId && (
+        <BulkMoveFilesModal
+          fileIds={Array.from(selectedFileIds)}
+          currentFolderId={currentFolderId}
+          onClose={() => setShowBulkMove(false)}
+          onDone={(result) => {
+            setShowBulkMove(false);
+            setSelectedFileIds(new Set());
+            void load(currentFolderId);
+            if (result.failed.length === 0) {
+              showToast("success", `${result.movedCount} file berhasil dipindahkan`);
+            } else {
+              showToast("error", `${result.movedCount} berhasil, ${result.failed.length} gagal: ${result.failed.map((f) => f.title).join(", ")}`);
+            }
+          }}
           onError={(m) => showToast("error", m)}
         />
       )}
@@ -956,24 +1006,6 @@ function DeleteFolderModal({
 // SUDAH dipilih, karena nama folder bisa sama di lokasi berbeda (nama saja bisa bikin
 // bingung folder mana yang sebenarnya kepilih).
 export type BlastFolderOption = { id: string; name: string; path: string };
-export type FlatFolder = { id: string; name: string; parentFolderId: string | null };
-export type FolderTreeNode = FlatFolder & { children: FolderTreeNode[] };
-
-export function buildFolderTree(flat: FlatFolder[]): FolderTreeNode[] {
-  const byId = new Map<string, FolderTreeNode>();
-  for (const f of flat) byId.set(f.id, { ...f, children: [] });
-  const roots: FolderTreeNode[] = [];
-  for (const node of byId.values()) {
-    const parent = node.parentFolderId ? byId.get(node.parentFolderId) : undefined;
-    if (parent) parent.children.push(node); else roots.push(node);
-  }
-  const sortRec = (nodes: FolderTreeNode[]) => {
-    nodes.sort((a, b) => a.name.localeCompare(b.name));
-    nodes.forEach((n) => sortRec(n.children));
-  };
-  sortRec(roots);
-  return roots;
-}
 
 // Folder MANAPUN bisa jadi tujuan Blast (bebas, tidak dicek akses — keputusan eksplisit
 // user) — file yang sama ikut muncul di folder-folder ini juga (link, bukan disalin
@@ -1126,6 +1158,53 @@ export function BlastEmailCriteriaEditor({
       <MultiSelect label="Jabatan" options={reference.positions} selected={value.positionIds} onChange={(v) => onChange({ ...value, positionIds: v })} />
       <MultiSelect label="Business Unit" options={buOptions} selected={value.businessUnitCodes} onChange={(v) => onChange({ ...value, businessUnitCodes: v })} />
     </div>
+  );
+}
+
+// ===================== Bulk Move Files Modal =====================
+
+type BulkMoveResult = { movedCount: number; failed: { id: string; title: string; message: string }[] };
+
+// "Pindahkan N File" (2026-09-30) — versi massal dari MoveFileButton (edoc-file/[fileId]/
+// _move-file-modal.tsx). Satu kali panggil POST /api/edoc/file/move-many, bukan N kali
+// panggil /move satu-satu — lihat catatan di route itu kenapa.
+function BulkMoveFilesModal({
+  fileIds, currentFolderId, onClose, onDone, onError,
+}: {
+  fileIds: string[]; currentFolderId: string; onClose: () => void; onDone: (result: BulkMoveResult) => void; onError: (m: string) => void;
+}) {
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [moving, setMoving] = useState(false);
+
+  const handleMove = async () => {
+    if (!selectedId) return;
+    setMoving(true);
+    try {
+      const res = await fetch("/api/edoc/file/move-many", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fileIds, folderId: selectedId }),
+      });
+      const json = await res.json();
+      if (!res.ok) { onError(json.message || "Gagal memindahkan file"); return; }
+      onDone(json);
+    } finally { setMoving(false); }
+  };
+
+  return (
+    <Modal open title={`Pindahkan ${fileIds.length} File ke Folder Lain`} onClose={onClose} boxClassName="max-w-xl">
+      <div className="space-y-3">
+        <p className="text-xs text-slate-400">
+          Pilih 1 folder tujuan untuk semua file terpilih. Kalau ada yang gagal (mis. nama file bentrok di tujuan), file
+          lainnya tetap lanjut dipindah — hasilnya dilaporkan per file.
+        </p>
+        <FolderTreeSingleSelectBody disabledFolderId={currentFolderId} selectedId={selectedId} onSelect={setSelectedId} />
+        <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+          <Button variant="outline" onClick={onClose}>Batal</Button>
+          <Button disabled={!selectedId || moving} onClick={handleMove} className="bg-amber-600 hover:bg-amber-700 text-white flex items-center gap-2">
+            {moving ? <Loader2 className="w-4 h-4 animate-spin" /> : <FolderInput className="w-4 h-4" />} Pindahkan {fileIds.length} File
+          </Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
