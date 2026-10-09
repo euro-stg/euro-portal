@@ -1267,6 +1267,7 @@ function UploadFileModal({
   const [obsoleteDestinationFolderId, setObsoleteDestinationFolderId] = useState("");
   const [obsoleteFolders, setObsoleteFolders] = useState<{ id: string; name: string }[]>([]);
   const [requiresItemImport, setRequiresItemImport] = useState(false);
+  const [allowDownload, setAllowDownload] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [productExcel, setProductExcel] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -1364,6 +1365,7 @@ function UploadFileModal({
       if (endDate) fd.append("endDate", endDate);
       if (obsoleteDestinationFolderId) fd.append("obsoleteDestinationFolderId", obsoleteDestinationFolderId);
       fd.append("requiresItemImport", String(requiresItemImport));
+      fd.append("allowDownload", String(allowDownload));
       if (requiresItemImport && productExcel) fd.append("productExcel", productExcel);
       fd.append("file", file);
 
@@ -1492,6 +1494,14 @@ function UploadFileModal({
           File ini akan masuk antrian Approval Document (Document Number wajib untuk semua file).
         </p>
 
+        <div>
+          <label className="flex items-center gap-2 text-sm text-slate-600">
+            <input type="checkbox" checked={allowDownload} onChange={(e) => setAllowDownload(e.target.checked)} className="rounded border-slate-300" />
+            Izinkan download PDF
+          </label>
+          <p className="text-xs text-slate-400 mt-1 pl-6">Kalau tidak dicentang, file hanya bisa dilihat lewat viewer (tanpa download/print).</p>
+        </div>
+
         {selectedCategory?.code === "IM" && (
           <div>
             <label className="flex items-center gap-2 text-sm text-slate-600">
@@ -1575,7 +1585,7 @@ const queueKey = (f: File) => `${f.name}-${f.size}`;
 const UPLOAD_TIMEOUT_MS = 5 * 60 * 1000;
 
 function uploadOneFile(
-  file: File, folderId: string, categoryId: string, idempotencyKey: string, onProgress: (pct: number) => void
+  file: File, folderId: string, categoryId: string, allowDownload: boolean, idempotencyKey: string, onProgress: (pct: number) => void
 ): Promise<{ ok: boolean; message?: string }> {
   return new Promise((resolve) => {
     const xhr = new XMLHttpRequest();
@@ -1594,6 +1604,7 @@ function uploadOneFile(
     const fd = new FormData();
     fd.append("folderId", folderId);
     fd.append("categoryId", categoryId);
+    fd.append("allowDownload", String(allowDownload));
     fd.append("idempotencyKey", idempotencyKey);
     fd.append("file", file);
     xhr.send(fd);
@@ -1607,6 +1618,7 @@ function BulkUploadModal({
   onClose: () => void; onDone: (succeeded: number) => void; onError: (m: string) => void;
 }) {
   const [categoryId, setCategoryId] = useState("");
+  const [allowDownload, setAllowDownload] = useState(false);
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [running, setRunning] = useState(false);
   const [started, setStarted] = useState(false);
@@ -1639,7 +1651,7 @@ function BulkUploadModal({
     for (const item of items) {
       const key = queueKey(item.file);
       updateItem(key, { status: "uploading", progress: 0, error: undefined });
-      const result = await uploadOneFile(item.file, folderId, categoryId, item.idempotencyKey, (pct) => updateItem(key, { progress: pct }));
+      const result = await uploadOneFile(item.file, folderId, categoryId, allowDownload, item.idempotencyKey, (pct) => updateItem(key, { progress: pct }));
       if (result.ok) { updateItem(key, { status: "success", progress: 100 }); successCount++; }
       else updateItem(key, { status: "error", error: result.message });
     }
@@ -1678,6 +1690,14 @@ function BulkUploadModal({
             {reference.categories.map((c) => <option key={c.id} value={c.id}>{c.code} — {c.name}</option>)}
           </select>
           <p className="text-xs text-slate-400 mt-1">Berlaku untuk semua file dalam batch ini — kalau ada category lain, upload di batch terpisah.</p>
+        </div>
+
+        <div>
+          <label className="flex items-center gap-2 text-sm text-slate-600">
+            <input type="checkbox" checked={allowDownload} onChange={(e) => setAllowDownload(e.target.checked)} disabled={started} className="rounded border-slate-300" />
+            Izinkan download PDF
+          </label>
+          <p className="text-xs text-slate-400 mt-1 pl-6">Berlaku untuk semua file dalam batch ini. Kalau tidak dicentang, file hanya bisa dilihat lewat viewer.</p>
         </div>
 
         <div>

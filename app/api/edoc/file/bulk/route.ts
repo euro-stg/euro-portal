@@ -44,6 +44,9 @@ export async function POST(request: Request) {
     // client, mis. koneksi putus persis di detik terakhir), kembalikan row yang SUDAH ADA
     // apa adanya — JANGAN buat file baru — supaya retry tidak pernah menghasilkan dobel.
     const idempotencyKey = (formData.get("idempotencyKey") as string | null) || null;
+    // Satu checkbox per batch di Bulk Upload (2026-10-07), default tidak dicentang = semua
+    // file di batch ini view-only.
+    const allowDownload = formData.get("allowDownload") === "true";
 
     if (!folderId) return NextResponse.json({ message: "folderId wajib diisi" }, { status: 400 });
     if (!categoryId) return NextResponse.json({ message: "Category wajib dipilih" }, { status: 400 });
@@ -122,6 +125,7 @@ export async function POST(request: Request) {
           // (sebelumnya disembunyikan total kalau flag ini false), jadi kelihatan jelas kalau
           // item-nya belum dilengkapi. Kategori lain tidak terpengaruh (flag tetap false).
           requiresItemImport: category.code === "IM",
+          allowDownload,
           status: "RELEASE",
           bulkImported: true,
           uploadedBy: userId,

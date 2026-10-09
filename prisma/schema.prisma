@@ -1012,6 +1012,13 @@ model EDocFile {
   // di-approve (lihat POST /api/edoc/file/[id]/approve). Kalau false, section
   // Produk/Promo Terkait disembunyikan total di halaman detail file.
   requiresItemImport Boolean @default(false)
+  // Izin download PDF (2026-10-07) — default false: file cuma bisa DILIHAT lewat viewer
+  // internal (GET /api/edoc/file/[id]/view, tanpa tombol download/print), download asli
+  // (GET .../download, attachment) ditolak 403. Tidak ada role yang dikecualikan
+  // (superadmin/uploader juga ikut flag ini) — yang berhak cukup nyalakan flag-nya lewat
+  // Edit (gerbangnya sama dengan canEditFileMetadata). File lama ikut false saat migrasi
+  // (keputusan user: semua file existing dikunci dulu).
+  allowDownload      Boolean @default(false)
   documentNumber     String? // null until approved (or typed in manually on a bulk-imported file — see bulkImported)
   mocNumber          String? // null until MOC generated (optional, separate action)
   status             String  @default("DRAFT") // "DRAFT" | "RELEASE" | "REJECTED"

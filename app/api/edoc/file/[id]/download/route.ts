@@ -14,7 +14,7 @@ export async function GET(
     const userId = session.user.id;
 
     const { id } = await params;
-    const file = await db.eDocFile.findFirst({ where: { id, deletedAt: null }, select: { id: true, fileUrl: true, title: true, folderId: true, status: true, uploadedBy: true } });
+    const file = await db.eDocFile.findFirst({ where: { id, deletedAt: null }, select: { id: true, fileUrl: true, title: true, folderId: true, status: true, uploadedBy: true, allowDownload: true } });
     if (!file) return NextResponse.json({ message: "File tidak ditemukan" }, { status: 404 });
 
     // Sebelumnya cuma cek ACL folder biasa — Document Approver yang tidak punya akses ACL
@@ -22,6 +22,11 @@ export async function GET(
     // buka PDF-nya (404 di sini). Dibenerin 2026-09-21 pakai canViewFile yang konsisten
     // dengan gerbang di GET /api/edoc/file/[id].
     if (!(await canViewFile(userId, file))) return NextResponse.json({ message: "File tidak ditemukan" }, { status: 404 });
+    // Izin download per file (2026-10-07) — tanpa pengecualian role, superadmin/uploader juga
+    // ikut flag ini. Melihat isinya tetap bisa lewat /view (viewer internal).
+    if (!file.allowDownload) {
+      return NextResponse.json({ message: "File ini tidak diizinkan untuk di-download" }, { status: 403 });
+    }
 
     const nextcloudRes = await downloadEDocFile(file.fileUrl).catch(() => null);
     if (!nextcloudRes || !nextcloudRes.ok) {
@@ -32,7 +37,7 @@ export async function GET(
     return new NextResponse(new Uint8Array(buffer), {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `inline; filename="${file.title.replace(/[^a-zA-Z0-9._ -]/g, "-")}.pdf"`,
+        "Content-Disposition": `attachment; filename="${file.title.replace(/[^a-zA-Z0-9._ -]/g, "-")}.pdf"`,
         "Cache-Control": "no-cache, no-store, must-revalidate",
       },
     });

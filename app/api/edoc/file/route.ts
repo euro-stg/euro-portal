@@ -171,6 +171,8 @@ export async function POST(request: Request) {
     // dikirim.
     const requiresNumber = true;
     const requiresItemImport = formData.get("requiresItemImport") === "true";
+    // Default TIDAK bisa download (2026-10-07) — cuma true kalau dicentang eksplisit di form.
+    const allowDownload = formData.get("allowDownload") === "true";
     const productExcel = formData.get("productExcel") as File | null;
 
     if (!folderId) return NextResponse.json({ message: "folderId wajib diisi" }, { status: 400 });
@@ -270,6 +272,7 @@ export async function POST(request: Request) {
         fileUrl,
         requiresNumber,
         requiresItemImport,
+        allowDownload,
         status: "DRAFT",
         uploadedBy: userId,
       },

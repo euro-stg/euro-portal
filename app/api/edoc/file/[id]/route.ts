@@ -59,8 +59,12 @@ export async function GET(
     // superadmin, titik).
     const canMove = superadmin || file.uploadedBy === userId;
 
+    // Download (2026-10-07) murni ikut flag per file — tidak ada role yang dikecualikan,
+    // lihat EDocFile.allowDownload. Melihat isi PDF selalu boleh lewat viewer (/view).
+    const canDownload = file.allowDownload;
+
     return NextResponse.json({
-      data: file, canWrite: canManage, canDelete: canManage, canManageBlast, canEditMetadata, canMove,
+      data: file, canWrite: canManage, canDelete: canManage, canManageBlast, canEditMetadata, canMove, canDownload,
       isDocumentApprover: approver || superadmin,
     });
   } catch (err) {
@@ -214,6 +218,7 @@ export async function PATCH(
     if ("mocNumber" in body) data.mocNumber = typeof body.mocNumber === "string" ? body.mocNumber.trim() || null : null;
 
     if (typeof body.requiresItemImport === "boolean") data.requiresItemImport = body.requiresItemImport;
+    if (typeof body.allowDownload === "boolean") data.allowDownload = body.allowDownload;
 
     const updated = await db.eDocFile.update({ where: { id }, data });
     return NextResponse.json({ data: updated });

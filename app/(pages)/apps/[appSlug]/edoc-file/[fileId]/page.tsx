@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
-  ArrowLeft, FileText, Download, Upload, Loader2, CheckCircle2, XCircle, Hash, History, Clock, Trash2, Radio, Pencil,
+  ArrowLeft, FileText, Download, Upload, Loader2, CheckCircle2, XCircle, Hash, History, Clock, Trash2, Radio, Pencil, Eye, Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
@@ -12,11 +12,12 @@ import { FeedbackSection } from "./_feedback-section";
 import { ImProductSection } from "./_im-product-section";
 import { BlastFolderPicker, type BlastFolderOption, BlastEmailCriteriaEditor, type BlastEmailCriteriaValue } from "../../_edoc-app";
 import { MoveFileButton } from "./_move-file-modal";
+import { PdfViewerModal } from "./_pdf-viewer";
 import { MultiSelect, type MultiSelectOption } from "../../_edoc-multiselect";
 
 type FileDetail = {
   id: string; folderId: string; title: string; description: string | null; fileUrl: string;
-  requiresNumber: boolean; requiresItemImport: boolean; documentNumber: string | null; mocNumber: string | null; status: string;
+  requiresNumber: boolean; requiresItemImport: boolean; allowDownload: boolean; documentNumber: string | null; mocNumber: string | null; status: string;
   bulkImported: boolean;
   approvalNote: string | null; approvedAt: string | null;
   rejectionNote: string | null; rejectedAt: string | null;
@@ -80,6 +81,8 @@ export default function EDocFileDetailPage() {
   const [canManageBlast, setCanManageBlast] = useState(false);
   const [canEditMetadata, setCanEditMetadata] = useState(false);
   const [canMove, setCanMove] = useState(false);
+  const [canDownload, setCanDownload] = useState(false);
+  const [showViewer, setShowViewer] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [isDocumentApprover, setIsDocumentApprover] = useState(false);
   const [blastFolders, setBlastFolders] = useState<BlastFolderOption[]>([]);
@@ -117,6 +120,7 @@ export default function EDocFileDetailPage() {
       setCanManageBlast(!!json.canManageBlast);
       setCanEditMetadata(!!json.canEditMetadata);
       setCanMove(!!json.canMove);
+      setCanDownload(!!json.canDownload);
       setIsDocumentApprover(!!json.isDocumentApprover);
     } finally { setLoading(false); }
   }, [fileId]);
@@ -360,11 +364,20 @@ export default function EDocFileDetailPage() {
         )}
 
         <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
-          <a href={`/api/edoc/file/${fileId}/download`} target="_blank" rel="noreferrer">
-            <Button variant="outline" className="flex items-center gap-2">
-              <Download className="w-4 h-4" /> Lihat / Download PDF
-            </Button>
-          </a>
+          <Button variant="outline" className="flex items-center gap-2" onClick={() => setShowViewer(true)}>
+            <Eye className="w-4 h-4" /> Lihat PDF
+          </Button>
+          {canDownload ? (
+            <a href={`/api/edoc/file/${fileId}/download`}>
+              <Button variant="outline" className="flex items-center gap-2">
+                <Download className="w-4 h-4" /> Download
+              </Button>
+            </a>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-xs text-slate-400" title="File ini hanya bisa dilihat, tidak bisa di-download">
+              <Lock className="w-3.5 h-3.5" /> Tidak bisa di-download
+            </span>
+          )}
           {canMove && (
             <MoveFileButton
               fileId={fileId} currentFolderId={file.folderId}
@@ -478,6 +491,10 @@ export default function EDocFileDetailPage() {
         <ImProductSection fileId={fileId} uploaderId={file.uploader.id} bulkImported={file.bulkImported} businessUnitCodes={file.businessUnitCodes} />
       )}
 
+      {showViewer && (
+        <PdfViewerModal fileId={fileId} title={file.title} canDownload={canDownload} onClose={() => setShowViewer(false)} />
+      )}
+
       {showEditModal && reference && (
         <EditFileModal
           file={file}
@@ -523,6 +540,7 @@ function EditFileModal({
   const [documentNumber, setDocumentNumber] = useState(file.documentNumber ?? "");
   const [mocNumber, setMocNumber] = useState(file.mocNumber ?? "");
   const [requiresItemImport, setRequiresItemImport] = useState(file.requiresItemImport);
+  const [allowDownload, setAllowDownload] = useState(file.allowDownload);
   const [saving, setSaving] = useState(false);
 
   const selectedCategory = reference.categories.find((c) => c.id === categoryId);
@@ -586,6 +604,7 @@ function EditFileModal({
           documentNumber: documentNumber.trim(),
           mocNumber: mocNumber.trim(),
           requiresItemImport,
+          allowDownload,
         }),
       });
       const json = await res.json();
@@ -669,6 +688,11 @@ function EditFileModal({
             <input className={inputCls} value={mocNumber} onChange={(e) => setMocNumber(e.target.value)} />
           </div>
         </div>
+
+        <label className="flex items-center gap-2 text-sm text-slate-600">
+          <input type="checkbox" checked={allowDownload} onChange={(e) => setAllowDownload(e.target.checked)} className="rounded border-slate-300" />
+          Izinkan download PDF — kalau tidak dicentang, file hanya bisa dilihat lewat viewer
+        </label>
 
         {selectedCategory?.code === "IM" && (
           <label className="flex items-center gap-2 text-sm text-slate-600">
