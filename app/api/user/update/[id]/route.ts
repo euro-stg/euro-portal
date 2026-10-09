@@ -65,6 +65,11 @@ export async function PATCH(
     let hashedPassword: string | undefined;
 
     if (body.password && body.password.trim()) {
+      // Disamakan dengan aktivasi/reset password & create user (2026-10-09) — sebelumnya
+      // tidak ada cek panjang sama sekali di server, cuma "minimal 6" di form Profile.
+      if (body.password.trim().length < 8) {
+        return NextResponse.json({ message: "Password minimal 8 karakter" }, { status: 400 });
+      }
       hashedPassword = await bcrypt.hash(body.password, 10);
     }
 

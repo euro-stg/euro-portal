@@ -71,7 +71,7 @@ export default function ProfilePage() {
         return;
       }
       if (password !== confirmPassword) { setPasswordError("Password tidak cocok"); return; }
-      if (password.length < 6)          { setPasswordError("Minimal 6 karakter");    return; }
+      if (password.length < 8)          { setPasswordError("Minimal 8 karakter");    return; }
 
       const res  = await fetch(`/api/user/update/${user.id}`, {
         method: "PATCH",
@@ -161,7 +161,7 @@ export default function ProfilePage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Field label="Password Baru">
                 <input ref={passwordRef} type="password" className={inputCls}
-                  placeholder="Minimal 6 karakter" autoComplete="new-password" disabled={saving} />
+                  placeholder="Minimal 8 karakter" autoComplete="new-password" disabled={saving} />
               </Field>
               <Field label="Konfirmasi Password">
                 <input ref={confirmPasswordRef} type="password" className={inputCls}
