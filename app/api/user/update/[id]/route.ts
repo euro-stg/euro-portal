@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 
 import prisma from "@/lib/db/db";
-import { requireSession, unauthorized } from "@/lib/api-auth";
+import { requireSession, unauthorized, forbidden } from "@/lib/api-auth";
+import { hasPortalModuleAccess, PORTAL_MODULE } from "@/lib/module-permission";
 
 type UpdateBody = {
   name?: string;
@@ -24,7 +25,8 @@ export async function PATCH(
   context: { params: Promise<unknown> },
 ) {
   try {
-    if (!await requireSession()) return unauthorized();
+    const session = await requireSession();
+    if (!session?.user?.id) return unauthorized();
     const rawParams = await context.params;
 
     const id =
@@ -37,6 +39,14 @@ export async function PATCH(
     }
 
     const body: UpdateBody = await request.json().catch(() => ({}));
+
+    // Admin user (Master User) boleh ubah apa saja; selain itu cuma boleh ganti password
+    // MILIK SENDIRI (form Profile) — sebelumnya siapa pun yang login bisa ubah user mana pun,
+    // termasuk password/role superadmin (2026-10-13).
+    if (!(await hasPortalModuleAccess(session.user.id, [PORTAL_MODULE.user]))) {
+      const selfPasswordOnly = id === session.user.id && Object.keys(body).every((k) => k === "password");
+      if (!selfPasswordOnly) return forbidden();
+    }
 
     /* =========================
        ✅ GET EXISTING DATA

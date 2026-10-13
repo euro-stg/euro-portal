@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import db from "@/lib/db/db";
+import { forbidden } from "@/lib/api-auth";
+import { canManageSsdSettings } from "@/lib/module-permission";
 
 export async function PATCH(
   request: Request,
@@ -9,6 +11,7 @@ export async function PATCH(
   try {
     const session = await auth();
     if (!session?.user?.id) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    if (!(await canManageSsdSettings(session.user.id))) return forbidden();
 
     const { id } = await params;
     const body = await request.json().catch(() => ({}));
@@ -40,6 +43,7 @@ export async function DELETE(
   try {
     const session = await auth();
     if (!session?.user?.id) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    if (!(await canManageSsdSettings(session.user.id))) return forbidden();
 
     const { id } = await params;
     await db.ssdCategory.update({ where: { id }, data: { deletedAt: new Date() } });

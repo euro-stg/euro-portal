@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db/db";
+import { forbidden } from "@/lib/api-auth";
+import { hasPortalModuleAccess, PORTAL_MODULE } from "@/lib/module-permission";
 
 const VALID_SCOPES = [
   "ALL",
@@ -17,6 +19,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   try {
     const session = await auth();
     if (!session?.user?.id) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    if (!(await hasPortalModuleAccess(session.user.id, [PORTAL_MODULE.role]))) return forbidden();
 
     const { id } = await params;
     const body = await request.json().catch(() => ({}));

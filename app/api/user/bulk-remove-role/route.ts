@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import db from "@/lib/db/db";
+import { forbidden } from "@/lib/api-auth";
+import { hasPortalModuleAccess, PORTAL_MODULE } from "@/lib/module-permission";
 
 export async function POST(request: Request) {
   try {
     const session = await auth();
     if (!session?.user?.id) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    if (!(await hasPortalModuleAccess(session.user.id, [PORTAL_MODULE.user, PORTAL_MODULE.userBulkAssign]))) return forbidden();
 
     const body = await request.json().catch(() => ({}));
     const { userIds, appId, roleId } = body as { userIds?: string[]; appId?: string | null; roleId?: string };

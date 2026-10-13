@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db/db";
+import { forbidden } from "@/lib/api-auth";
+import { hasPortalModuleAccess, PORTAL_MODULE } from "@/lib/module-permission";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  if (!(await hasPortalModuleAccess(session.user.id, [PORTAL_MODULE.company]))) return forbidden();
 
   const { id } = await params;
   const body = await req.json().catch(() => ({}));
@@ -40,6 +43,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  if (!(await hasPortalModuleAccess(session.user.id, [PORTAL_MODULE.company]))) return forbidden();
 
   const { id } = await params;
   const company = await prisma.company.findFirst({ where: { id, deletedAt: null } });

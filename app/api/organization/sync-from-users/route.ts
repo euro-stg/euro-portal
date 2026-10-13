@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
-import { requireSession, unauthorized } from "@/lib/api-auth";
+import { requireSession, unauthorized, forbidden } from "@/lib/api-auth";
+import { hasPortalModuleAccess, PORTAL_MODULE } from "@/lib/module-permission";
 import db from "@/lib/db/db";
 
 export async function POST() {
   try {
-    if (!await requireSession()) return unauthorized();
+    const session = await requireSession();
+    if (!session?.user?.id) return unauthorized();
+    if (!(await hasPortalModuleAccess(session.user.id, [PORTAL_MODULE.organization]))) return forbidden();
 
     const users = await db.user.findMany({
       where: { status: "active", organizationId: { not: null } },

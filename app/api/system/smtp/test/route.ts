@@ -2,11 +2,14 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import nodemailer from "nodemailer";
 import { getSmtpConfig } from "@/api/system/smtp/route";
+import { forbidden } from "@/lib/api-auth";
+import { hasPortalModuleAccess, PORTAL_MODULE } from "@/lib/module-permission";
 
 export async function POST(request: Request) {
   try {
     const session = await auth();
     if (!session?.user?.id) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    if (!(await hasPortalModuleAccess(session.user.id, [PORTAL_MODULE.email]))) return forbidden();
 
     const body = await request.json().catch(() => ({}));
     const { to } = body as { to?: string };

@@ -3,6 +3,8 @@ import prisma from "@/lib/db/db";
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import { auth } from "@/lib/auth";
+import { forbidden } from "@/lib/api-auth";
+import { hasPortalModuleAccess, PORTAL_MODULE } from "@/lib/module-permission";
 import { writeFile, mkdir, unlink } from "fs/promises";
 import path from "path";
 
@@ -242,6 +244,7 @@ export async function POST(req: NextRequest) {
     if (!session?.user?.id) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
+    if (!(await hasPortalModuleAccess(session.user.id, [PORTAL_MODULE.user]))) return forbidden();
   }
 
   const trigger = isScheduled ? "scheduled" : "manual";

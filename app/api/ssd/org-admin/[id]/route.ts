@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
-import { requireSession, unauthorized } from "@/lib/api-auth";
+import { requireSession, unauthorized, forbidden } from "@/lib/api-auth";
 import db from "@/lib/db/db";
+import { canManageSsdSettings } from "@/lib/module-permission";
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    if (!await requireSession()) return unauthorized();
+    const session = await requireSession();
+    if (!session?.user?.id) return unauthorized();
+    if (!(await canManageSsdSettings(session.user.id))) return forbidden();
 
     const { id } = await params;
     const existing = await db.ssdOrgAdmin.findUnique({ where: { id } });

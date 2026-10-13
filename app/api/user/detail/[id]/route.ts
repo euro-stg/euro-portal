@@ -1,14 +1,17 @@
 import { NextResponse } from "next/server";
 
 import prisma from "@/lib/db/db";
-import { requireSession, unauthorized } from "@/lib/api-auth";
+import { requireSession, unauthorized, forbidden } from "@/lib/api-auth";
+import { hasPortalModuleAccess, PORTAL_MODULE } from "@/lib/module-permission";
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    if (!await requireSession()) return unauthorized();
+    const session = await requireSession();
+    if (!session?.user?.id) return unauthorized();
+    if (!(await hasPortalModuleAccess(session.user.id, [PORTAL_MODULE.user]))) return forbidden();
     const { id } = await params;
 
     const row = await prisma.user.findUnique({

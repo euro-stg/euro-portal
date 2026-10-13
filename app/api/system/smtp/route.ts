@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import db from "@/lib/db/db";
 import { encrypt, decrypt } from "@/lib/encryption";
+import { forbidden } from "@/lib/api-auth";
+import { hasPortalModuleAccess, PORTAL_MODULE } from "@/lib/module-permission";
 
 const SMTP_KEYS = ["smtp.host", "smtp.port", "smtp.secure", "smtp.user", "smtp.pass", "smtp.from"] as const;
 type SmtpKey = (typeof SMTP_KEYS)[number];
@@ -11,6 +13,7 @@ export async function GET() {
   try {
     const session = await auth();
     if (!session?.user?.id) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    if (!(await hasPortalModuleAccess(session.user.id, [PORTAL_MODULE.email]))) return forbidden();
 
     const rows = await db.systemConfig.findMany({ where: { key: { in: [...SMTP_KEYS] } } });
     const map = Object.fromEntries(rows.map((r) => [r.key, r.value]));
@@ -36,6 +39,7 @@ export async function PATCH(request: Request) {
   try {
     const session = await auth();
     if (!session?.user?.id) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    if (!(await hasPortalModuleAccess(session.user.id, [PORTAL_MODULE.email]))) return forbidden();
 
     const body = await request.json().catch(() => ({}));
     const { host, port, secure, user, pass, from } = body as {

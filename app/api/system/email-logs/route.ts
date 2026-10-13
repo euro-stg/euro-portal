@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import db from "@/lib/db/db";
+import { forbidden } from "@/lib/api-auth";
+import { hasPortalModuleAccess, PORTAL_MODULE } from "@/lib/module-permission";
 
 export async function GET(request: Request) {
   try {
     const session = await auth();
     if (!session?.user?.id) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    if (!(await hasPortalModuleAccess(session.user.id, [PORTAL_MODULE.email]))) return forbidden();
 
     const { searchParams } = new URL(request.url);
     const page   = Math.max(1, Number(searchParams.get("page")  ?? 1));
@@ -47,6 +50,7 @@ export async function DELETE(request: Request) {
   try {
     const session = await auth();
     if (!session?.user?.id) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    if (!(await hasPortalModuleAccess(session.user.id, [PORTAL_MODULE.email]))) return forbidden();
 
     const body = await request.json().catch(() => ({}));
     const { before } = body as { before?: string };

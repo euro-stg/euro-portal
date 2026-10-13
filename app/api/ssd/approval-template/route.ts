@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import db from "@/lib/db/db";
+import { forbidden } from "@/lib/api-auth";
+import { canManageSsdSettings } from "@/lib/module-permission";
 
 export async function GET() {
   try {
     const session = await auth();
     if (!session?.user?.id) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    if (!(await canManageSsdSettings(session.user.id))) return forbidden();
 
     const templates = await db.ssdApprovalTemplate.findMany({
       where: { deletedAt: null },
@@ -23,6 +26,7 @@ export async function POST(request: Request) {
   try {
     const session = await auth();
     if (!session?.user?.id) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    if (!(await canManageSsdSettings(session.user.id))) return forbidden();
 
     const body = await request.json().catch(() => ({}));
     const { name, steps } = body as {

@@ -9,3 +9,6 @@ export async function requireSession() {
 
 export const unauthorized = () =>
   NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+
+export const forbidden = (message = "Anda tidak memiliki akses untuk tindakan ini") =>
+  NextResponse.json({ message }, { status: 403 });

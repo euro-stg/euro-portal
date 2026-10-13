@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db/db";
-import { requireSession, unauthorized } from "@/lib/api-auth";
+import { requireSession, unauthorized, forbidden } from "@/lib/api-auth";
+import { hasPortalModuleAccess, PORTAL_MODULE } from "@/lib/module-permission";
 
 // DELETE: remove a specific role from a user by userId + appId scope
 export async function DELETE(request: Request) {
   try {
-    if (!await requireSession()) return unauthorized();
+    const session = await requireSession();
+    if (!session?.user?.id) return unauthorized();
+    if (!(await hasPortalModuleAccess(session.user.id, [PORTAL_MODULE.user]))) return forbidden();
     const body = await request.json().catch(() => ({}));
     const { userId, appId } = body as { userId?: string; appId?: string | null };
 

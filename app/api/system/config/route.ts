@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import db from "@/lib/db/db";
 import { invalidateNotifCache } from "@/lib/system-config";
+import { forbidden } from "@/lib/api-auth";
+import { hasPortalModuleAccess, PORTAL_MODULE } from "@/lib/module-permission";
 
 const NOTIF_KEYS = ["notifications.inapp", "notifications.email"] as const;
 type NotifKey = (typeof NOTIF_KEYS)[number];
@@ -10,6 +12,7 @@ export async function GET() {
   try {
     const session = await auth();
     if (!session?.user?.id) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    if (!(await hasPortalModuleAccess(session.user.id, [PORTAL_MODULE.notification]))) return forbidden();
 
     const rows = await db.systemConfig.findMany({ where: { key: { in: [...NOTIF_KEYS] } } });
     const map = Object.fromEntries(rows.map((r) => [r.key, r.value]));
@@ -30,6 +33,7 @@ export async function PATCH(request: Request) {
   try {
     const session = await auth();
     if (!session?.user?.id) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    if (!(await hasPortalModuleAccess(session.user.id, [PORTAL_MODULE.notification]))) return forbidden();
 
     const body = await request.json().catch(() => ({}));
 

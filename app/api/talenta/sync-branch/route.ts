@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db/db";
 import { auth } from "@/lib/auth";
+import { forbidden } from "@/lib/api-auth";
+import { hasPortalModuleAccess, PORTAL_MODULE } from "@/lib/module-permission";
 import { talentaGet } from "@/lib/talenta";
 
 export const maxDuration = 120;
@@ -32,6 +34,7 @@ export async function POST(req: NextRequest) {
   if (!isScheduled) {
     const session = await auth();
     if (!session?.user?.id) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    if (!(await hasPortalModuleAccess(session.user.id, [PORTAL_MODULE.branch]))) return forbidden();
   }
 
   const trigger = isScheduled ? "scheduled" : "manual";
