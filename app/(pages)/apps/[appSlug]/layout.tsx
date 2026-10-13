@@ -105,7 +105,9 @@ export default async function AppLayout({
     });
     const owner = appModulePaths
       .map((m) => m.path)
-      .filter((p) => pathname === p || pathname.startsWith(p + "/"))
+      // Halaman root app (mis. menu "Beranda" SD yang path-nya = path app) selalu boleh
+      // dibuka oleh pemilik role app ini — kartu app di dashboard mengarah ke sana.
+      .filter((p) => p !== appPath && (pathname === p || pathname.startsWith(p + "/")))
       .sort((a, b) => b.length - a.length)[0];
     if (owner && !modules.some((m) => m.path === owner)) redirect("/");
   }
