@@ -63,3 +63,6 @@ deploy.sh
 # design docs — lokal saja, bukan bagian dari kode
 /EDOC_Requirements_and_Task_Breakdown.pdf
 /Panduan_Pengguna_Portal_Euromedica.pdf
+
+# user guide tooling & output (lokal saja, tidak di-commit)
+/script/user-guide/

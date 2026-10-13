@@ -66,8 +66,11 @@ export default async function ProtectedLayout({
   const headersList = await headers();
   const pathname = headersList.get("x-pathname") ?? "/";
 
-  // Halaman umum yang selalu boleh diakses
-  const isPublicPage = pathname === "/" || pathname.startsWith("/profile");
+  // Halaman umum yang selalu boleh diakses. /apps/* dicek sendiri oleh
+  // apps/[appSlug]/layout.tsx (harus punya role di app tsb) — dulu ikut dicek di sini
+  // terhadap module PORTAL, jadi user non-superadmin yang buka link app langsung (refresh,
+  // bookmark, link di email notifikasi) selalu terlempar ke "/" (2026-10-13).
+  const isPublicPage = pathname === "/" || pathname.startsWith("/profile") || pathname.startsWith("/apps/");
 
   if (!isPublicPage) {
     // superadmin boleh semua, role lain hanya boleh path yang ada di modules-nya

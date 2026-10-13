@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 
 import { auth } from "@/lib/auth";
 import { AppShell } from "@/components/ui/app-shell";
@@ -90,6 +91,23 @@ export default async function AppLayout({
     if (!approver) {
       modules = modules.filter((m) => !m.path.includes("/approval"));
     }
+  }
+
+  // Halaman yang "milik" sebuah menu (cocok prefix terpanjang dengan path module app ini)
+  // hanya boleh dibuka kalau menu itu ada di sidebar user — sama seperti gerbang halaman
+  // portal. Halaman yang bukan milik menu mana pun (mis. detail file E Document) tetap
+  // terbuka untuk semua yang punya role di app ini.
+  if (portalRole !== "superadmin") {
+    const pathname = (await headers()).get("x-pathname") ?? appPath;
+    const appModulePaths = await db.module.findMany({
+      where: { appId: appModule.id, type: "module", status: "active", deletedAt: null },
+      select: { path: true },
+    });
+    const owner = appModulePaths
+      .map((m) => m.path)
+      .filter((p) => pathname === p || pathname.startsWith(p + "/"))
+      .sort((a, b) => b.length - a.length)[0];
+    if (owner && !modules.some((m) => m.path === owner)) redirect("/");
   }
 
   const envMode = process.env["ENV_MODE"] ?? "PRODUCTION";
