@@ -376,15 +376,14 @@ export function EDocApp() {
               <Plus className="w-4 h-4" /> Folder Baru
             </Button>
           )}
-          {currentFolderId && canWriteCurrent && (
+          {currentFolderId && me?.isSuperadmin && (
             <Button onClick={() => setShowBulkUpload(true)} variant="outline" className="flex items-center gap-2">
               <Upload className="w-4 h-4" /> Bulk Upload
             </Button>
           )}
-          {/* Lintas folder (bukan cuma folder yang lagi dibuka) — sengaja gate-nya beda
-              dari Bulk Upload di atas (write-ACL 1 folder), pakai role Folder Creator
-              global saja, karena tool ini beroperasi ke SEMUA file Category IM sekaligus. */}
-          {me?.isFolderCreator && (
+          {/* Bulk Upload & Cocokkan & Import Item khusus superadmin (2026-10-14) — dua-duanya
+              alat migrasi yang melewati alur approval normal. Server juga mengecek ini. */}
+          {me?.isSuperadmin && (
             <Button onClick={() => setShowBulkItemMatch(true)} variant="outline" className="flex items-center gap-2">
               <Package className="w-4 h-4" /> Cocokkan & Import Item
             </Button>

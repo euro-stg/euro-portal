@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { unauthorized } from "@/lib/api-auth";
 import db from "@/lib/db/db";
-import { parseImProductImport, extractDocumentNumberFromFilename, isSuperadmin, isEDocFolderCreator } from "@/lib/edoc";
+import { parseImProductImport, extractDocumentNumberFromFilename, isSuperadmin } from "@/lib/edoc";
 
 export const maxDuration = 120;
 
@@ -25,9 +25,9 @@ export async function POST(request: Request) {
     if (!session?.user?.id) return unauthorized();
     const userId = session.user.id;
 
-    const [superadmin, folderCreator] = await Promise.all([isSuperadmin(userId), isEDocFolderCreator(userId)]);
-    if (!superadmin && !folderCreator) {
-      return NextResponse.json({ message: "Bulk Import Item hanya untuk Folder Creator/superadmin" }, { status: 403 });
+    // Khusus superadmin (2026-10-14) — sebelumnya Folder Creator juga boleh.
+    if (!(await isSuperadmin(userId))) {
+      return NextResponse.json({ message: "Cocokkan & Import Item hanya untuk superadmin" }, { status: 403 });
     }
 
     const formData = await request.formData();
