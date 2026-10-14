@@ -13,7 +13,7 @@ type NotifItem = {
 };
 
 const APP_LABELS: Record<string, string> = {
-  SD: "Software Development",
+  SD: "Application Request",
   GENERAL: "Portal",
 };
 function appLabel(appType: string | null) {

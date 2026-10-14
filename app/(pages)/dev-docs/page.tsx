@@ -117,8 +117,8 @@ const DOCS: AppDoc[] = [
   },
   {
     id: "sd",
-    title: "Software Development",
-    subtitle: "Submission and tracking system for internal software development requests",
+    title: "Application Request",
+    subtitle: "Submission and tracking system for internal application requests (new apps and changes)",
     icon: <Code2 className="w-5 h-5" />,
     accent: "text-indigo-600",
     accentBg: "bg-indigo-50 border-indigo-100",
@@ -128,7 +128,7 @@ const DOCS: AppDoc[] = [
         items: [
           {
             label: "Digitizing the SD Process",
-            desc: "Replaces manual submission (email/chat) for internal software development requests. Every request has a clear lifecycle, a full audit trail, and real-time status visibility for all parties.",
+            desc: "Replaces manual submission (email/chat) for internal application requests (new apps and changes). Every request has a clear lifecycle, a full audit trail, and real-time status visibility for all parties.",
           },
           {
             label: "IT & User Collaboration",
