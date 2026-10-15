@@ -28,6 +28,8 @@ type FileDetail = {
   uploader: { id: string; name: string | null; employeeId: string };
   approver: { id: string; name: string | null } | null;
   rejecter: { id: string; name: string | null } | null;
+  folder: { id: string; name: string } | null;
+  obsoleteDestination: { id: string; name: string } | null;
   revisions: { id: string; previousFileUrl: string; replacedAt: string; replacer: { name: string | null } }[];
 };
 type Reference = {
@@ -437,6 +439,10 @@ export default function EDocFileDetailPage() {
         </div>
       )}
 
+      {isDocumentApprover && (
+        <ApproverInfoCard file={file} reference={reference} blastFolders={blastFolders} notifyCriteria={notifyCriteria} />
+      )}
+
       {/* Approval Document actions */}
       {isDocumentApprover && file.requiresNumber && (
         <div className="bg-white rounded-xl border border-slate-200 p-6 mb-4">
@@ -584,6 +590,7 @@ function EditFileModal({
 
   const submit = async () => {
     if (!title.trim()) { onError("Title tidak boleh kosong"); return; }
+    if (!organizationId) { onError("Organisasi/Departemen wajib dipilih"); return; }
     if (endDate && !obsoleteDestinationFolderId) { onError("Pilih folder tujuan Obsolete jika mengisi end date"); return; }
 
     setSaving(true);
@@ -650,10 +657,11 @@ function EditFileModal({
         </div>
 
         <div>
-          <label className={labelCls}>Organisasi/Departemen</label>
+          <label className={labelCls}>Organisasi/Departemen <span className="text-red-500">*</span></label>
           <select className={inputCls} value={organizationId} onChange={(e) => setOrganizationId(e.target.value)}>
-            <option value="">-</option>
-            {reference.organizations.map((o) => <option key={o.id} value={o.id}>{o.code ? `${o.code} — ${o.name}` : o.name}</option>)}
+            <option value="">Pilih organisasi/departemen...</option>
+            {/* Hanya organisasi yang sudah punya kode (2026-10-15) — kode dipakai di nomor dokumen. */}
+            {reference.organizations.filter((o) => o.code).map((o) => <option key={o.id} value={o.id}>{o.code} — {o.name}</option>)}
           </select>
         </div>
 
@@ -710,5 +718,77 @@ function EditFileModal({
         </div>
       </div>
     </Modal>
+  );
+}
+
+
+// Semua isian form upload dalam satu kartu read-only, khusus Document Approver & superadmin
+// (2026-10-15) — supaya approver bisa menilai dokumen lengkap (organisasi, tujuan blast,
+// kriteria email, dll.) tanpa harus membuka form Edit yang memang bukan haknya. User biasa
+// tetap melihat ringkasan di kartu atas seperti sebelumnya.
+function ApproverInfoCard({
+  file, reference, blastFolders, notifyCriteria,
+}: {
+  file: FileDetail; reference: Reference | null; blastFolders: BlastFolderOption[]; notifyCriteria: BlastEmailCriteriaValue;
+}) {
+  const fmtDate = (d: string | null) => (d ? new Date(d).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" }) : "-");
+  const fmtDateTime = (d: string | null) => (d ? new Date(d).toLocaleString("id-ID", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "-");
+  const org = reference?.organizations.find((o) => o.id === file.organizationId);
+  const names = (ids: string[], options: { id: string; name: string }[] | undefined) =>
+    ids.map((id) => options?.find((o) => o.id === id)?.name ?? id);
+  const buNames = (codes: string[]) => codes.map((c) => reference?.businessUnits.find((b) => b.code === c)?.name ?? c);
+  const orgNames = (ids: string[]) => ids.map((id) => {
+    const o = reference?.organizations.find((x) => x.id === id);
+    return o ? (o.code ? `${o.code} — ${o.name}` : o.name) : id;
+  });
+  const chips = (items: string[]) => items.length === 0
+    ? <span className="text-slate-400">-</span>
+    : <span className="flex flex-wrap gap-1">{items.map((t) => <span key={t} className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-xs">{t}</span>)}</span>;
+  const yesNo = (v: boolean) => (v ? "Ya" : "Tidak");
+  const criteriaEmpty = !notifyCriteria.branchIds.length && !notifyCriteria.orgIds.length && !notifyCriteria.positionIds.length && !notifyCriteria.businessUnitCodes.length;
+
+  const rows: [string, React.ReactNode][] = [
+    ["Kategori", file.category ? `${file.category.code} — ${file.category.name}` : "-"],
+    ["Category Type", file.categoryType?.name ?? "-"],
+    ["Organisasi/Departemen", org
+      ? <span>{org.code ? `${org.code} — ${org.name}` : org.name}{!org.code && <span className="ml-2 text-xs text-amber-600">(kode organisasi belum diisi — segmen organisasi di nomor dokumen akan kosong)</span>}</span>
+      : <span className="text-amber-600">Belum diisi</span>],
+    ["Folder", file.folder?.name ?? "-"],
+    ["Business Unit", chips(buNames(file.businessUnitCodes))],
+    ["Branch", chips(names(file.branchIds, reference?.branches.map((b) => ({ id: String(b.id), name: String(b.name) }))))],
+    ["Berlaku", `${fmtDate(file.startDate)} s/d ${fmtDate(file.endDate)}`],
+    ["Folder Tujuan Obsolete", file.obsoleteDestination?.name ?? "-"],
+    ["Wajib Document Number", yesNo(file.requiresNumber)],
+    ["Izin Download PDF", yesNo(file.allowDownload)],
+    ...(file.category?.code === "IM" ? [["File Promo (butuh lampiran item)", yesNo(file.requiresItemImport)] as [string, React.ReactNode]] : []),
+    ["Blast ke Folder", chips(blastFolders.map((f) => f.path || f.name))],
+    ["Kriteria Email Blast", criteriaEmpty ? <span className="text-slate-400">Tidak ada (tidak ada yang di-email)</span> : (
+      <div className="space-y-1">
+        {notifyCriteria.branchIds.length > 0 && <div><span className="text-xs text-slate-400">Branch: </span>{chips(names(notifyCriteria.branchIds, reference?.branches.map((b) => ({ id: String(b.id), name: String(b.name) }))))}</div>}
+        {notifyCriteria.orgIds.length > 0 && <div><span className="text-xs text-slate-400">Organisasi: </span>{chips(orgNames(notifyCriteria.orgIds))}</div>}
+        {notifyCriteria.positionIds.length > 0 && <div><span className="text-xs text-slate-400">Jabatan: </span>{chips(names(notifyCriteria.positionIds, reference?.positions.map((b) => ({ id: String(b.id), name: String(b.name) }))))}</div>}
+        {notifyCriteria.businessUnitCodes.length > 0 && <div><span className="text-xs text-slate-400">Business Unit: </span>{chips(buNames(notifyCriteria.businessUnitCodes))}</div>}
+      </div>
+    )],
+    ["Diupload oleh", `${file.uploader.name ?? file.uploader.employeeId} (${file.uploader.employeeId}) · ${fmtDateTime(file.createdAt)}`],
+    ...(file.approvedAt ? [["Disetujui oleh", `${file.approver?.name ?? "-"} · ${fmtDateTime(file.approvedAt)}${file.approvalNote ? ` · "${file.approvalNote}"` : ""}`] as [string, React.ReactNode]] : []),
+    ...(file.rejectedAt ? [["Ditolak oleh", `${file.rejecter?.name ?? "-"} · ${fmtDateTime(file.rejectedAt)}${file.rejectionNote ? ` · "${file.rejectionNote}"` : ""}`] as [string, React.ReactNode]] : []),
+  ];
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 p-6 mb-4">
+      <p className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+        <FileText className="w-4 h-4 text-blue-600" /> Informasi Lengkap Dokumen
+        <span className="text-xs font-normal text-slate-400">(hanya terlihat oleh Document Approver &amp; superadmin)</span>
+      </p>
+      <dl className="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-x-4 gap-y-2 text-sm">
+        {rows.map(([label, value]) => (
+          <div key={label} className="contents">
+            <dt className="text-slate-500">{label}</dt>
+            <dd className="text-slate-700">{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
   );
 }

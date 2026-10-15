@@ -29,6 +29,8 @@ export async function GET(
         uploader: { select: { id: true, name: true, employeeId: true } },
         approver: { select: { id: true, name: true } },
         rejecter: { select: { id: true, name: true } },
+        folder: { select: { id: true, name: true } },
+        obsoleteDestination: { select: { id: true, name: true } },
         revisions: { orderBy: { replacedAt: "desc" }, include: { replacer: { select: { name: true } } } },
       },
     });
@@ -181,7 +183,16 @@ export async function PATCH(
 
     if (Array.isArray(body.businessUnitCodes)) data.businessUnitCodes = body.businessUnitCodes.map(String).filter(Boolean);
     if (Array.isArray(body.branchIds)) data.branchIds = body.branchIds.map(String).filter(Boolean);
-    if ("organizationId" in body) data.organizationId = body.organizationId || null;
+    if ("organizationId" in body) {
+      // Wajib sejak 2026-10-15 (lihat POST /api/edoc/file) — tidak boleh dikosongkan lewat Edit.
+      if (!body.organizationId) return NextResponse.json({ message: "Organisasi/Departemen wajib dipilih" }, { status: 400 });
+      const org = await db.organization.findFirst({ where: { id: String(body.organizationId), deletedAt: null }, select: { id: true, code: true } });
+      if (!org) return NextResponse.json({ message: "Organisasi/Departemen tidak ditemukan" }, { status: 400 });
+      if (!org.code?.trim()) {
+        return NextResponse.json({ message: "Organisasi/Departemen ini belum punya kode — isi kodenya di Master Organization dulu" }, { status: 400 });
+      }
+      data.organizationId = org.id;
+    }
 
     if ("startDate" in body) data.startDate = body.startDate ? new Date(body.startDate) : null;
 

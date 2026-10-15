@@ -22,7 +22,7 @@ type FileItem = {
   category: { id: string; code: string; name: string } | null;
   categoryType: { id: string; code: string; name: string } | null;
 };
-type Reference = {
+export type Reference = {
   branches: MultiSelectOption[]; positions: MultiSelectOption[];
   organizations: { id: string; name: string; code: string | null }[];
   businessUnits: { code: string; name: string }[];
@@ -1338,6 +1338,7 @@ function UploadFileModal({
   const submit = async () => {
     if (!title.trim()) { onError("Title wajib diisi"); return; }
     if (!categoryId) { onError("Category wajib dipilih"); return; }
+    if (!organizationId) { onError("Organisasi/Departemen wajib dipilih"); return; }
     if (!file) { onError("File PDF wajib diupload"); return; }
     if (endDate && !obsoleteDestinationFolderId) { onError("Pilih folder tujuan Obsolete jika mengisi end date"); return; }
     if (requiresItemImport && !productExcel) { onError("File ini promo — Excel produk/item wajib diupload sekarang"); return; }
@@ -1457,10 +1458,11 @@ function UploadFileModal({
         </div>
 
         <div>
-          <label className={labelCls}>Organisasi/Departemen</label>
+          <label className={labelCls}>Organisasi/Departemen <span className="text-red-500">*</span></label>
           <select className={inputCls} value={organizationId} onChange={(e) => setOrganizationId(e.target.value)}>
-            <option value="">-</option>
-            {reference.organizations.map((o) => <option key={o.id} value={o.id}>{o.code ? `${o.code} — ${o.name}` : o.name}</option>)}
+            <option value="">Pilih organisasi/departemen...</option>
+            {/* Hanya organisasi yang sudah punya kode (2026-10-15) — kode dipakai di nomor dokumen. */}
+            {reference.organizations.filter((o) => o.code).map((o) => <option key={o.id} value={o.id}>{o.code} — {o.name}</option>)}
           </select>
         </div>
 

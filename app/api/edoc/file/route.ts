@@ -178,6 +178,14 @@ export async function POST(request: Request) {
     if (!folderId) return NextResponse.json({ message: "folderId wajib diisi" }, { status: 400 });
     if (!title) return NextResponse.json({ message: "Title wajib diisi" }, { status: 400 });
     if (!categoryId) return NextResponse.json({ message: "Category wajib dipilih" }, { status: 400 });
+    // Wajib sejak 2026-10-15 — sumber token ORG_DEPT_CODE di nomor dokumen; dulu opsional
+    // sehingga segmen organisasi di nomor dokumen bisa kosong diam-diam.
+    if (!organizationId) return NextResponse.json({ message: "Organisasi/Departemen wajib dipilih" }, { status: 400 });
+    const org = await db.organization.findFirst({ where: { id: organizationId, deletedAt: null }, select: { code: true } });
+    if (!org) return NextResponse.json({ message: "Organisasi/Departemen tidak ditemukan" }, { status: 400 });
+    if (!org.code?.trim()) {
+      return NextResponse.json({ message: "Organisasi/Departemen ini belum punya kode — isi kodenya di Master Organization dulu" }, { status: 400 });
+    }
     if (!file) return NextResponse.json({ message: "File wajib diupload" }, { status: 400 });
     if (!ALLOWED_MIME.includes(file.type) && !file.name.toLowerCase().endsWith(".pdf")) {
       return NextResponse.json({ message: "Hanya file PDF yang diperbolehkan" }, { status: 400 });
