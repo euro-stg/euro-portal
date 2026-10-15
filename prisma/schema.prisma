@@ -801,6 +801,18 @@ model EuPost {
   targetOrgIds      String[]   @default([])
   targetPositionIds String[]   @default([])
   publishedAt       DateTime?
+  // Blast notifikasi saat post dipublish (2026-10-15) — konsep sama dengan "Kriteria Email
+  // Blast" E Document: penerima = user aktif yang cocok SALAH SATU kriteria (OR). Kanal
+  // dipilih per post (aplikasi dan/atau email). Dikirim SEKALI saja: begitu post sudah
+  // publish dan notifiedAt masih null (saat create, edit, atau publish draft).
+  notifyInApp             Boolean   @default(false)
+  notifyEmail             Boolean   @default(false)
+  notifyBranchIds         String[]  @default([])
+  notifyOrgIds            String[]  @default([])
+  notifyPositionIds       String[]  @default([])
+  notifyBusinessUnitCodes String[]  @default([])
+  notifiedAt              DateTime?
+  notifiedCount           Int?
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
   deletedAt         DateTime?

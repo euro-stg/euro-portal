@@ -14,6 +14,7 @@ type NotifItem = {
 
 const APP_LABELS: Record<string, string> = {
   SD: "Application Request",
+  EU: "Euro Update",
   GENERAL: "Portal",
 };
 function appLabel(appType: string | null) {
@@ -22,6 +23,7 @@ function appLabel(appType: string | null) {
 }
 const APP_BADGE: Record<string, string> = {
   SD:      "bg-indigo-100 text-indigo-700",
+  EU:      "bg-rose-100 text-rose-700",
   GENERAL: "bg-slate-100 text-slate-500",
 };
 function appBadgeCls(appType: string | null) {

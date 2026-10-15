@@ -4,6 +4,7 @@ import db from "@/lib/db/db";
 import { unauthorized } from "@/lib/api-auth";
 import { getEuPostPermission } from "@/lib/eu-permission";
 import { deleteFromNextcloud } from "@/lib/nextcloud";
+import { sendEuPostNotification, parseEuNotifyInput } from "@/lib/eu-notify";
 
 // Attachment.url disimpan sebagai "/api/eu/file?path=<path-nextcloud-ter-encode>" (lihat
 // _eu-feed.tsx saat upload) — untuk hapus fisiknya perlu diekstrak dulu query param `path`.
@@ -97,6 +98,12 @@ export async function PATCH(
     const canManage = isSuperadmin || canPost || post.authorId === session.user.id;
     if (!canManage) return NextResponse.json({ message: "Anda tidak memiliki izin untuk mengubah post ini" }, { status: 403 });
 
+    // Pengaturan notifikasi dikunci setelah blast terkirim (notifiedAt terisi) supaya
+    // catatan penerimanya tetap sesuai yang benar-benar dikirim.
+    const notify = parseEuNotifyInput(body as Record<string, unknown>);
+    if (!post.notifiedAt && notify.error) return NextResponse.json({ message: notify.error }, { status: 400 });
+    const notifyData = post.notifiedAt ? {} : notify.data;
+
     type AttachmentInput = { name: string; url: string; mimeType?: string; size?: number; order?: number };
     const attachmentList = Array.isArray(attachments) ? (attachments as AttachmentInput[]) : null;
 
@@ -134,6 +141,7 @@ export async function PATCH(
           ...(targetPositionIds !== undefined ? { targetPositionIds: targetPositionIds as string[] } : {}),
           ...(publishNow ? { publishedAt: new Date() } : {}),
           ...(unpublish  ? { publishedAt: null }        : {}),
+          ...notifyData,
         },
       });
       if (attachmentList !== null) {
@@ -149,6 +157,8 @@ export async function PATCH(
       }
       return p;
     });
+    // Kirim kalau post sekarang publish & belum pernah di-blast (mis. draft baru dipublish).
+    await sendEuPostNotification(id, process.env.NEXT_PUBLIC_APP_URL ?? new URL(request.url).origin);
     return NextResponse.json({ data: updated });
   } catch (err) {
     console.error(err);

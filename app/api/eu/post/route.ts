@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import db from "@/lib/db/db";
 import { requireSession, unauthorized } from "@/lib/api-auth";
 import { getEuPostPermission } from "@/lib/eu-permission";
+import { sendEuPostNotification, parseEuNotifyInput } from "@/lib/eu-notify";
 
 const PAGE_SIZE = 10;
 
@@ -103,6 +104,8 @@ export async function POST(request: Request) {
     if (!title?.trim())     return NextResponse.json({ message: "Judul wajib diisi" }, { status: 400 });
     if (!content?.trim())   return NextResponse.json({ message: "Konten wajib diisi" }, { status: 400 });
     if (!categoryId)        return NextResponse.json({ message: "Kategori wajib dipilih" }, { status: 400 });
+    const notify = parseEuNotifyInput(body as Record<string, unknown>);
+    if (notify.error) return NextResponse.json({ message: notify.error }, { status: 400 });
 
     const post = await db.euPost.create({
       data: {
@@ -116,12 +119,16 @@ export async function POST(request: Request) {
         targetOrgIds:      targetOrgIds ?? [],
         targetPositionIds: targetPositionIds ?? [],
         publishedAt: publishNow ? new Date() : null,
+        ...notify.data,
         attachments: attachments?.length
           ? { create: attachments.map((a, i) => ({ name: a.name, url: a.url, mimeType: a.mimeType, size: a.size, order: a.order ?? i })) }
           : undefined,
       },
       include: { category: true, author: { select: { id: true, name: true } }, attachments: true },
     });
+
+    // Blast notifikasi (kalau dipilih & post langsung publish) — tidak pernah throw.
+    await sendEuPostNotification(post.id, process.env.NEXT_PUBLIC_APP_URL ?? new URL(request.url).origin);
 
     return NextResponse.json({ data: post }, { status: 201 });
   } catch (err) {

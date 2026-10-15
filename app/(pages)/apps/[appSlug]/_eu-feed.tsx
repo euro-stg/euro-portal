@@ -6,6 +6,7 @@ import { Search, ChevronLeft, ChevronRight, MessageCircle, Paperclip, Pin, Shiel
 import { Alert } from "@/components/ui/alert";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
+import { BlastEmailCriteriaEditor, type BlastEmailCriteriaValue, type Reference as EdocReference } from "./_edoc-app";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -16,6 +17,9 @@ type Attachment = { id: string; name: string; url: string; mimeType: string | nu
 type Post = {
   id: string; title: string; content: string;
   isPinned: boolean; isMandatory: boolean; publishedAt: string;
+  notifyInApp?: boolean; notifyEmail?: boolean;
+  notifyBranchIds?: string[]; notifyOrgIds?: string[]; notifyPositionIds?: string[]; notifyBusinessUnitCodes?: string[];
+  notifiedAt?: string | null; notifiedCount?: number | null;
   category: Category;
   author: { id: string; name: string | null; image: string | null; jobPositionName: string | null };
   attachments: Attachment[];
@@ -308,6 +312,7 @@ function CreatePostModal({ categories, onClose, onCreated }: {
     title: "", content: "", categoryId: "",
     isPinned: false, isMandatory: false, publishNow: true,
   });
+  const [notify, setNotify] = useState<EuNotifyValue>(EMPTY_NOTIFY);
   const [attachments, setAttachments] = useState<UploadItem[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -356,6 +361,8 @@ function CreatePostModal({ categories, onClose, onCreated }: {
     if (!form.content.trim()) { setError("Konten wajib diisi"); return; }
     if (!form.categoryId) { setError("Kategori wajib dipilih"); return; }
     if (hasUploading) { setError("Tunggu upload selesai"); return; }
+    const notifyError = validateNotify(notify);
+    if (notifyError) { setError(notifyError); return; }
     setSaving(true); setError(null);
     try {
       const res = await fetch("/api/eu/post", {
@@ -363,6 +370,7 @@ function CreatePostModal({ categories, onClose, onCreated }: {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form,
+          ...notifyPayload(notify),
           attachments: attachments
             .filter((a) => !a.uploading && a.url)
             .map((a, i) => ({ name: a.name, url: a.url, mimeType: a.mimeType, order: i })),
@@ -491,6 +499,8 @@ function CreatePostModal({ categories, onClose, onCreated }: {
         </div>
       </div>
 
+      <EuNotifySection value={notify} onChange={setNotify} />
+
       <div className="flex justify-end gap-2 pt-3 mt-1 border-t border-slate-100">
         <Button variant="ghost" onClick={onClose} disabled={saving}>Batal</Button>
         <Button variant="primary" onClick={() => void handleSubmit()} disabled={saving || hasUploading}>
@@ -516,6 +526,13 @@ function EditPostModal({ post, categories, onClose, onSaved }: {
     isPinned:    post.isPinned,
     isMandatory: post.isMandatory,
   });
+  const [notify, setNotify] = useState<EuNotifyValue>(() => ({
+    notifyInApp: !!post.notifyInApp, notifyEmail: !!post.notifyEmail,
+    criteria: {
+      branchIds: post.notifyBranchIds ?? [], orgIds: post.notifyOrgIds ?? [],
+      positionIds: post.notifyPositionIds ?? [], businessUnitCodes: post.notifyBusinessUnitCodes ?? [],
+    },
+  }));
   const [attachments, setAttachments] = useState<UploadItem[]>(() =>
     post.attachments.map((a) => ({
       id: a.id, name: a.name, url: a.url,
@@ -570,6 +587,8 @@ function EditPostModal({ post, categories, onClose, onSaved }: {
     if (!form.content.trim()) { setError("Konten wajib diisi"); return; }
     if (!form.categoryId)     { setError("Kategori wajib dipilih"); return; }
     if (hasUploading)         { setError("Tunggu upload selesai"); return; }
+    const notifyError = post.notifiedAt ? null : validateNotify(notify);
+    if (notifyError) { setError(notifyError); return; }
     setSaving(true); setError(null);
     try {
       const res = await fetch(`/api/eu/post/${post.id}`, {
@@ -577,6 +596,7 @@ function EditPostModal({ post, categories, onClose, onSaved }: {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form,
+          ...(post.notifiedAt ? {} : notifyPayload(notify)),
           attachments: attachments
             .filter((a) => !a.uploading && a.url)
             .map((a, i) => ({ name: a.name, url: a.url, mimeType: a.mimeType, order: i })),
@@ -697,6 +717,8 @@ function EditPostModal({ post, categories, onClose, onSaved }: {
           </label>
         </div>
       </div>
+
+      <EuNotifySection value={notify} onChange={setNotify} sentAt={post.notifiedAt ?? null} sentCount={post.notifiedCount ?? null} />
 
       <div className="flex justify-end gap-2 pt-3 mt-1 border-t border-slate-100">
         <Button variant="ghost" onClick={onClose} disabled={saving}>Batal</Button>
@@ -1477,5 +1499,83 @@ export function EuFeedPage() {
         />
       )}
     </>
+  );
+}
+
+
+// ===================== Blast notifikasi post (2026-10-15) =====================
+// Konsep sama dengan Kriteria Email Blast E Document: penerima = user yang cocok SALAH SATU
+// kriteria (Branch / Organisasi / Jabatan / Business Unit). Dikirim server sekali saja saat
+// post dipublish — setelah terkirim, bagian ini cuma menampilkan info.
+type EuNotifyValue = { notifyInApp: boolean; notifyEmail: boolean; criteria: BlastEmailCriteriaValue };
+const EMPTY_NOTIFY: EuNotifyValue = {
+  notifyInApp: false, notifyEmail: false,
+  criteria: { branchIds: [], orgIds: [], positionIds: [], businessUnitCodes: [] },
+};
+function validateNotify(v: EuNotifyValue): string | null {
+  if (!v.notifyInApp && !v.notifyEmail) return null;
+  const c = v.criteria;
+  return c.branchIds.length || c.orgIds.length || c.positionIds.length || c.businessUnitCodes.length
+    ? null : "Pilih minimal satu kriteria penerima notifikasi";
+}
+function notifyPayload(v: EuNotifyValue) {
+  return {
+    notifyInApp: v.notifyInApp, notifyEmail: v.notifyEmail,
+    notifyBranchIds: v.criteria.branchIds, notifyOrgIds: v.criteria.orgIds,
+    notifyPositionIds: v.criteria.positionIds, notifyBusinessUnitCodes: v.criteria.businessUnitCodes,
+  };
+}
+
+function EuNotifySection({ value, onChange, sentAt = null, sentCount = null }: {
+  value: EuNotifyValue; onChange: (v: EuNotifyValue) => void; sentAt?: string | null; sentCount?: number | null;
+}) {
+  const [reference, setReference] = useState<EdocReference | null>(null);
+  const active = value.notifyInApp || value.notifyEmail;
+  useEffect(() => {
+    if (!active || reference || sentAt) return;
+    let cancelled = false;
+    fetch("/api/edoc/reference").then((r) => r.json()).then((j) => { if (!cancelled) setReference(j); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [active, reference, sentAt]);
+
+  if (sentAt) {
+    const channels = [value.notifyInApp && "aplikasi", value.notifyEmail && "email"].filter(Boolean).join(" & ");
+    const when = new Date(sentAt).toLocaleString("id-ID", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+    if (!sentCount) {
+      return (
+        <div className="mt-3 p-3 rounded-lg bg-slate-50 border border-slate-200 text-sm text-slate-600">
+          Notifikasi diproses pada {when}, tetapi tidak ada yang terkirim (kanal {channels} sedang dimatikan di pengaturan notifikasi, atau tidak ada user yang cocok dengan kriteria).
+        </div>
+      );
+    }
+    return (
+      <div className="mt-3 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-sm text-emerald-800">
+        Notifikasi {channels} sudah dikirim ke {sentCount} user pada {when}.
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 p-3 rounded-lg border border-slate-200 bg-slate-50 space-y-2">
+      <p className="text-sm font-medium text-slate-700">Kirim Notifikasi</p>
+      <div className="flex flex-wrap gap-4">
+        <label className="flex items-center gap-2 cursor-pointer select-none">
+          <input type="checkbox" className="rounded" checked={value.notifyInApp} onChange={(e) => onChange({ ...value, notifyInApp: e.target.checked })} />
+          <span className="text-sm text-slate-700">Notifikasi aplikasi</span>
+        </label>
+        <label className="flex items-center gap-2 cursor-pointer select-none">
+          <input type="checkbox" className="rounded" checked={value.notifyEmail} onChange={(e) => onChange({ ...value, notifyEmail: e.target.checked })} />
+          <span className="text-sm text-slate-700">Email</span>
+        </label>
+      </div>
+      {active && (
+        reference
+          ? <BlastEmailCriteriaEditor reference={reference} value={value.criteria} onChange={(criteria) => onChange({ ...value, criteria })} />
+          : <p className="text-xs text-slate-400 flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Memuat pilihan penerima...</p>
+      )}
+      <p className="text-xs text-slate-400">
+        Dikirim saat post dipublikasikan, ke user yang cocok dengan <b>salah satu</b> kriteria. Hanya dikirim sekali.
+      </p>
+    </div>
   );
 }
