@@ -20,6 +20,7 @@ export async function GET(
         id: true,
         employeeId: true,
         name: true,
+        source: true,
         joinDate: true,
         resignDate: true,
         status: true,

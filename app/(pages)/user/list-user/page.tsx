@@ -84,6 +84,7 @@ type FormState = {
   jobLevel: string;
   employmentStatus: string;
   newPassword: string;
+  source: string;
 };
 
 type FilterState = {
@@ -188,7 +189,14 @@ export default function ListUserPage() {
 
   // Create manual user
   const [createOpen, setCreateOpen] = useState(false);
-  const [createForm, setCreateForm] = useState({ employeeId: "", name: "", email: "", password: "" });
+  const [createForm, setCreateForm] = useState<EmployeeFields & { employeeId: string; password: string }>({ ...EMPTY_EMPLOYEE, employeeId: "", password: "" });
+  // Pilihan organisasi/jabatan/cabang = nilai yang dipakai data karyawan Talenta (ID + nama).
+  const [employeeOptions, setEmployeeOptions] = useState<EmployeeOptions>({ organizations: [], positions: [], branches: [] });
+  useEffect(() => {
+    fetch("/api/user/positions").then((r) => r.json()).then((j) => setEmployeeOptions({
+      organizations: j.organizations ?? [], positions: j.positions ?? [], branches: j.branches ?? [],
+    })).catch(() => {});
+  }, []);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
@@ -207,7 +215,7 @@ export default function ListUserPage() {
     phone: "", mobilePhone: "", email: "",
     lastName: "", gender: "", birthPlace: "", birthDate: "", address: "",
     religion: "", bloodType: "", maritalStatus: "", identityType: "",
-    identityNumber: "", jobLevel: "", employmentStatus: "", newPassword: "",
+    identityNumber: "", jobLevel: "", employmentStatus: "", newPassword: "", source: "",
   };
 
   const [form, setForm] = useState<FormState>(emptyForm);
@@ -394,6 +402,7 @@ export default function ListUserPage() {
         religion: d.religion ?? "", bloodType: d.bloodType ?? "", maritalStatus: d.maritalStatus ?? "",
         identityType: d.identityType ?? "", identityNumber: d.identityNumber ?? "",
         jobLevel: d.jobLevel ?? "", employmentStatus: d.employmentStatus ?? "", newPassword: "",
+        source: d.source ?? "talenta",
       });
     } catch (err) {
       console.error(err);
@@ -431,7 +440,7 @@ export default function ListUserPage() {
     setSaving(true);
     setFormError(null);
     try {
-      const payload: Record<string, unknown> = {};
+      const payload: Record<string, unknown> = form.source === "manual" ? employeePayload(form) : {};
       if (form.newPassword.trim()) payload.password = form.newPassword.trim();
 
       const res = await fetch(`/api/user/update/${form.id}`, {
@@ -490,13 +499,13 @@ export default function ListUserPage() {
       const res = await fetch("/api/user", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(createForm),
+        body: JSON.stringify({ employeeId: createForm.employeeId, password: createForm.password, ...employeePayload(createForm) }),
       });
       const json = await res.json().catch(() => null);
       if (!res.ok) { setCreateError(json?.message ?? "Gagal membuat user"); return; }
       showToast("success", "User berhasil dibuat");
       setCreateOpen(false);
-      setCreateForm({ employeeId: "", name: "", email: "", password: "" });
+      setCreateForm({ ...EMPTY_EMPLOYEE, employeeId: "", password: "" });
       void refreshList(currentPage, filters, showAll);
     } catch { setCreateError("Network error"); }
     finally { setCreating(false); }
@@ -769,7 +778,13 @@ export default function ListUserPage() {
           <div className="space-y-5">
             {formError && <Alert variant="error" message={formError} />}
 
-            {/* Info dari Talenta — readonly */}
+            {form.source === "manual" ? (
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Data Karyawan (user manual — dapat diubah)</p>
+                <EmployeeFieldsForm value={form} onChange={(patch) => setForm((p) => ({ ...p, ...patch }))} options={employeeOptions} showStatus />
+              </div>
+            ) : (
+            /* Info dari Talenta — readonly */
             <div>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Data Talenta (read-only)</p>
 
@@ -859,6 +874,7 @@ export default function ListUserPage() {
                 </div>
               </div>
             </div>
+            )}
 
             {/* Field yang bisa diubah */}
             <div>
@@ -931,7 +947,7 @@ export default function ListUserPage() {
       )}
 
       {/* Create Manual User Modal */}
-      <Modal open={createOpen} title="Tambah User Manual" onClose={() => setCreateOpen(false)} boxClassName="w-full max-w-md">
+      <Modal open={createOpen} title="Tambah User Manual" onClose={() => setCreateOpen(false)} boxClassName="w-11/12 max-w-3xl">
         <div className="space-y-4">
           {createError && <Alert variant="error" message={createError} />}
           <FormField label="Employee ID *">
@@ -940,23 +956,6 @@ export default function ListUserPage() {
               placeholder="Contoh: EXT001"
               value={createForm.employeeId}
               onChange={(e) => setCreateForm((p) => ({ ...p, employeeId: e.target.value }))}
-            />
-          </FormField>
-          <FormField label="Nama *">
-            <input
-              className={inputCls}
-              placeholder="Nama lengkap"
-              value={createForm.name}
-              onChange={(e) => setCreateForm((p) => ({ ...p, name: e.target.value }))}
-            />
-          </FormField>
-          <FormField label="Email">
-            <input
-              type="email"
-              className={inputCls}
-              placeholder="email@example.com (opsional)"
-              value={createForm.email}
-              onChange={(e) => setCreateForm((p) => ({ ...p, email: e.target.value }))}
             />
           </FormField>
           <FormField label="Password *">
@@ -968,6 +967,8 @@ export default function ListUserPage() {
               onChange={(e) => setCreateForm((p) => ({ ...p, password: e.target.value }))}
             />
           </FormField>
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pt-2">Data Karyawan (seperti data Talenta)</p>
+          <EmployeeFieldsForm value={createForm} onChange={(patch) => setCreateForm((p) => ({ ...p, ...patch }))} options={employeeOptions} />
           <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
             <Button variant="ghost" onClick={() => setCreateOpen(false)} disabled={creating}>Batal</Button>
             <Button variant="primary" onClick={() => void handleCreate()} disabled={creating}>
@@ -1016,6 +1017,89 @@ export default function ListUserPage() {
           ))}
         </div>
       </Modal>
+    </div>
+  );
+}
+
+
+// ===================== Data karyawan user manual (2026-10-15) =====================
+// Field sama dengan hasil sync Talenta. Organisasi/jabatan/cabang dipilih dari nilai yang dipakai
+// karyawan Talenta (ID + nama) supaya user manual ikut pencocokan approver & blast notifikasi.
+type EmployeeFields = {
+  name: string; lastName: string; gender: string; birthPlace: string; birthDate: string; religion: string;
+  maritalStatus: string; bloodType: string; identityType: string; identityNumber: string; address: string;
+  organizationId: string; jobPositionId: string; branchId: string; jobLevel: string; employmentStatus: string;
+  joinDate: string; resignDate: string; phone: string; mobilePhone: string; email: string; status: string;
+};
+type EmployeeOptions = { organizations: { id: string; name: string }[]; positions: { id: string; name: string }[]; branches: { id: string; name: string }[] };
+
+const EMPTY_EMPLOYEE: EmployeeFields = {
+  name: "", lastName: "", gender: "", birthPlace: "", birthDate: "", religion: "", maritalStatus: "", bloodType: "",
+  identityType: "KTP", identityNumber: "", address: "", organizationId: "", jobPositionId: "", branchId: "",
+  jobLevel: "", employmentStatus: "", joinDate: "", resignDate: "", phone: "", mobilePhone: "", email: "", status: "active",
+};
+const EMPLOYEE_KEYS = Object.keys(EMPTY_EMPLOYEE) as (keyof EmployeeFields)[];
+function employeePayload(f: EmployeeFields): Record<string, string> {
+  return Object.fromEntries(EMPLOYEE_KEYS.map((k) => [k, f[k] ?? ""]));
+}
+
+const GENDERS = ["Female", "Male"];
+const RELIGIONS = ["Islam", "Christian", "Catholic", "Hindu", "Buddha", "Other"];
+const MARITAL = ["Single", "Married", "Widow", "Widower"];
+const BLOOD = ["A", "B", "AB", "O"];
+const IDENTITY = ["KTP", "Passport", "KITAS", "SIM"];
+const JOB_LEVELS = ["NON STAFF", "INTERNSHIP", "OFFICER", "FIELD OFFICER", "SUPERVISOR", "JUNIOR MANAGER", "MANAGER", "SENIOR MANAGER", "HEAD", "GENERAL MANAGER", "CHIEF", "DIRECTOR"];
+const EMPLOYMENT = ["Permanent", "Contract 3", "Contract 6", "Probation", "Internship 3", "Kemitraan", "Kemitraan 3", "Kemitraan 6", "Kemitraan 12", "Partnership 12"];
+
+function EmployeeFieldsForm({ value, onChange, options, showStatus = false }: {
+  value: EmployeeFields; onChange: (patch: Partial<EmployeeFields>) => void; options: EmployeeOptions; showStatus?: boolean;
+}) {
+  const text = (key: keyof EmployeeFields, label: string, type = "text", placeholder = "") => (
+    <FormField label={label}>
+      <input type={type} className={inputCls} placeholder={placeholder} value={value[key]} onChange={(e) => onChange({ [key]: e.target.value })} />
+    </FormField>
+  );
+  const select = (key: keyof EmployeeFields, label: string, items: { id: string; name: string }[] | string[]) => (
+    <FormField label={label}>
+      <select className={inputCls} value={value[key]} onChange={(e) => onChange({ [key]: e.target.value })}>
+        <option value="">-</option>
+        {items.map((it) => typeof it === "string"
+          ? <option key={it} value={it}>{it}</option>
+          : <option key={it.id} value={it.id}>{it.name}</option>)}
+      </select>
+    </FormField>
+  );
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      {text("name", "Nama Depan *")}
+      {text("lastName", "Nama Belakang")}
+      {select("gender", "Gender", GENDERS)}
+      {text("birthPlace", "Tempat Lahir")}
+      {text("birthDate", "Tanggal Lahir", "date")}
+      {select("religion", "Agama", RELIGIONS)}
+      {select("maritalStatus", "Status Pernikahan", MARITAL)}
+      {select("bloodType", "Golongan Darah", BLOOD)}
+      {select("identityType", "Jenis Identitas", IDENTITY)}
+      {text("identityNumber", "Nomor Identitas")}
+      {select("organizationId", "Organization", options.organizations)}
+      {select("branchId", "Branch", options.branches)}
+      {select("jobPositionId", "Job Position", options.positions)}
+      {select("jobLevel", "Job Level", JOB_LEVELS)}
+      <FormField label="Status Kepegawaian">
+        <input className={inputCls} list="employment-status-options" value={value.employmentStatus} onChange={(e) => onChange({ employmentStatus: e.target.value })} />
+        <datalist id="employment-status-options">{EMPLOYMENT.map((v) => <option key={v} value={v} />)}</datalist>
+      </FormField>
+      {text("joinDate", "Join Date", "date")}
+      {text("resignDate", "Resign Date", "date")}
+      {text("phone", "Phone")}
+      {text("mobilePhone", "Mobile Phone")}
+      {text("email", "Email", "email", "email@example.com")}
+      {showStatus && select("status", "Status", ["active", "inactive"])}
+      <div className="md:col-span-2">
+        <FormField label="Alamat">
+          <input className={inputCls} value={value.address} onChange={(e) => onChange({ address: e.target.value })} />
+        </FormField>
+      </div>
     </div>
   );
 }

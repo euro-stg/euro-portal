@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import prisma from "@/lib/db/db";
 import { requireSession, unauthorized, forbidden } from "@/lib/api-auth";
 import { hasPortalModuleAccess, PORTAL_MODULE } from "@/lib/module-permission";
+import { parseManualUserFields } from "@/lib/manual-user";
 
 type UpdateBody = {
   name?: string;
@@ -150,12 +151,22 @@ export async function PATCH(
       }
     }
 
+    // User MANUAL: semua field data karyawan bisa diubah (sama seperti hasil sync Talenta).
+    // User Talenta tidak — datanya selalu ditimpa sync. Hanya sampai sini kalau admin user
+    // (non-admin sudah dibatasi ke ganti password sendiri di atas).
+    let manualData = {};
+    if (existing.source === "manual") {
+      const parsed = await parseManualUserFields(body as unknown as Record<string, unknown>);
+      if (parsed.error) return NextResponse.json({ message: parsed.error }, { status: 400 });
+      manualData = parsed.data;
+    }
+
     /* =========================
        ✅ UPDATE USER
     ========================= */
     const updated = await prisma.user.update({
       where: { id },
-      data: updateData,
+      data: { ...updateData, ...manualData },
       select: {
         id: true,
         employeeId: true,

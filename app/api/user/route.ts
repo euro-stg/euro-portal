@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import db from "@/lib/db/db";
 import { requireSession, unauthorized, forbidden } from "@/lib/api-auth";
 import { hasPortalModuleAccess, PORTAL_MODULE } from "@/lib/module-permission";
+import { parseManualUserFields } from "@/lib/manual-user";
 
 export async function POST(request: Request) {
   try {
@@ -23,15 +24,20 @@ export async function POST(request: Request) {
     const existing = await db.user.findUnique({ where: { employeeId: employeeId.trim() } });
     if (existing) return NextResponse.json({ message: "Employee ID sudah digunakan" }, { status: 409 });
 
+    // Data karyawan lengkap seperti hasil sync Talenta (organisasi, jabatan, cabang, dll.).
+    const fields = await parseManualUserFields(body as Record<string, unknown>);
+    if (fields.error) return NextResponse.json({ message: fields.error }, { status: 400 });
+
     const hashed = await bcrypt.hash(password, 10);
     const user = await db.user.create({
       data: {
         employeeId: employeeId.trim(),
         name: name.trim(),
         email: email?.trim() || null,
+        status: "active",
+        ...fields.data,
         password: hashed,
         source: "manual",
-        status: "active",
       },
       select: { id: true, employeeId: true, name: true, email: true, source: true, status: true, createdAt: true },
     });
