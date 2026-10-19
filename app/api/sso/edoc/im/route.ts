@@ -102,7 +102,6 @@ export async function GET(request: Request) {
       select: { id: true, code: true, name: true },
     });
     const orgById = new Map(orgs.map((o) => [o.id, o]));
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? new URL(request.url).origin;
 
     const data = files.map((f) => {
       // Nomor urut = angka pertama di nomor dokumen, tahun = segmen 4 digit terakhir.
@@ -128,7 +127,6 @@ export async function GET(request: Request) {
         status: f.status,
         approvedAt: f.approvedAt,
         updatedAt: f.updatedAt,
-        portalUrl: `${baseUrl}/apps/e-document/edoc-file/${f.id}`,
       };
     });
 

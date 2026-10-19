@@ -766,8 +766,7 @@ curl -X GET "${BASE_URL}/api/sso/organizations?parentId=79747" \\
       "department": { "code": "BUS", "name": "Business" },
       "status": "RELEASE",
       "approvedAt": "2025-12-01T03:15:00.000Z",
-      "updatedAt": "2025-12-01T03:15:00.000Z",
-      "portalUrl": "https://portal.iteuromedica.com/apps/e-document/edoc-file/cmv9..."
+      "updatedAt": "2025-12-01T03:15:00.000Z"
     }
   ],
   "total": 1, "page": 1, "limit": 20, "totalPages": 1
@@ -782,7 +781,6 @@ curl -X GET "${BASE_URL}/api/sso/organizations?parentId=79747" \\
             <Field name="initiator" type="object | null" desc="Inisiator IM; jobPosition = jabatan SAAT dokumen dibuat (snapshot)" />
             <Field name="validity" type="string" desc="Masa berlaku: 'TETAP' atau 'TEMPORER' (TEMPORER selalu punya endDate)" />
             <Field name="department" type="object | null" desc="Organisasi/departemen dokumen (kode & nama)" />
-            <Field name="portalUrl" type="string" desc="Link ke detail dokumen di portal (perlu login)" />
           </div>
         </div>
 
