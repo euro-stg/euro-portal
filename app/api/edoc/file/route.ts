@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { unauthorized } from "@/lib/api-auth";
 import db from "@/lib/db/db";
 import { resolveFolderContentAccess, uploadEDocFileToFolder, parseImProductImport, isSuperadmin, isEDocDocumentApprover } from "@/lib/edoc";
+import { checkValidity, resolveInitiator } from "@/lib/edoc-file-fields";
 
 export const maxDuration = 60;
 
@@ -157,8 +158,13 @@ export async function POST(request: Request) {
     const branchIds = formData.getAll("branchIds").map(String).filter(Boolean);
     const organizationId = (formData.get("organizationId") as string | null) || null;
     const startDateRaw = formData.get("startDate") as string | null;
-    const endDateRaw = formData.get("endDate") as string | null;
-    const obsoleteDestinationFolderId = (formData.get("obsoleteDestinationFolderId") as string | null) || null;
+    const validityTypeRaw = (formData.get("validityType") as string | null) || null;
+    // Dokumen TETAP tidak punya End Date / folder Obsolete — diabaikan walau terkirim.
+    const isTetap = validityTypeRaw === "TETAP";
+    const endDateRaw = isTetap ? null : (formData.get("endDate") as string | null);
+    const obsoleteDestinationFolderId = isTetap ? null : ((formData.get("obsoleteDestinationFolderId") as string | null) || null);
+    const initiatorIdRaw = (formData.get("initiatorId") as string | null) || null;
+    const initiatorJobPositionRaw = (formData.get("initiatorJobPositionName") as string | null) || null;
     const blastFolderIds = formData.getAll("blastFolderIds").map(String).filter(Boolean);
     // Kriteria Email Blast (2026-09-30) — independen dari blastFolderIds di atas, lihat
     // catatan di schema.prisma EDocFile.notify*.
@@ -207,6 +213,10 @@ export async function POST(request: Request) {
     }
 
     const endDate = endDateRaw ? new Date(endDateRaw) : null;
+    const validity = checkValidity(validityTypeRaw, endDate);
+    if (validity.error) return NextResponse.json({ message: validity.error }, { status: 400 });
+    const initiator = await resolveInitiator(initiatorIdRaw, initiatorJobPositionRaw);
+    if ("error" in initiator) return NextResponse.json({ message: initiator.error }, { status: 400 });
     if (endDate) {
       if (isNaN(endDate.getTime())) return NextResponse.json({ message: "End date tidak valid" }, { status: 400 });
       if (!obsoleteDestinationFolderId) {
@@ -277,6 +287,9 @@ export async function POST(request: Request) {
         startDate: startDateRaw ? new Date(startDateRaw) : null,
         endDate,
         obsoleteDestinationFolderId,
+        validityType: validity.value,
+        initiatorId: initiator.initiatorId,
+        initiatorJobPositionName: initiator.initiatorJobPositionName,
         fileUrl,
         requiresNumber,
         requiresItemImport,

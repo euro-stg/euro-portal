@@ -133,6 +133,9 @@ export async function POST(request: Request) {
           status: "RELEASE",
           bulkImported: true,
           uploadedBy: userId,
+          // Inisiator default = pengupload (2026-10-19), masa berlaku default TETAP — lengkapi lewat Edit.
+          initiatorId: userId,
+          initiatorJobPositionName: (await db.user.findUnique({ where: { id: userId }, select: { jobPositionName: true } }))?.jobPositionName ?? null,
           fileUrl,
           bulkUploadKey: idempotencyKey,
           documentNumber,

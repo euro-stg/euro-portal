@@ -10,7 +10,7 @@ import { Modal } from "@/components/ui/modal";
 import { Alert } from "@/components/ui/alert";
 import { FeedbackSection } from "./_feedback-section";
 import { ImProductSection } from "./_im-product-section";
-import { BlastFolderPicker, type BlastFolderOption, BlastEmailCriteriaEditor, type BlastEmailCriteriaValue } from "../../_edoc-app";
+import { BlastFolderPicker, type BlastFolderOption, BlastEmailCriteriaEditor, type BlastEmailCriteriaValue, InitiatorPicker, type InitiatorValue, ValidityTypePicker } from "../../_edoc-app";
 import { MoveFileButton } from "./_move-file-modal";
 import { PdfViewerModal } from "./_pdf-viewer";
 import { MultiSelect, type MultiSelectOption } from "../../_edoc-multiselect";
@@ -23,6 +23,8 @@ type FileDetail = {
   rejectionNote: string | null; rejectedAt: string | null;
   businessUnitCodes: string[]; branchIds: string[]; organizationId: string | null;
   startDate: string | null; endDate: string | null; obsoleteDestinationFolderId: string | null; createdAt: string;
+  validityType: string; initiatorJobPositionName: string | null;
+  initiator: { id: string; name: string | null; employeeId: string } | null;
   categoryId: string; category: { id: string; code: string; name: string } | null;
   categoryTypeId: string | null; categoryType: { id: string; code: string; name: string } | null;
   uploader: { id: string; name: string | null; employeeId: string };
@@ -303,6 +305,10 @@ export default function EDocFileDetailPage() {
         {file.description && <p className="text-sm text-slate-600">{file.description}</p>}
 
         <div className="flex items-center gap-4 text-xs text-slate-400 flex-wrap">
+          {file.initiator && (
+            <span>Inisiator: <b className="font-medium text-slate-600">{file.initiator.name ?? file.initiator.employeeId}</b>{file.initiatorJobPositionName ? ` · ${file.initiatorJobPositionName}` : ""}</span>
+          )}
+          <span>Masa berlaku: <b className="font-medium text-slate-600">{file.validityType === "TEMPORER" ? "Temporer" : "Tetap"}</b></span>
           <span>Diupload oleh: {file.uploader.name ?? file.uploader.employeeId}</span>
           <span>{new Date(file.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}</span>
           {file.startDate && <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> Berlaku dari: {new Date(file.startDate).toLocaleDateString("id-ID")}</span>}
@@ -538,9 +544,16 @@ function EditFileModal({
   const [categoryTypeId, setCategoryTypeId] = useState(file.categoryTypeId ?? "");
   const [businessUnitCodes, setBusinessUnitCodes] = useState<string[]>(file.businessUnitCodes);
   const [branchIds, setBranchIds] = useState<string[]>(file.branchIds);
-  const [organizationId, setOrganizationId] = useState(file.organizationId ?? "");
+  // Organisasi lama yang belum punya kode tidak ada di pilihan (hanya yang berkode) — mulai
+  // kosong supaya user langsung diminta memilih yang valid, bukan error saat simpan.
+  const [organizationId, setOrganizationId] = useState(() =>
+    reference.organizations.some((o) => o.id === file.organizationId && o.code) ? file.organizationId ?? "" : "");
   const [startDate, setStartDate] = useState(file.startDate ? file.startDate.slice(0, 10) : "");
   const [endDate, setEndDate] = useState(file.endDate ? file.endDate.slice(0, 10) : "");
+  const [validityType, setValidityType] = useState(file.validityType);
+  const [initiator, setInitiator] = useState<InitiatorValue | null>(file.initiator
+    ? { id: file.initiator.id, name: file.initiator.name ?? file.initiator.employeeId, employeeId: file.initiator.employeeId, jobPositionName: file.initiatorJobPositionName ?? "" }
+    : null);
   const [obsoleteDestinationFolderId, setObsoleteDestinationFolderId] = useState(file.obsoleteDestinationFolderId ?? "");
   const [obsoleteFolders, setObsoleteFolders] = useState<{ id: string; name: string }[]>([]);
   const [documentNumber, setDocumentNumber] = useState(file.documentNumber ?? "");
@@ -591,7 +604,9 @@ function EditFileModal({
   const submit = async () => {
     if (!title.trim()) { onError("Title tidak boleh kosong"); return; }
     if (!organizationId) { onError("Organisasi/Departemen wajib dipilih"); return; }
-    if (endDate && !obsoleteDestinationFolderId) { onError("Pilih folder tujuan Obsolete jika mengisi end date"); return; }
+    if (!initiator) { onError("Inisiator wajib dipilih"); return; }
+    if (validityType === "TEMPORER" && !endDate) { onError("End Date wajib diisi untuk dokumen Temporer"); return; }
+    if (validityType === "TEMPORER" && endDate && !obsoleteDestinationFolderId) { onError("Pilih folder tujuan Obsolete jika mengisi end date"); return; }
 
     setSaving(true);
     try {
@@ -606,8 +621,11 @@ function EditFileModal({
           branchIds,
           organizationId: organizationId || null,
           startDate: startDate || null,
-          endDate: endDate || null,
-          obsoleteDestinationFolderId: obsoleteDestinationFolderId || null,
+          validityType,
+          endDate: validityType === "TEMPORER" ? endDate || null : null,
+          obsoleteDestinationFolderId: validityType === "TEMPORER" ? obsoleteDestinationFolderId || null : null,
+          initiatorId: initiator?.id,
+          initiatorJobPositionName: initiator?.jobPositionName ?? "",
           documentNumber: documentNumber.trim(),
           mocNumber: mocNumber.trim(),
           requiresItemImport,
@@ -665,18 +683,27 @@ function EditFileModal({
           </select>
         </div>
 
+        <InitiatorPicker value={initiator} onChange={setInitiator} />
+
+        <ValidityTypePicker value={validityType} onChange={(v) => {
+          setValidityType(v);
+          if (v === "TETAP") { setEndDate(""); setObsoleteDestinationFolderId(""); }
+        }} />
+
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className={labelCls}>Start Date</label>
             <input type="date" className={inputCls} value={startDate} onChange={(e) => setStartDate(e.target.value)} />
           </div>
-          <div>
-            <label className={labelCls}>End Date</label>
-            <input type="date" className={inputCls} value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-          </div>
+          {validityType === "TEMPORER" && (
+            <div>
+              <label className={labelCls}>End Date <span className="text-red-500">*</span></label>
+              <input type="date" className={inputCls} value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+            </div>
+          )}
         </div>
 
-        {endDate && (
+        {validityType === "TEMPORER" && endDate && (
           <div>
             <label className={labelCls}>Folder Tujuan Obsolete <span className="text-red-500">*</span></label>
             <select className={inputCls} value={obsoleteDestinationFolderId} onChange={(e) => setObsoleteDestinationFolderId(e.target.value)}>
@@ -756,6 +783,8 @@ function ApproverInfoCard({
     ["Folder", file.folder?.name ?? "-"],
     ["Business Unit", chips(buNames(file.businessUnitCodes))],
     ["Branch", chips(names(file.branchIds, reference?.branches.map((b) => ({ id: String(b.id), name: String(b.name) }))))],
+    ["Inisiator", file.initiator ? `${file.initiator.name ?? file.initiator.employeeId} (${file.initiator.employeeId})${file.initiatorJobPositionName ? ` · ${file.initiatorJobPositionName}` : ""}` : "-"],
+    ["Masa Berlaku", file.validityType === "TEMPORER" ? "Temporer" : "Tetap"],
     ["Berlaku", `${fmtDate(file.startDate)} s/d ${fmtDate(file.endDate)}`],
     ["Folder Tujuan Obsolete", file.obsoleteDestination?.name ?? "-"],
     ["Wajib Document Number", yesNo(file.requiresNumber)],

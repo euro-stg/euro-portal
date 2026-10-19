@@ -1267,6 +1267,16 @@ function UploadFileModal({
   const [obsoleteFolders, setObsoleteFolders] = useState<{ id: string; name: string }[]>([]);
   const [requiresItemImport, setRequiresItemImport] = useState(false);
   const [allowDownload, setAllowDownload] = useState(false);
+  const [validityType, setValidityType] = useState("");
+  // Default inisiator = user yang sedang upload (bisa diganti).
+  const [initiator, setInitiator] = useState<InitiatorValue | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/me").then((r) => r.json()).then((m) => {
+      if (!cancelled && m?.id) setInitiator((cur) => cur ?? { id: m.id, name: m.name ?? m.employeeId, employeeId: m.employeeId, jobPositionName: m.jobPositionName ?? "" });
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
   const [file, setFile] = useState<File | null>(null);
   const [productExcel, setProductExcel] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -1339,6 +1349,9 @@ function UploadFileModal({
     if (!title.trim()) { onError("Title wajib diisi"); return; }
     if (!categoryId) { onError("Category wajib dipilih"); return; }
     if (!organizationId) { onError("Organisasi/Departemen wajib dipilih"); return; }
+    if (!initiator) { onError("Inisiator wajib dipilih"); return; }
+    if (!validityType) { onError("Masa berlaku wajib dipilih (Tetap / Temporer)"); return; }
+    if (validityType === "TEMPORER" && !endDate) { onError("End Date wajib diisi untuk dokumen Temporer"); return; }
     if (!file) { onError("File PDF wajib diupload"); return; }
     if (endDate && !obsoleteDestinationFolderId) { onError("Pilih folder tujuan Obsolete jika mengisi end date"); return; }
     if (requiresItemImport && !productExcel) { onError("File ini promo — Excel produk/item wajib diupload sekarang"); return; }
@@ -1362,8 +1375,11 @@ function UploadFileModal({
       notifyCriteria.businessUnitCodes.forEach((v) => fd.append("notifyBusinessUnitCodes", v));
       if (organizationId) fd.append("organizationId", organizationId);
       if (startDate) fd.append("startDate", startDate);
-      if (endDate) fd.append("endDate", endDate);
-      if (obsoleteDestinationFolderId) fd.append("obsoleteDestinationFolderId", obsoleteDestinationFolderId);
+      fd.append("validityType", validityType);
+      fd.append("initiatorId", initiator.id);
+      fd.append("initiatorJobPositionName", initiator.jobPositionName);
+      if (validityType === "TEMPORER" && endDate) fd.append("endDate", endDate);
+      if (validityType === "TEMPORER" && obsoleteDestinationFolderId) fd.append("obsoleteDestinationFolderId", obsoleteDestinationFolderId);
       fd.append("requiresItemImport", String(requiresItemImport));
       fd.append("allowDownload", String(allowDownload));
       if (requiresItemImport && productExcel) fd.append("productExcel", productExcel);
@@ -1466,19 +1482,28 @@ function UploadFileModal({
           </select>
         </div>
 
+        <InitiatorPicker value={initiator} onChange={setInitiator} />
+
+        <ValidityTypePicker value={validityType} onChange={(v) => {
+          setValidityType(v);
+          if (v === "TETAP") { setEndDate(""); setObsoleteDestinationFolderId(""); }
+        }} />
+
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className={labelCls}>Start Date</label>
             <input type="date" className={inputCls} value={startDate} onChange={(e) => setStartDate(e.target.value)} />
           </div>
-          <div>
-            <label className={labelCls}>End Date</label>
-            <input type="date" className={inputCls} value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-            <p className="text-xs text-slate-400 mt-1">Begitu lewat tanggal ini, file otomatis dipindah ke folder Obsolete di bawah.</p>
-          </div>
+          {validityType === "TEMPORER" && (
+            <div>
+              <label className={labelCls}>End Date <span className="text-red-500">*</span></label>
+              <input type="date" className={inputCls} value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+              <p className="text-xs text-slate-400 mt-1">Begitu lewat tanggal ini, file otomatis dipindah ke folder Obsolete di bawah.</p>
+            </div>
+          )}
         </div>
 
-        {endDate && (
+        {validityType === "TEMPORER" && endDate && (
           <div>
             <label className={labelCls}>Folder Tujuan Obsolete <span className="text-red-500">*</span></label>
             <select className={inputCls} value={obsoleteDestinationFolderId} onChange={(e) => setObsoleteDestinationFolderId(e.target.value)}>
@@ -1944,5 +1969,83 @@ function BulkItemMatchModal({
         )}
       </div>
     </Modal>
+  );
+}
+
+
+// ===================== Inisiator & Masa Berlaku (2026-10-19) =====================
+// Dipakai form Upload File & Edit File. Inisiator bisa beda dari pengupload; jabatannya
+// disimpan SNAPSHOT (terisi otomatis saat memilih orang, bisa dikoreksi).
+export type InitiatorValue = { id: string; name: string; employeeId: string; jobPositionName: string };
+type UserHit = { id: string; name: string | null; employeeId: string; jobPositionName: string | null; organizationName: string | null };
+
+export function InitiatorPicker({ value, onChange }: { value: InitiatorValue | null; onChange: (v: InitiatorValue | null) => void }) {
+  const [q, setQ] = useState("");
+  const [hits, setHits] = useState<UserHit[]>([]);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const term = q.trim();
+    if (term.length < 2) return;
+    let cancelled = false;
+    const t = setTimeout(() => {
+      const param = /^\d+$/.test(term) ? "employeeId" : "name";
+      fetch(`/api/user/list?${param}=${encodeURIComponent(term)}&status=active`)
+        .then((r) => r.json())
+        .then((j) => { if (!cancelled) { setHits((j.data ?? []).slice(0, 8)); setOpen(true); } })
+        .catch(() => {});
+    }, 300);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [q]);
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div className="relative">
+        <label className={labelCls}>Inisiator <span className="text-red-500">*</span></label>
+        {value ? (
+          <div className="flex items-center gap-2 p-2.5 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-blue-800 truncate">{value.name}</p>
+              <p className="text-xs text-blue-600">{value.employeeId}</p>
+            </div>
+            <button type="button" onClick={() => { onChange(null); setQ(""); }} className="p-1 text-blue-500 hover:text-red-500"><X className="w-4 h-4" /></button>
+          </div>
+        ) : (
+          <input className={inputCls} placeholder="Cari nama atau NIK..." value={q} onChange={(e) => setQ(e.target.value)} onFocus={() => setOpen(hits.length > 0)} />
+        )}
+        {!value && open && q.trim().length >= 2 && (
+          <div className="absolute z-20 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+            {hits.length === 0 ? <p className="p-3 text-xs text-slate-400">Tidak ditemukan</p> : hits.map((u) => (
+              <button key={u.id} type="button" className="w-full text-left px-3 py-2 hover:bg-slate-50"
+                onClick={() => { onChange({ id: u.id, name: u.name ?? u.employeeId, employeeId: u.employeeId, jobPositionName: u.jobPositionName ?? "" }); setOpen(false); }}>
+                <p className="text-sm text-slate-700">{u.name ?? u.employeeId}</p>
+                <p className="text-xs text-slate-400">{u.employeeId}{u.jobPositionName ? ` · ${u.jobPositionName}` : ""}{u.organizationName ? ` · ${u.organizationName}` : ""}</p>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      <div>
+        <label className={labelCls}>Jabatan Inisiator</label>
+        <input className={inputCls} disabled={!value} value={value?.jobPositionName ?? ""} placeholder="Terisi otomatis dari data karyawan"
+          onChange={(e) => value && onChange({ ...value, jobPositionName: e.target.value })} />
+        <p className="text-xs text-slate-400 mt-1">Disimpan sebagai jabatan saat dokumen dibuat.</p>
+      </div>
+    </div>
+  );
+}
+
+export function ValidityTypePicker({ value, onChange }: { value: string; onChange: (v: "TETAP" | "TEMPORER") => void }) {
+  return (
+    <div>
+      <label className={labelCls}>Masa Berlaku <span className="text-red-500">*</span></label>
+      <div className="flex gap-4">
+        {([["TETAP", "Tetap", "Tanpa tanggal berakhir"], ["TEMPORER", "Temporer", "Ada tanggal berakhir (End Date)"]] as const).map(([v, l, d]) => (
+          <label key={v} className={`flex-1 flex items-start gap-2 p-2.5 rounded-lg border cursor-pointer ${value === v ? "border-amber-400 bg-amber-50" : "border-slate-200"}`}>
+            <input type="radio" name="validityType" className="mt-0.5" checked={value === v} onChange={() => onChange(v)} />
+            <span><span className="block text-sm font-medium text-slate-700">{l}</span><span className="block text-xs text-slate-400">{d}</span></span>
+          </label>
+        ))}
+      </div>
+    </div>
   );
 }

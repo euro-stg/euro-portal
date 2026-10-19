@@ -10,6 +10,9 @@ export async function GET() {
     where: { id: session.user.id },
     select: {
       id: true,
+      name: true,
+      employeeId: true,
+      jobPositionName: true,
       jobPositionId: true,
       organizationId: true,
       organizationName: true,
@@ -30,6 +33,9 @@ export async function GET() {
 
   return NextResponse.json({
     id: user.id,
+    name: user.name,
+    employeeId: user.employeeId,
+    jobPositionName: user.jobPositionName,
     jobPositionId: user.jobPositionId,
     organizationId: user.organizationId,
     organizationName: user.organizationName,

@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { unauthorized } from "@/lib/api-auth";
 import db from "@/lib/db/db";
 import { isEDocDocumentApprover, isSuperadmin, deleteEDocFile, canViewFile, canEditFileMetadata } from "@/lib/edoc";
+import { checkValidity, resolveInitiator } from "@/lib/edoc-file-fields";
 
 // DRAFT files are visible only to superadmin, their own uploader, or any Document
 // Approver (flat global pool, bypasses folder ACL — same rule as the pending-approval
@@ -31,6 +32,7 @@ export async function GET(
         rejecter: { select: { id: true, name: true } },
         folder: { select: { id: true, name: true } },
         obsoleteDestination: { select: { id: true, name: true } },
+        initiator: { select: { id: true, name: true, employeeId: true } },
         revisions: { orderBy: { replacedAt: "desc" }, include: { replacer: { select: { name: true } } } },
       },
     });
@@ -196,11 +198,19 @@ export async function PATCH(
 
     if ("startDate" in body) data.startDate = body.startDate ? new Date(body.startDate) : null;
 
-    const endDateProvided = "endDate" in body;
-    const nextEndDate = endDateProvided ? (body.endDate ? new Date(body.endDate) : null) : file.endDate;
-    const nextObsoleteDestinationFolderId = "obsoleteDestinationFolderId" in body
+    // Masa berlaku (2026-10-19): TETAP memaksa End Date & folder Obsolete kosong.
+    const nextValidityType: string = "validityType" in body ? String(body.validityType ?? "") : file.validityType;
+    const forceNoEnd = nextValidityType === "TETAP";
+    const endDateProvided = "endDate" in body || forceNoEnd;
+    const nextEndDate = forceNoEnd ? null : ("endDate" in body ? (body.endDate ? new Date(body.endDate) : null) : file.endDate);
+    const nextObsoleteDestinationFolderId = forceNoEnd ? null : ("obsoleteDestinationFolderId" in body
       ? (body.obsoleteDestinationFolderId || null)
-      : file.obsoleteDestinationFolderId;
+      : file.obsoleteDestinationFolderId);
+    if ("validityType" in body || "endDate" in body) {
+      const validity = checkValidity(nextValidityType, nextEndDate);
+      if (validity.error) return NextResponse.json({ message: validity.error }, { status: 400 });
+      data.validityType = validity.value;
+    }
     if (nextEndDate) {
       if (isNaN(nextEndDate.getTime())) return NextResponse.json({ message: "End date tidak valid" }, { status: 400 });
       if (!nextObsoleteDestinationFolderId) {
@@ -212,7 +222,19 @@ export async function PATCH(
       }
     }
     if (endDateProvided) data.endDate = nextEndDate;
-    if ("obsoleteDestinationFolderId" in body) data.obsoleteDestinationFolderId = nextObsoleteDestinationFolderId;
+    if ("obsoleteDestinationFolderId" in body || forceNoEnd) data.obsoleteDestinationFolderId = nextObsoleteDestinationFolderId;
+
+    // Inisiator (2026-10-19): ganti orang → jabatan di-snapshot ulang (atau pakai isian form);
+    // kalau cuma jabatan yang dikirim, snapshot-nya saja yang dikoreksi.
+    if ("initiatorId" in body) {
+      const initiator = await resolveInitiator(body.initiatorId ? String(body.initiatorId) : null,
+        typeof body.initiatorJobPositionName === "string" ? body.initiatorJobPositionName : null);
+      if ("error" in initiator) return NextResponse.json({ message: initiator.error }, { status: 400 });
+      data.initiatorId = initiator.initiatorId;
+      data.initiatorJobPositionName = initiator.initiatorJobPositionName;
+    } else if ("initiatorJobPositionName" in body) {
+      data.initiatorJobPositionName = typeof body.initiatorJobPositionName === "string" ? body.initiatorJobPositionName.trim() || null : null;
+    }
 
     // Diketik manual (bukan hasil generateEDocNumber) — biasanya untuk dokumen lama hasil
     // Bulk Import yang sudah punya nomor asli dari arsip. Dicek unik terhadap file lain saja

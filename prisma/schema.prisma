@@ -73,6 +73,7 @@ model User {
   euReadLogs                  EuReadLog[]             @relation("EuReader")
   edocFoldersCreated          EDocFolder[]            @relation("EDocFolderCreatedBy")
   edocFilesUploaded           EDocFile[]              @relation("EDocFileUploader")
+  edocFilesInitiated          EDocFile[]              @relation("EDocFileInitiator")
   edocFilesApproved           EDocFile[]              @relation("EDocFileApprover")
   edocFilesRejected           EDocFile[]              @relation("EDocFileRejecter")
   edocFileRevisions           EDocFileRevisionLog[]   @relation("EDocFileRevisionReplacer")
@@ -1010,6 +1011,14 @@ model EDocFile {
   // obsoleteDestinationFolderId terisi, relocateExpiredFiles() memindahkan file ke folder
   // itu secara otomatis.
   endDate   DateTime?
+  // Masa berlaku (2026-10-19): "TETAP" (tanpa End Date) | "TEMPORER" (End Date wajib).
+  validityType String @default("TETAP")
+
+  // Inisiator dokumen (2026-10-19) — bisa beda dari pengupload (mis. admin upload IM milik
+  // EVP). Jabatan disimpan SNAPSHOT saat dokumen dibuat supaya riwayat tidak ikut berubah
+  // kalau inisiator pindah jabatan. Data lama di-backfill = pengupload & jabatannya saat itu.
+  initiatorId              String?
+  initiatorJobPositionName String?
 
   obsoleteDestinationFolderId String?
 
@@ -1075,6 +1084,7 @@ model EDocFile {
   category            EDocCategory          @relation(fields: [categoryId], references: [id])
   categoryType        EDocCategoryType?     @relation(fields: [categoryTypeId], references: [id])
   uploader            User                  @relation("EDocFileUploader", fields: [uploadedBy], references: [id])
+  initiator           User?                 @relation("EDocFileInitiator", fields: [initiatorId], references: [id])
   approver            User?                 @relation("EDocFileApprover", fields: [approvedBy], references: [id])
   rejecter            User?                 @relation("EDocFileRejecter", fields: [rejectedBy], references: [id])
   revisions           EDocFileRevisionLog[]
