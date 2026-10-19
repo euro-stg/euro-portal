@@ -6,6 +6,7 @@ import { Plus, RefreshCw, Trash2, Copy, Check, Eye, EyeOff, Loader2, ToggleLeft,
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { Alert } from "@/components/ui/alert";
+import { SSO_ONLY_PERMISSIONS } from "@/lib/app-token";
 
 type ExternalApp = { id: string; name: string; externalUrl: string | null };
 type RoleOption  = { id: string; name: string; permissions: string[] };
@@ -24,7 +25,15 @@ type AppTokenRow = {
   role: { id: string; name: string; permissions: string[] } | null;
 };
 
-const PERM_LABEL: Record<string, string> = { LOGIN: "Login", VALIDATE: "Validate", GET_USERS: "Get Users" };
+const PERM_LABEL: Record<string, string> = {
+  LOGIN: "Login", VALIDATE: "Validate", GET_USERS: "Get Users", GET_BRANCHES: "Get Branches",
+  GET_JOB_POSITIONS: "Get Jabatan", GET_COMPANIES: "Get Companies", GET_ORGANIZATIONS: "Get Organizations",
+  GET_EDOC_IM: "Get Internal Memo",
+};
+
+type TokenKind = "sso" | "integration";
+// Token Integrasi Sistem tidak boleh pakai role yang memuat Login/Validate (dicek juga di server).
+const isIntegrationRole = (r: RoleOption) => !r.permissions.some((p) => (SSO_ONLY_PERMISSIONS as readonly string[]).includes(p));
 
 const inputCls  = "w-full h-10 border border-slate-200 rounded-md px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 bg-white";
 const selectCls = "w-full h-10 border border-slate-200 rounded-md px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 bg-white";
@@ -37,6 +46,8 @@ export default function AppTokenPage() {
   const [externalApps, setExternalApps]     = useState<ExternalApp[]>([]);
   const [roles, setRoles]                   = useState<RoleOption[]>([]);
   const [createOpen, setCreateOpen]         = useState(false);
+  const [createKind, setCreateKind]         = useState<TokenKind>("sso");
+  const [createName, setCreateName]         = useState("");
   const [createModuleId, setCreateModuleId] = useState("");
   const [createRoleId, setCreateRoleId]     = useState("");
   const [createDesc, setCreateDesc]         = useState("");
@@ -89,19 +100,30 @@ export default function AppTokenPage() {
   const usedModuleIds = new Set(rows.filter((r) => r.moduleId).map((r) => r.moduleId!));
   const availableApps = externalApps.filter((a) => !usedModuleIds.has(a.id));
 
+  const roleOptions = createKind === "integration" ? roles.filter(isIntegrationRole) : roles;
+  const canCreate = !!createRoleId && (createKind === "sso" ? !!createModuleId : createName.trim().length >= 3);
+
+  const openCreate = () => {
+    setCreateOpen(true); setNewToken(null);
+    setCreateKind(availableApps.length > 0 ? "sso" : "integration");
+    setCreateModuleId(""); setCreateName(""); setCreateRoleId(""); setCreateDesc("");
+  };
+
   const handleCreate = async () => {
-    if (!createModuleId || !createRoleId) return;
+    if (!canCreate) return;
     setCreating(true);
     try {
       const r = await fetch("/api/app-token", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ moduleId: createModuleId, roleId: createRoleId, description: createDesc.trim() || undefined }),
+        body: JSON.stringify(createKind === "integration"
+          ? { kind: "integration", name: createName.trim(), roleId: createRoleId, description: createDesc.trim() || undefined }
+          : { kind: "sso", moduleId: createModuleId, roleId: createRoleId, description: createDesc.trim() || undefined }),
       });
       const j = await r.json();
       if (!r.ok) { showAlert("error", j.message ?? "Gagal membuat token"); return; }
       setNewToken(j.data.token);
-      setCreateModuleId(""); setCreateRoleId(""); setCreateDesc("");
+      setCreateModuleId(""); setCreateName(""); setCreateRoleId(""); setCreateDesc("");
       load();
     } finally { setCreating(false); }
   };
@@ -167,7 +189,7 @@ export default function AppTokenPage() {
           </div>
           <div>
             <h1 className="text-lg font-bold text-slate-800">App Token</h1>
-            <p className="text-xs text-slate-400 mt-0.5">Token autentikasi untuk aplikasi eksternal yang menggunakan SSO API</p>
+            <p className="text-xs text-slate-400 mt-0.5">Token untuk aplikasi eksternal (SSO) dan integrasi sistem yang mengambil data lewat API</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -177,8 +199,7 @@ export default function AppTokenPage() {
           <Link href="/api-logs" className="flex items-center gap-1.5 px-3 py-2 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
             <Activity className="w-3.5 h-3.5" /> API Logs
           </Link>
-          <Button onClick={() => { setCreateOpen(true); setNewToken(null); setCreateModuleId(""); setCreateRoleId(""); setCreateDesc(""); }}
-            className="flex items-center gap-2" disabled={availableApps.length === 0 || roles.length === 0}>
+          <Button onClick={openCreate} className="flex items-center gap-2" disabled={roles.length === 0}>
             <Plus className="w-4 h-4" /> Buat Token
           </Button>
         </div>
@@ -198,15 +219,13 @@ export default function AppTokenPage() {
         ) : rows.length === 0 ? (
           <div className="text-center py-16">
             <p className="text-sm text-slate-400">Belum ada app token</p>
-            {externalApps.length === 0 && (
-              <p className="text-xs text-slate-400 mt-1">Tambahkan dulu aplikasi eksternal di <span className="font-medium">Master Module</span></p>
-            )}
+
           </div>
         ) : (
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50">
-                <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Aplikasi</th>
+                <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Aplikasi / Sistem</th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Role & Permissions</th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Token</th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</th>
@@ -219,7 +238,12 @@ export default function AppTokenPage() {
                 return (
                   <tr key={row.id} className="border-b border-slate-50 hover:bg-slate-50/50">
                     <td className="px-5 py-3.5">
-                      <p className="font-medium text-slate-800">{row.module?.name ?? row.name}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="font-medium text-slate-800">{row.module?.name ?? row.name}</p>
+                        {row.moduleId
+                          ? <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-100 text-blue-700">SSO</span>
+                          : <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-700">Integrasi</span>}
+                      </div>
                       {row.module?.externalUrl && (
                         <p className="text-xs text-slate-400 font-mono mt-0.5 truncate max-w-48">{row.module.externalUrl}</p>
                       )}
@@ -304,6 +328,29 @@ export default function AppTokenPage() {
         ) : (
           <div className="space-y-4">
             <div>
+              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">Jenis Token</label>
+              <div className="grid grid-cols-2 gap-2">
+                {([
+                  ["sso", "Aplikasi SSO", "Aplikasi eksternal yang login user via portal"],
+                  ["integration", "Integrasi Sistem", "Sistem lain yang hanya mengambil data (tanpa login user)"],
+                ] as const).map(([k, label, desc]) => (
+                  <button key={k} type="button" disabled={creating}
+                    onClick={() => { setCreateKind(k); setCreateRoleId(""); }}
+                    className={`text-left p-3 rounded-lg border transition-colors ${createKind === k ? "border-blue-400 bg-blue-50" : "border-slate-200 hover:bg-slate-50"}`}>
+                    <p className="text-sm font-medium text-slate-700">{label}</p>
+                    <p className="text-xs text-slate-400 mt-0.5">{desc}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+            {createKind === "integration" ? (
+            <div>
+              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">Nama Sistem</label>
+              <input className={inputCls} placeholder="mis. Odoo ERP" value={createName} onChange={(e) => setCreateName(e.target.value)} disabled={creating} />
+              <p className="text-xs text-slate-400 mt-1">Dipakai sebagai identitas pemanggil di API Logs. Token ini tidak bisa dipakai untuk login/validasi SSO.</p>
+            </div>
+            ) : (
+            <div>
               <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">Aplikasi Eksternal</label>
               {availableApps.length === 0 ? (
                 <p className="text-sm text-slate-400 bg-slate-50 rounded-md px-3 py-2.5">
@@ -318,16 +365,21 @@ export default function AppTokenPage() {
                 </select>
               )}
             </div>
+            )}
             <div>
               <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">Role</label>
               {roles.length === 0 ? (
                 <p className="text-sm text-slate-400 bg-slate-50 rounded-md px-3 py-2.5">
                   Belum ada role. <Link href="/app-token-role" className="text-blue-600 underline">Buat role dulu</Link>.
                 </p>
+              ) : roleOptions.length === 0 ? (
+                <p className="text-sm text-slate-400 bg-slate-50 rounded-md px-3 py-2.5">
+                  Belum ada role tanpa Login/Validate. <Link href="/app-token-role" className="text-blue-600 underline">Buat role data-only</Link>.
+                </p>
               ) : (
                 <select className={selectCls} value={createRoleId} onChange={(e) => setCreateRoleId(e.target.value)} disabled={creating}>
                   <option value="">— Pilih role —</option>
-                  {roles.map((r) => (
+                  {roleOptions.map((r) => (
                     <option key={r.id} value={r.id}>{r.name} ({r.permissions.map((p) => PERM_LABEL[p] ?? p).join(", ")})</option>
                   ))}
                 </select>
@@ -341,7 +393,7 @@ export default function AppTokenPage() {
             </div>
             <div className="flex gap-3 justify-end">
               <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={creating}>Batal</Button>
-              <Button onClick={handleCreate} disabled={creating || !createModuleId || !createRoleId} className="flex items-center gap-2">
+              <Button onClick={handleCreate} disabled={creating || !canCreate} className="flex items-center gap-2">
                 {creating && <Loader2 className="w-4 h-4 animate-spin" />} Generate Token
               </Button>
             </div>
@@ -374,7 +426,7 @@ export default function AppTokenPage() {
               <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">Role</label>
               <select className={selectCls} value={regenRoleId} onChange={(e) => setRegenRoleId(e.target.value)} disabled={regening}>
                 <option value="">— Pakai role saat ini ({regenTarget?.role?.name ?? "belum ada"}) —</option>
-                {roles.map((r) => (
+                {(regenTarget?.moduleId ? roles : roles.filter(isIntegrationRole)).map((r) => (
                   <option key={r.id} value={r.id}>{r.name} ({r.permissions.map((p) => PERM_LABEL[p] ?? p).join(", ")})</option>
                 ))}
               </select>
@@ -395,7 +447,7 @@ export default function AppTokenPage() {
       <Modal open={!!deleteTarget} onClose={() => setDeleteTarget(null)} title="Hapus App Token">
         <div className="space-y-4">
           <p className="text-sm text-slate-600">Hapus token untuk <strong>{deleteTarget?.module?.name ?? deleteTarget?.name}</strong>?</p>
-          <p className="text-xs text-red-500">Semua session aktif akan dihapus dan aplikasi tidak bisa lagi menggunakan SSO API.</p>
+          <p className="text-xs text-red-500">Semua session aktif akan dihapus dan aplikasi/sistem tidak bisa lagi memakai API portal.</p>
           <div className="flex gap-3 justify-end">
             <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleting}>Batal</Button>
             <Button onClick={handleDelete} disabled={deleting} className="flex items-center gap-2 bg-red-600 hover:bg-red-700">

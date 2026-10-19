@@ -3,6 +3,7 @@ import { randomBytes } from "crypto";
 import { auth } from "@/lib/auth";
 import db from "@/lib/db/db";
 import { signAppTokenJwt } from "@/lib/sso-jwt";
+import { integrationRoleError } from "@/lib/app-token";
 
 async function requireSuperadmin(userId: string) {
   const row = await db.userRole.findFirst({
@@ -41,6 +42,10 @@ export async function PATCH(
   if (roleId !== undefined) {
     const role = await db.appTokenRole.findFirst({ where: { id: roleId, deletedAt: null } });
     if (!role) return NextResponse.json({ message: "Role tidak ditemukan" }, { status: 404 });
+    if (!existing.moduleId) {
+      const roleError = integrationRoleError(role);
+      if (roleError) return NextResponse.json({ message: roleError }, { status: 400 });
+    }
     data.roleId = roleId;
   }
 
@@ -53,6 +58,12 @@ export async function PATCH(
       ? await db.appTokenRole.findFirst({ where: { id: roleId, deletedAt: null } })
       : existing.role;
     if (!role) return NextResponse.json({ message: "Role tidak ditemukan" }, { status: 404 });
+    // Permission ikut di-embed ke JWT saat regenerate — cek ulang aturan token integrasi
+    // (role-nya mungkin sudah diubah sejak token dibuat).
+    if (!existing.moduleId) {
+      const roleError = integrationRoleError(role);
+      if (roleError) return NextResponse.json({ message: roleError }, { status: 400 });
+    }
 
     const placeholder = randomBytes(16).toString("hex");
     data.token = placeholder;

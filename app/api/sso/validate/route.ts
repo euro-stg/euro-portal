@@ -40,6 +40,11 @@ export async function GET(request: Request) {
       log("FAILED", { appTokenId: claims.sub, appName: claims.name, statusCode: 401, reason: "App token tidak aktif atau sudah di-revoke" });
       return NextResponse.json({ error: "App token tidak valid atau tidak aktif" }, { status: 401 });
     }
+    // Token Integrasi Sistem (tanpa aplikasi) hanya untuk endpoint data, bukan alur SSO.
+    if (!appRecord.moduleId) {
+      log("FAILED", { appTokenId: appRecord.id, appName: claims.name, statusCode: 403, reason: "Token integrasi tidak bisa dipakai untuk SSO" });
+      return NextResponse.json({ error: "Token Integrasi Sistem tidak bisa dipakai untuk login/validasi SSO" }, { status: 403 });
+    }
 
     const appName = claims.name;
 

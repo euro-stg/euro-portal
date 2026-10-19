@@ -108,6 +108,10 @@ export default function ApiDocsPage() {
             Semua endpoint memerlukan header <code className="font-mono bg-amber-100 px-1 rounded">X-App-Token</code> yang berisi token apps yang telah didaftarkan oleh administrator portal.
             Hubungi admin untuk mendapatkan token.
           </p>
+          <ul className="text-xs text-amber-700 mt-1.5 leading-relaxed list-disc pl-4 space-y-0.5">
+            <li><b>Aplikasi SSO</b> — terhubung ke satu aplikasi eksternal di portal. Bisa memakai semua endpoint sesuai permission role-nya, termasuk login/validasi SSO.</li>
+            <li><b>Integrasi Sistem</b> — untuk sistem lain yang hanya mengambil data (mis. ERP). Tidak terhubung ke aplikasi, jadi hanya bisa memakai endpoint data; <code className="font-mono bg-amber-100 px-1 rounded">/api/sso/login</code>, <code className="font-mono bg-amber-100 px-1 rounded">/api/sso/validate</code> dan generate-link menolak token ini (403/400).</li>
+          </ul>
         </div>
       </div>
 
@@ -265,6 +269,9 @@ window.location.href = redirectUrl;
 // 401 - App token tidak valid
 { "error": "App token tidak valid atau tidak aktif" }
 
+// 403 - Token Integrasi Sistem (bukan token aplikasi SSO)
+{ "error": "Token Integrasi Sistem tidak bisa dipakai untuk login/validasi SSO" }
+
 // 403 - Akun nonaktif
 { "error": "Akun tidak aktif" }
 
@@ -367,6 +374,9 @@ curl -X GET "${BASE_URL}/api/sso/validate" \\
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Response Error</p>
           <CodeBlock code={`// 401 - Token tidak ada atau kadaluarsa
 { "valid": false, "error": "Token sudah kadaluarsa" }
+
+// 403 - Token Integrasi Sistem (bukan token aplikasi SSO)
+{ "error": "Token Integrasi Sistem tidak bisa dipakai untuk login/validasi SSO" }
 
 // 403 - Token dari app lain
 { "valid": false, "error": "Token bukan milik app ini" }

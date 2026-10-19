@@ -37,9 +37,12 @@ export async function POST(request: Request) {
       appRecord = mod.appToken;
       finalRedirectUrl = mod.externalUrl;
     } else if (explicitAppTokenId && explicitRedirectUrl) {
-      appRecord = await db.appToken.findUnique({ where: { id: explicitAppTokenId } });
-      if (!appRecord || !appRecord.active || appRecord.deletedAt)
+      const rec = await db.appToken.findUnique({ where: { id: explicitAppTokenId } });
+      if (!rec || !rec.active || rec.deletedAt)
         return NextResponse.json({ message: "App token tidak valid atau tidak aktif" }, { status: 401 });
+      if (!rec.moduleId)
+        return NextResponse.json({ message: "Token Integrasi Sistem tidak bisa dipakai untuk SSO" }, { status: 400 });
+      appRecord = rec;
     } else {
       return NextResponse.json({ message: "moduleId atau appTokenId + redirectUrl wajib diisi" }, { status: 400 });
     }
