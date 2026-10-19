@@ -48,6 +48,7 @@ export async function GET(request: Request) {
     const employeeId = searchParams.get("employeeId");
     const status = searchParams.get("status");
     const roleId = searchParams.get("roleId");
+    const source = searchParams.get("source"); // "manual" | "talenta"
     const organizationName = searchParams.get("organizationName");
     const jobPositionName = searchParams.get("jobPositionName");
     const branchName = searchParams.get("branchName");
@@ -66,6 +67,7 @@ export async function GET(request: Request) {
         ? { status: { contains: status, mode: "insensitive" as const } }
         : {}),
       ...(roleId ? { userRoles: { some: { roleId } } } : {}),
+      ...(source === "manual" ? { source: "manual" } : source === "talenta" ? { source: { not: "manual" } } : {}),
       ...(organizationName
         ? {
             organizationName: {

@@ -404,7 +404,9 @@ export async function POST(req: NextRequest) {
     for (const role of defaultRoles) {
       // Tentukan kondisi user berdasarkan scope
       const scope = role.defaultScope ?? "ALL";
-      const userWhere: Record<string, unknown> = { status: "active" };
+      // User manual (mis. akun testing) terisolasi: tidak pernah dapat default role, role-nya
+      // hanya yang di-assign admin secara eksplisit.
+      const userWhere: Record<string, unknown> = { status: "active", source: { not: "manual" } };
       if (scope.includes("ORGANIZATION")) {
         if (!role.defaultOrgId) continue;
         userWhere.organizationId = role.defaultOrgId;

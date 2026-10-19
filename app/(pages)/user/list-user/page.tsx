@@ -98,6 +98,7 @@ type FilterState = {
   age: string;
   joinDate: string;
   resignDate: string;
+  source: string;
 };
 
 type AppOption = { id: string; name: string };
@@ -221,7 +222,7 @@ export default function ListUserPage() {
   const [form, setForm] = useState<FormState>(emptyForm);
   const [filters, setFilters] = useState<FilterState>({
     employeeId: "", name: "", status: "", roleId: "", organizationName: "",
-    jobPositionName: "", branchName: "", age: "", joinDate: "", resignDate: "",
+    jobPositionName: "", branchName: "", age: "", joinDate: "", resignDate: "", source: "",
   });
 
   function showToast(variant: "success" | "error", message: string) {
@@ -258,6 +259,7 @@ export default function ListUserPage() {
     if (f.age.trim())              p.set("age", f.age.trim());
     if (f.joinDate.trim())         p.set("joinDate", f.joinDate.trim());
     if (f.resignDate.trim())       p.set("resignDate", f.resignDate.trim());
+    if (f.source)                  p.set("source", f.source);
     return p.toString();
   };
 
@@ -309,7 +311,7 @@ export default function ListUserPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters.name, filters.employeeId, filters.status, filters.roleId,
       filters.organizationName, filters.jobPositionName, filters.branchName,
-      filters.age, filters.joinDate, filters.resignDate]);
+      filters.age, filters.joinDate, filters.resignDate, filters.source]);
 
   const handlePageChange = (page: number) => { setCurrentPage(page); void refreshList(page, filters, showAll); };
 
@@ -654,7 +656,13 @@ export default function ListUserPage() {
                   ))}
                 </select>
               </td>
-              <td className="px-3 py-2" />
+              <td className="px-3 py-2">
+                <select className={selectSmCls} value={filters.source} onChange={(e) => setFilters((p) => ({ ...p, source: e.target.value }))}>
+                  <option value="">Semua</option>
+                  <option value="talenta">Talenta</option>
+                  <option value="manual">Manual</option>
+                </select>
+              </td>
               <td className="px-3 py-2" />
             </tr>
           </thead>
