@@ -39,33 +39,51 @@ export async function GET(request: Request) {
     }
 
     const { searchParams } = new URL(request.url);
-    const search   = searchParams.get("search")?.trim() ?? "";
+    const search   = searchParams.get("search")?.trim().toLowerCase() ?? "";
     const parentId = searchParams.get("parentId")?.trim() ?? "";
 
-    const orgs = await db.organization.findMany({
-      where: {
-        deletedAt: null,
-        ...(parentId === "null"
-          ? { parentOrganizationId: null }
-          : parentId
-          ? { parentOrganizationId: parentId }
-          : {}),
-        ...(search
-          ? { OR: [{ name: { contains: search, mode: "insensitive" } }, { code: { contains: search, mode: "insensitive" } }] }
-          : {}),
-      },
-      select: {
-        id: true,
-        name: true,
-        code: true,
-        parentOrganizationId: true,
-        source: true,
-      },
-      orderBy: [{ parentOrganizationId: "asc" }, { name: "asc" }],
+    // Respons BERTINGKAT (2026-10-19): sub-org ada di `children` induknya, bukan sejajar.
+    // Field tiap node sama seperti sebelumnya (+ children). Organisasi yang parent-nya sudah
+    // dihapus/tidak ada diperlakukan sebagai induk supaya tidak hilang.
+    const all = await db.organization.findMany({
+      where: { deletedAt: null },
+      select: { id: true, name: true, code: true, parentOrganizationId: true, source: true },
+      orderBy: { name: "asc" },
+    });
+    const byId = new Map(all.map((o) => [o.id, o]));
+    const parentOf = (o: (typeof all)[number]) =>
+      o.parentOrganizationId && byId.has(o.parentOrganizationId) ? o.parentOrganizationId : null;
+
+    // search → organisasi yang cocok + seluruh induknya (posisi di hierarki tetap terlihat).
+    let included: Set<string> | null = null;
+    if (search) {
+      included = new Set();
+      for (const o of all) {
+        if (!o.name.toLowerCase().includes(search) && !(o.code ?? "").toLowerCase().includes(search)) continue;
+        for (let cur: string | null = o.id; cur && !included.has(cur); cur = parentOf(byId.get(cur)!)) included.add(cur);
+      }
+    }
+
+    type OrgNode = (typeof all)[number] & { children: OrgNode[] };
+    const childrenOf = new Map<string | null, (typeof all)[number][]>();
+    for (const o of all) {
+      if (included && !included.has(o.id)) continue;
+      const key = parentOf(o);
+      childrenOf.set(key, [...(childrenOf.get(key) ?? []), o]);
+    }
+    const build = (o: (typeof all)[number], seen: Set<string>): OrgNode => ({
+      ...o,
+      // `seen` mencegah loop tak berujung kalau data parent saling menunjuk (data rusak).
+      children: (childrenOf.get(o.id) ?? []).filter((c) => !seen.has(c.id)).map((c) => build(c, new Set([...seen, c.id]))),
     });
 
+    // parentId=null (atau kosong) → mulai dari induk teratas; parentId=<id> → anak-anak org tsb.
+    const rootKey = parentId && parentId !== "null" ? parentId : null;
+    const data = (childrenOf.get(rootKey) ?? []).map((o) => build(o, new Set([o.id])));
+    const countNodes = (nodes: OrgNode[]): number => nodes.reduce((n, x) => n + 1 + countNodes(x.children), 0);
+
     log("SUCCESS", { appTokenId: appRecord.id, appName: claims.name, statusCode: 200 });
-    return NextResponse.json({ data: orgs, total: orgs.length });
+    return NextResponse.json({ data, total: countNodes(data) });
   } catch (err) {
     console.error("[SSO Organizations]", err);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });

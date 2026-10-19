@@ -646,7 +646,7 @@ curl -X GET "${BASE_URL}/api/sso/job-positions?search=dokter" \\
           <code className="text-sm font-mono text-slate-700 bg-slate-100 px-3 py-1 rounded">/api/sso/organizations</code>
         </div>
         <p className="text-sm text-slate-600">
-          Mengambil daftar organization beserta informasi hierarki (org utama dan sub-org).
+          Mengambil daftar organization dalam bentuk <b>bertingkat</b>: sub-org berada di dalam <code className="font-mono bg-slate-100 px-1 rounded text-xs">children</code> org induknya (kedalaman tidak terbatas).
           Data dikelola di Master Organization portal, mendukung 3 sumber: input manual, sync dari data user, dan sync Talenta (mendatang).
           Memerlukan permission <code className="font-mono bg-slate-100 px-1 rounded text-xs">GET_ORGANIZATIONS</code> pada App Token.
         </p>
@@ -654,8 +654,8 @@ curl -X GET "${BASE_URL}/api/sso/job-positions?search=dokter" \\
         <div>
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Query Parameter (opsional)</p>
           <div className="border border-slate-100 rounded-lg overflow-hidden">
-            <Field name="search" type="string" desc="Filter nama atau kode organization (case-insensitive)" />
-            <Field name="parentId" type="string" desc="Filter berdasarkan parent. Gunakan 'null' untuk hanya org utama (tanpa parent), atau isi ID untuk sub-org dari org tertentu" />
+            <Field name="search" type="string" desc="Filter nama atau kode organization (case-insensitive). Hasil tetap bertingkat: org yang cocok ditampilkan beserta org induknya" />
+            <Field name="parentId" type="string" desc="Titik awal hierarki. Kosong atau 'null' = mulai dari org utama; isi ID untuk mengambil sub-org dari org tertentu (beserta sub-sub-org-nya)" />
           </div>
         </div>
 
@@ -664,8 +664,8 @@ curl -X GET "${BASE_URL}/api/sso/job-positions?search=dokter" \\
           <CodeBlock lang="bash" code={`curl -X GET "${BASE_URL}/api/sso/organizations" \\
   -H "X-App-Token: your-app-token-here"
 
-# Hanya org utama (tanpa parent)
-curl -X GET "${BASE_URL}/api/sso/organizations?parentId=null" \\
+# Sub-org dari org tertentu
+curl -X GET "${BASE_URL}/api/sso/organizations?parentId=79747" \\
   -H "X-App-Token: your-app-token-here"`} />
         </div>
 
@@ -676,16 +676,19 @@ curl -X GET "${BASE_URL}/api/sso/organizations?parentId=null" \\
     {
       "id": "79747",
       "name": "HRD & GA",
-      "code": null,
+      "code": "HRGA",
       "parentOrganizationId": null,
-      "source": "user_sync"
-    },
-    {
-      "id": "79748",
-      "name": "HRD",
-      "code": null,
-      "parentOrganizationId": "79747",
-      "source": "manual"
+      "source": "user_sync",
+      "children": [
+        {
+          "id": "79748",
+          "name": "HRD",
+          "code": "HRD",
+          "parentOrganizationId": "79747",
+          "source": "manual",
+          "children": []
+        }
+      ]
     }
   ],
   "total": 2
@@ -700,6 +703,8 @@ curl -X GET "${BASE_URL}/api/sso/organizations?parentId=null" \\
             <Field name="code" type="string | null" desc="Kode singkat organization, bisa null jika tidak diisi" />
             <Field name="parentOrganizationId" type="string | null" desc="ID parent organization. Null berarti ini adalah org utama; jika berisi ID maka ini adalah sub-org" />
             <Field name="source" type="string" desc="Sumber data: 'manual' (input portal), 'user_sync' (sync dari profil user), 'talenta' (sync API Talenta)" />
+            <Field name="children" type="array" desc="Sub-org langsung dari org ini (struktur sama, bertingkat). Array kosong jika tidak punya sub-org" />
+            <Field name="total" type="number" desc="Jumlah seluruh organization di respons, termasuk semua sub-org" />
           </div>
         </div>
       </Section>
