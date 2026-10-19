@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Copy, Check, BookOpen, Lock, Users, ShieldCheck, ArrowRight, ChevronDown, GitBranch, Briefcase, Building2, Network } from "lucide-react";
+import { Copy, Check, BookOpen, Lock, Users, ShieldCheck, ArrowRight, ChevronDown, GitBranch, Briefcase, Building2, Network, FileText } from "lucide-react";
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -701,6 +701,102 @@ curl -X GET "${BASE_URL}/api/sso/organizations?parentId=null" \\
             <Field name="parentOrganizationId" type="string | null" desc="ID parent organization. Null berarti ini adalah org utama; jika berisi ID maka ini adalah sub-org" />
             <Field name="source" type="string" desc="Sumber data: 'manual' (input portal), 'user_sync' (sync dari profil user), 'talenta' (sync API Talenta)" />
           </div>
+        </div>
+      </Section>
+
+      <Section id="edoc-im" icon={FileText} title="9. Internal Memo (E Document)" open={openSections.has("edoc-im")} onToggle={() => toggle("edoc-im")}>
+        <div className="flex items-center gap-3">
+          <Badge method="GET" />
+          <code className="text-sm font-mono text-slate-700 bg-slate-100 px-3 py-1 rounded">/api/sso/edoc/im</code>
+        </div>
+        <p className="text-sm text-slate-600">
+          Daftar Internal Memo dari E Document (kategori IM) yang sudah <b>Release</b> dan punya nomor dokumen, terbaru dulu.
+          Hanya metadata — tanpa file PDF. Memerlukan permission <code className="font-mono bg-slate-100 px-1 rounded text-xs">GET_EDOC_IM</code> pada App Token.
+        </p>
+
+        <div>
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Query Parameter (opsional)</p>
+          <div className="border border-slate-100 rounded-lg overflow-hidden">
+            <Field name="year" type="string" desc="Tahun pada nomor dokumen (4 digit), contoh: 2025" />
+            <Field name="department" type="string" desc="Kode organisasi/departemen, contoh: BUS, PI" />
+            <Field name="search" type="string" desc="Cari di nomor dokumen atau judul (case-insensitive)" />
+            <Field name="updatedSince" type="string (ISO datetime)" desc="Hanya dokumen yang berubah sejak waktu ini — untuk sync bertahap, contoh: 2026-10-01T00:00:00Z" />
+            <Field name="page" type="number" desc="Halaman, default 1" />
+            <Field name="limit" type="number" desc="Jumlah per halaman, default 20, maksimal 100" />
+          </div>
+        </div>
+
+        <div>
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Contoh Request</p>
+          <CodeBlock lang="bash" code={`curl -X GET "${BASE_URL}/api/sso/edoc/im?year=2025&department=BUS" \\
+  -H "X-App-Token: your-app-token-here"`} />
+        </div>
+
+        <div>
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Response Sukses <span className="text-emerald-500 font-mono">200</span></p>
+          <CodeBlock code={`{
+  "data": [
+    {
+      "id": "cmv9...",
+      "documentNumber": "004/Euromedica/IM/BUS/XII/2025",
+      "sequence": 4,
+      "year": 2025,
+      "yearFormat": "004 - 2025",
+      "title": "Program Promo Akhir Tahun",
+      "categoryType": { "code": "Regular", "name": "Regular" },
+      "initiator": { "employeeId": "20231234", "name": "Andri Susanto Yos", "jobPosition": "EVP of Strategy & Commercial" },
+      "validity": "TEMPORER",
+      "startDate": "2025-12-01T00:00:00.000Z",
+      "endDate": "2026-01-31T00:00:00.000Z",
+      "department": { "code": "BUS", "name": "Business" },
+      "status": "RELEASE",
+      "approvedAt": "2025-12-01T03:15:00.000Z",
+      "updatedAt": "2025-12-01T03:15:00.000Z",
+      "portalUrl": "https://portal.iteuromedica.com/apps/e-document/edoc-file/cmv9..."
+    }
+  ],
+  "total": 1, "page": 1, "limit": 20, "totalPages": 1
+}`} />
+        </div>
+
+        <div>
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Keterangan Field</p>
+          <div className="border border-slate-100 rounded-lg overflow-hidden">
+            <Field name="documentNumber" type="string" desc="Nomor IM resmi (Nama IM)" />
+            <Field name="sequence / year / yearFormat" type="number / number / string" desc="Nomor urut & tahun dari nomor dokumen; yearFormat = 'urut - tahun' (Format Tahun)" />
+            <Field name="initiator" type="object | null" desc="Inisiator IM; jobPosition = jabatan SAAT dokumen dibuat (snapshot)" />
+            <Field name="validity" type="string" desc="Masa berlaku: 'TETAP' atau 'TEMPORER' (TEMPORER selalu punya endDate)" />
+            <Field name="department" type="object | null" desc="Organisasi/departemen dokumen (kode & nama)" />
+            <Field name="portalUrl" type="string" desc="Link ke detail dokumen di portal (perlu login)" />
+          </div>
+        </div>
+
+        <div>
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Response Error</p>
+          <CodeBlock code={`// 401 - Header X-App-Token tidak ada
+{ "error": "X-App-Token header diperlukan" }
+
+// 401 - Token tidak valid (format/tanda tangan salah)
+{ "error": "App token tidak valid" }
+
+// 401 - Token nonaktif atau sudah di-revoke
+{ "error": "App token tidak valid atau tidak aktif" }
+
+// 403 - Role token tidak punya permission GET_EDOC_IM
+{ "error": "Tidak memiliki akses ke endpoint ini" }
+
+// 400 - Parameter tidak valid
+{ "error": "Parameter year harus 4 digit, mis. 2025" }
+{ "error": "Parameter updatedSince harus format tanggal ISO, mis. 2026-10-01T00:00:00Z" }`} />
+        </div>
+
+        <div className="flex gap-3 bg-blue-50 border border-blue-200 rounded-lg p-3">
+          <p className="text-xs text-blue-800 leading-relaxed">
+            <b>Sync bertahap:</b> simpan waktu sync terakhir, lalu panggil dengan{" "}
+            <code className="font-mono bg-blue-100 px-1 rounded">updatedSince</code> untuk mengambil dokumen yang baru atau berubah saja.
+            Data diurutkan dari yang terbaru di-approve; ulangi per <code className="font-mono bg-blue-100 px-1 rounded">page</code> sampai{" "}
+            <code className="font-mono bg-blue-100 px-1 rounded">page = totalPages</code>.
+          </p>
         </div>
       </Section>
 
