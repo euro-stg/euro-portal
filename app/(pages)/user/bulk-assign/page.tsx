@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Users, RefreshCw, CheckSquare, Square, ChevronLeft, ChevronRight, UserCheck, List, Layers } from "lucide-react";
+import { Users, RefreshCw, CheckSquare, Square, ChevronLeft, ChevronRight, UserCheck, List, Layers, Plus, X } from "lucide-react";
 
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 type AppOption  = { id: string; name: string };
 type RoleOption = { id: string; name: string; appId: string | null };
 type RoleEntry  = { name: string; appId: string | null };
+type Target     = { appId: string; roleId: string }; // appId "portal" = level portal
 type UserRow    = {
   id: string;
   employeeId: string;
@@ -30,10 +31,9 @@ export default function BulkAssignPage() {
 
   // ── Target selection ─────────────────────────────────────────
   const [apps, setApps]               = useState<AppOption[]>([]);
-  const [roles, setRoles]             = useState<RoleOption[]>([]);
-  const [filterRoles, setFilterRoles] = useState<RoleOption[]>([]);
-  const [selectedAppId, setSelectedAppId] = useState<string>("portal");
-  const [selectedRoleId, setSelectedRoleId] = useState<string>("");
+  const [filterRoles, setFilterRoles] = useState<RoleOption[]>([]); // semua role aktif (portal + app)
+  // Beberapa aplikasi sekaligus — satu baris = satu aplikasi + role-nya.
+  const [targets, setTargets]         = useState<Target[]>([{ appId: "portal", roleId: "" }]);
 
   // ── User list ─────────────────────────────────────────────────
   const [users, setUsers]             = useState<UserRow[]>([]);
@@ -42,7 +42,7 @@ export default function BulkAssignPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [listError, setListError]     = useState<string | null>(null);
-  const [filters, setFilters]         = useState({ name: "", branchName: "", organizationName: "", roleId: "" });
+  const [filters, setFilters]         = useState({ name: "", branchName: "", organizationName: "", roleId: "", source: "" });
 
   // ── Show All ──────────────────────────────────────────────────
   const [showAll, setShowAll]         = useState(false);
@@ -76,25 +76,6 @@ export default function BulkAssignPage() {
     return () => { if (toastRef.current) clearTimeout(toastRef.current); };
   }, []);
 
-  // Load roles when app changes
-  useEffect(() => {
-    setSelectedRoleId("");
-    setRoles([]);
-    const appId = selectedAppId === "portal" ? null : selectedAppId;
-    const q = appId === null ? "appId=null" : `appId=${appId}`;
-    fetch(`/api/role/list?status=active&${q}`, { cache: "no-store" })
-      .then((r) => r.json())
-      .then((j) => {
-        const all: RoleOption[] = j?.data ?? [];
-        // filter by appId match
-        const filtered = all.filter((r) =>
-          appId === null ? r.appId === null : r.appId === appId
-        );
-        setRoles(filtered);
-      })
-      .catch(() => {});
-  }, [selectedAppId]);
-
   // Load users
   const loadUsers = useCallback(async (page: number, f = filters, all = showAll) => {
     setLoadingUsers(true); setListError(null);
@@ -106,6 +87,7 @@ export default function BulkAssignPage() {
       if (f.branchName.trim())       p.set("branchName", f.branchName.trim());
       if (f.organizationName.trim()) p.set("organizationName", f.organizationName.trim());
       if (f.roleId.trim())           p.set("roleId", f.roleId.trim());
+      if (f.source)                  p.set("source", f.source);
       const res  = await fetch(`/api/user/list?${p}`, { cache: "no-store" });
       const json = await res.json().catch(() => null);
       if (!res.ok) { setUsers([]); setListError(json?.message ?? "Gagal memuat"); return; }
@@ -130,7 +112,7 @@ export default function BulkAssignPage() {
     const t = setTimeout(() => { void loadUsers(1, filters, showAll); }, 400);
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.name, filters.branchName, filters.organizationName, filters.roleId]);
+  }, [filters.name, filters.branchName, filters.organizationName, filters.roleId, filters.source]);
 
   const toggleShowAll = () => {
     const next = !showAll;
@@ -163,15 +145,14 @@ export default function BulkAssignPage() {
   const handleSubmit = async () => {
     if (submitting) return;
     if (selected.size === 0) { showToast("error", "Pilih minimal 1 user"); return; }
-    if (!selectedRoleId)     { showToast("error", "Pilih role terlebih dahulu"); return; }
+    if (!targetsReady)       { showToast("error", "Pilih role untuk setiap aplikasi terlebih dahulu"); return; }
 
     setSubmitting(true);
     try {
-      const appId = selectedAppId === "portal" ? null : selectedAppId;
       const res   = await fetch("/api/user/bulk-assign-role", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userIds: Array.from(selected), roleId: selectedRoleId, appId }),
+        body: JSON.stringify({ userIds: Array.from(selected), assignments }),
       });
       const json = await res.json().catch(() => null);
       if (!res.ok) { showToast("error", json?.message ?? "Gagal assign"); return; }
@@ -185,16 +166,15 @@ export default function BulkAssignPage() {
   const handleRemove = async () => {
     if (submitting) return;
     if (selected.size === 0) { showToast("error", "Pilih minimal 1 user"); return; }
-    if (!selectedRoleId) { showToast("error", "Pilih role yang ingin dihapus terlebih dahulu"); return; }
-    if (!confirm(`Hapus role "${selectedRoleName}" dari ${selected.size} user?`)) return;
+    if (!targetsReady) { showToast("error", "Pilih role yang ingin dihapus terlebih dahulu"); return; }
+    if (!confirm(`Hapus ${targetSummary} dari ${selected.size} user?`)) return;
 
     setSubmitting(true);
     try {
-      const appId = selectedAppId === "portal" ? null : selectedAppId;
       const res   = await fetch("/api/user/bulk-remove-role", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userIds: Array.from(selected), appId, roleId: selectedRoleId }),
+        body: JSON.stringify({ userIds: Array.from(selected), assignments }),
       });
       const json = await res.json().catch(() => null);
       if (!res.ok) { showToast("error", json?.message ?? "Gagal hapus role"); return; }
@@ -205,11 +185,19 @@ export default function BulkAssignPage() {
     finally { setSubmitting(false); }
   };
 
-  const selectedAppName = selectedAppId === "portal"
-    ? "Portal"
-    : apps.find((a) => a.id === selectedAppId)?.name ?? selectedAppId;
+  const appName  = (appId: string) => appId === "portal" ? "Portal" : apps.find((a) => a.id === appId)?.name ?? appId;
+  const rolesFor = (appId: string) => filterRoles.filter((r) => (appId === "portal" ? r.appId === null : r.appId === appId));
+  const roleName = (roleId: string) => filterRoles.find((r) => r.id === roleId)?.name ?? roleId;
+  const updateTarget = (i: number, patch: Partial<Target>) =>
+    setTargets((prev) => prev.map((t, j) => (j === i ? { ...t, ...patch } : t)));
+  const usedAppIds = new Set(targets.map((t) => t.appId));
+  const appChoices = [{ id: "portal", name: "Portal (level portal)" }, ...apps];
+  const nextFreeApp = appChoices.find((a) => !usedAppIds.has(a.id));
 
-  const selectedRoleName = roles.find((r) => r.id === selectedRoleId)?.name;
+  const filledTargets = targets.filter((t) => t.roleId);
+  const targetsReady  = filledTargets.length > 0 && filledTargets.length === targets.length;
+  const assignments   = filledTargets.map((t) => ({ appId: t.appId === "portal" ? null : t.appId, roleId: t.roleId }));
+  const targetSummary = filledTargets.map((t) => `${roleName(t.roleId)} di ${appName(t.appId)}`).join(", ");
 
   return (
     <div>
@@ -241,46 +229,72 @@ export default function BulkAssignPage() {
         <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-4">
           1 — Pilih Target Role
         </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-2">
+          <div className="hidden sm:grid grid-cols-[1fr_1fr_2rem] gap-3">
             <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Aplikasi</label>
-            <select
-              className={inputCls + " w-full"}
-              value={selectedAppId}
-              onChange={(e) => setSelectedAppId(e.target.value)}
-            >
-              <option value="portal">Portal (level portal)</option>
-              {apps.map((a) => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))}
-            </select>
-          </div>
-          <div className="flex flex-col gap-1.5">
             <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Role</label>
-            <select
-              className={inputCls + " w-full"}
-              value={selectedRoleId}
-              onChange={(e) => setSelectedRoleId(e.target.value)}
-              disabled={mounted && roles.length === 0 ? true : undefined}
-            >
-              <option value="">
-                {roles.length === 0 ? "— belum ada role untuk app ini —" : "-- Pilih Role --"}
-              </option>
-              {roles.map((r) => (
-                <option key={r.id} value={r.id}>{r.name}</option>
-              ))}
-            </select>
           </div>
+          {targets.map((t, i) => {
+            const opts = rolesFor(t.appId);
+            return (
+              <div key={i} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_2rem] gap-3 items-center">
+                <select
+                  className={inputCls + " w-full"}
+                  value={t.appId}
+                  onChange={(e) => updateTarget(i, { appId: e.target.value, roleId: "" })}
+                >
+                  {appChoices.filter((a) => a.id === t.appId || !usedAppIds.has(a.id)).map((a) => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))}
+                </select>
+                <select
+                  className={inputCls + " w-full"}
+                  value={t.roleId}
+                  onChange={(e) => updateTarget(i, { roleId: e.target.value })}
+                  disabled={mounted && opts.length === 0 ? true : undefined}
+                >
+                  <option value="">
+                    {opts.length === 0 ? "— belum ada role untuk app ini —" : "-- Pilih Role --"}
+                  </option>
+                  {opts.map((r) => (
+                    <option key={r.id} value={r.id}>{r.name}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => setTargets((prev) => prev.filter((_, j) => j !== i))}
+                  disabled={targets.length === 1}
+                  className="p-1.5 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-400 transition-colors"
+                  title="Hapus baris"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            );
+          })}
+          {nextFreeApp && (
+            <button
+              onClick={() => setTargets((prev) => [...prev, { appId: nextFreeApp.id, roleId: "" }])}
+              className="self-start inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-700 mt-1"
+            >
+              <Plus className="w-3.5 h-3.5" /> Tambah aplikasi
+            </button>
+          )}
         </div>
 
-        {selectedRoleId && (
-          <div className="mt-3 flex items-center gap-2 text-xs text-slate-500 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
-            <UserCheck className="w-3.5 h-3.5 text-blue-500" />
-            User terpilih akan mendapat role{" "}
-            <span className="font-semibold text-blue-700">{selectedRoleName}</span>{" "}
-            di{" "}
-            <span className="font-semibold text-blue-700">{selectedAppName}</span>.
-            Role lama di app yang sama akan digantikan.
+        {filledTargets.length > 0 && (
+          <div className="mt-3 flex items-start gap-2 text-xs text-slate-500 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+            <UserCheck className="w-3.5 h-3.5 text-blue-500 mt-0.5 shrink-0" />
+            <span>
+              User terpilih akan mendapat{" "}
+              {filledTargets.map((t, i) => (
+                <span key={t.appId}>
+                  {i > 0 && ", "}
+                  <span className="font-semibold text-blue-700">{roleName(t.roleId)}</span> di{" "}
+                  <span className="font-semibold text-blue-700">{appName(t.appId)}</span>
+                </span>
+              ))}
+              . Role lama di app yang sama akan digantikan.
+            </span>
           </div>
         )}
       </div>
@@ -345,6 +359,15 @@ export default function BulkAssignPage() {
             {filterRoles.map((r) => (
               <option key={r.id} value={r.id}>{r.name}</option>
             ))}
+          </select>
+          <select
+            className={inputCls + " min-w-[120px]"}
+            value={filters.source}
+            onChange={(e) => setFilters((p) => ({ ...p, source: e.target.value }))}
+          >
+            <option value="">Semua Source</option>
+            <option value="talenta">Talenta</option>
+            <option value="manual">Manual</option>
           </select>
           <p className="text-xs text-slate-400 whitespace-nowrap ml-auto">
             {total} user ditemukan
@@ -481,13 +504,12 @@ export default function BulkAssignPage() {
                 <p className="text-sm font-semibold text-slate-800">
                   {selected.size} user dipilih
                 </p>
-                {selectedRoleId ? (
+                {targetsReady ? (
                   <p className="text-xs text-slate-400">
-                    Role: <span className="font-medium text-slate-600">{selectedRoleName}</span>{" "}
-                    di <span className="font-medium text-slate-600">{selectedAppName}</span>
+                    Role: <span className="font-medium text-slate-600">{targetSummary}</span>
                   </p>
                 ) : (
-                  <p className="text-xs text-amber-500">Pilih role di panel atas terlebih dahulu</p>
+                  <p className="text-xs text-amber-500">Pilih role untuk setiap aplikasi di panel atas terlebih dahulu</p>
                 )}
               </div>
             </div>
@@ -498,7 +520,7 @@ export default function BulkAssignPage() {
               <Button
                 variant="outline"
                 onClick={() => void handleRemove()}
-                disabled={submitting}
+                disabled={submitting || !targetsReady}
                 className="text-red-600 border-red-200 hover:bg-red-50"
               >
                 {submitting ? "Memproses..." : `Hapus Role dari ${selected.size} User`}
@@ -506,7 +528,7 @@ export default function BulkAssignPage() {
               <Button
                 variant="primary"
                 onClick={() => void handleSubmit()}
-                disabled={submitting || !selectedRoleId}
+                disabled={submitting || !targetsReady}
               >
                 {submitting ? "Menyimpan..." : `Assign ke ${selected.size} User`}
               </Button>
