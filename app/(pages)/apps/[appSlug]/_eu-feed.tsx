@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import Image from "next/image";
-import { Search, ChevronLeft, ChevronRight, MessageCircle, Paperclip, Pin, ShieldAlert, RefreshCw, Cake, CalendarDays, Megaphone, ThumbsUp, Heart, PartyPopper, Lightbulb, PenSquare, ImagePlus, X, Loader2, Send, Pencil, Trash2 } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight, MessageCircle, Paperclip, ShieldAlert, RefreshCw, Cake, CalendarDays, Megaphone, ThumbsUp, Heart, PartyPopper, Lightbulb, PenSquare, ImagePlus, X, Loader2, Send, Pencil, Trash2 } from "lucide-react";
 import { Alert } from "@/components/ui/alert";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
@@ -184,7 +184,6 @@ function PostCard({ post, onReact, onOpenModal, me, onEdit, onDelete }: {
             </div>
           </div>
           <div className="flex items-center gap-1.5 flex-shrink-0">
-            {post.isPinned && <Pin className="w-3.5 h-3.5 text-amber-500" />}
             {post.isMandatory && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-50 text-red-600 text-xs font-medium border border-red-200">
                 <ShieldAlert className="w-3 h-3" /> Wajib
@@ -310,7 +309,7 @@ function CreatePostModal({ categories, onClose, onCreated }: {
 }) {
   const [form, setForm] = useState({
     title: "", content: "", categoryId: "",
-    isPinned: false, isMandatory: false, publishNow: true,
+    isMandatory: false, publishNow: true,
   });
   const [notify, setNotify] = useState<EuNotifyValue>(EMPTY_NOTIFY);
   const [attachments, setAttachments] = useState<UploadItem[]>([]);
@@ -361,8 +360,6 @@ function CreatePostModal({ categories, onClose, onCreated }: {
     if (!form.content.trim()) { setError("Konten wajib diisi"); return; }
     if (!form.categoryId) { setError("Kategori wajib dipilih"); return; }
     if (hasUploading) { setError("Tunggu upload selesai"); return; }
-    const notifyError = validateNotify(notify);
-    if (notifyError) { setError(notifyError); return; }
     setSaving(true); setError(null);
     try {
       const res = await fetch("/api/eu/post", {
@@ -485,10 +482,6 @@ function CreatePostModal({ categories, onClose, onCreated }: {
         <div className="flex flex-col gap-2">
           <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Opsi</label>
           <label className="flex items-center gap-2 cursor-pointer select-none">
-            <input type="checkbox" className="rounded" checked={form.isPinned} onChange={(e) => setForm((p) => ({ ...p, isPinned: e.target.checked }))} />
-            <span className="text-sm text-slate-700">📌 Pin ke slider beranda</span>
-          </label>
-          <label className="flex items-center gap-2 cursor-pointer select-none">
             <input type="checkbox" className="rounded" checked={form.isMandatory} onChange={(e) => setForm((p) => ({ ...p, isMandatory: e.target.checked }))} />
             <span className="text-sm text-slate-700">🔴 Wajib dibaca</span>
           </label>
@@ -523,7 +516,6 @@ function EditPostModal({ post, categories, onClose, onSaved }: {
     title:       post.title,
     content:     post.content,
     categoryId:  post.category.id,
-    isPinned:    post.isPinned,
     isMandatory: post.isMandatory,
   });
   const [notify, setNotify] = useState<EuNotifyValue>(() => ({
@@ -587,8 +579,6 @@ function EditPostModal({ post, categories, onClose, onSaved }: {
     if (!form.content.trim()) { setError("Konten wajib diisi"); return; }
     if (!form.categoryId)     { setError("Kategori wajib dipilih"); return; }
     if (hasUploading)         { setError("Tunggu upload selesai"); return; }
-    const notifyError = post.notifiedAt ? null : validateNotify(notify);
-    if (notifyError) { setError(notifyError); return; }
     setSaving(true); setError(null);
     try {
       const res = await fetch(`/api/eu/post/${post.id}`, {
@@ -707,10 +697,6 @@ function EditPostModal({ post, categories, onClose, onSaved }: {
 
         <div className="flex flex-col gap-2">
           <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Opsi</label>
-          <label className="flex items-center gap-2 cursor-pointer select-none">
-            <input type="checkbox" className="rounded" checked={form.isPinned} onChange={(e) => setForm((p) => ({ ...p, isPinned: e.target.checked }))} />
-            <span className="text-sm text-slate-700">📌 Pin ke slider beranda</span>
-          </label>
           <label className="flex items-center gap-2 cursor-pointer select-none">
             <input type="checkbox" className="rounded" checked={form.isMandatory} onChange={(e) => setForm((p) => ({ ...p, isMandatory: e.target.checked }))} />
             <span className="text-sm text-slate-700">🔴 Wajib dibaca</span>
@@ -876,7 +862,7 @@ function AnnouncementWidget({ onClick }: { onClick: (id: string) => void }) {
   );
 }
 
-// ─── Hero Slider (Pinned Posts) ───────────────────────────────────────────────
+// ─── Hero Slider (3 post terbaru) ───────────────────────────────────────────────
 
 function HeroSlider({ posts, onClickPost }: { posts: Post[]; onClickPost: (id: string) => void }) {
   const [current, setCurrent] = useState(0);
@@ -1159,9 +1145,8 @@ function PostDetailModal({
               {/* Content */}
               <div className="px-5 py-4">
                 <h2 className="text-lg font-bold text-slate-800 mb-2">{post.title}</h2>
-                {(post.isPinned || post.isMandatory) && (
+                {post.isMandatory && (
                   <div className="flex items-center gap-2 mb-3">
-                    {post.isPinned && <span className="inline-flex items-center gap-1 text-xs text-amber-600"><Pin className="w-3 h-3" /> Disematkan</span>}
                     {post.isMandatory && <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-50 text-red-600 text-xs font-medium border border-red-200"><ShieldAlert className="w-3 h-3" /> Wajib Dibaca</span>}
                   </div>
                 )}
@@ -1303,7 +1288,7 @@ function PostDetailModal({
 
 export function EuFeedPage() {
   const [posts, setPosts]             = useState<Post[]>([]);
-  const [pinnedPosts, setPinnedPosts] = useState<Post[]>([]);
+  const [sliderPosts, setSliderPosts] = useState<Post[]>([]);
   const [categories, setCategories]   = useState<Category[]>([]);
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState<string | null>(null);
@@ -1335,17 +1320,17 @@ export function EuFeedPage() {
     finally { setLoading(false); }
   }, []);
 
-  const refreshPinned = useCallback(() => {
-    fetch("/api/eu/post?pinned=true&all=true").then((r) => r.json()).then((j) => setPinnedPosts(j.data ?? [])).catch(() => {});
+  const refreshSlider = useCallback(() => {
+    fetch("/api/eu/post?limit=3").then((r) => r.json()).then((j) => setSliderPosts(j.data ?? [])).catch(() => {});
   }, []);
 
   useEffect(() => {
     Promise.all([
-      refreshPinned(),
+      refreshSlider(),
       fetch("/api/eu/category").then((r) => r.json()).then((j) => setCategories(j.data ?? [])).catch(() => {}),
       fetch("/api/eu/me").then((r) => r.json()).then((j: Me) => setMe(j)).catch(() => {}),
     ]);
-  }, [refreshPinned]);
+  }, [refreshSlider]);
 
   useEffect(() => {
     void fetchPosts(page, activeCategory, search);
@@ -1374,7 +1359,7 @@ export function EuFeedPage() {
     if (!window.confirm(`Hapus post "${post.title}"?`)) return;
     await fetch(`/api/eu/post/${post.id}`, { method: "DELETE" });
     void fetchPosts(page, activeCategory, search);
-    refreshPinned();
+    refreshSlider();
   };
 
   const handleOpenModal = (id: string) => {
@@ -1392,7 +1377,7 @@ export function EuFeedPage() {
       <div className="flex flex-col lg:flex-row gap-6 max-w-6xl mx-auto w-full">
         {/* ── Main Feed ──────────────────────────────────────────── */}
         <div className="flex-1 min-w-0">
-          {pinnedPosts.length > 0 && <HeroSlider posts={pinnedPosts} onClickPost={handleOpenModal} />}
+          {sliderPosts.length > 0 && <HeroSlider posts={sliderPosts} onClickPost={handleOpenModal} />}
 
           <div className="mb-4 space-y-3">
             <div className="flex items-center gap-2">
@@ -1478,7 +1463,7 @@ export function EuFeedPage() {
           post={editPost}
           categories={categories}
           onClose={() => setEditPost(null)}
-          onSaved={() => { void fetchPosts(page, activeCategory, search); refreshPinned(); setEditPost(null); }}
+          onSaved={() => { void fetchPosts(page, activeCategory, search); refreshSlider(); setEditPost(null); }}
         />
       )}
 
@@ -1495,7 +1480,7 @@ export function EuFeedPage() {
         <CreatePostModal
           categories={categories}
           onClose={() => setCreateOpen(false)}
-          onCreated={() => { void fetchPosts(page, activeCategory, search); refreshPinned(); }}
+          onCreated={() => { void fetchPosts(page, activeCategory, search); refreshSlider(); }}
         />
       )}
     </>
@@ -1512,12 +1497,8 @@ const EMPTY_NOTIFY: EuNotifyValue = {
   notifyInApp: false, notifyEmail: false,
   criteria: { branchIds: [], orgIds: [], positionIds: [], businessUnitCodes: [] },
 };
-function validateNotify(v: EuNotifyValue): string | null {
-  if (!v.notifyInApp && !v.notifyEmail) return null;
-  const c = v.criteria;
-  return c.branchIds.length || c.orgIds.length || c.positionIds.length || c.businessUnitCodes.length
-    ? null : "Pilih minimal satu kriteria penerima notifikasi";
-}
+const noCriteria = (c: BlastEmailCriteriaValue) =>
+  !c.branchIds.length && !c.orgIds.length && !c.positionIds.length && !c.businessUnitCodes.length;
 function notifyPayload(v: EuNotifyValue) {
   return {
     notifyInApp: v.notifyInApp, notifyEmail: v.notifyEmail,
@@ -1573,8 +1554,13 @@ function EuNotifySection({ value, onChange, sentAt = null, sentCount = null }: {
           ? <BlastEmailCriteriaEditor reference={reference} value={value.criteria} onChange={(criteria) => onChange({ ...value, criteria })} />
           : <p className="text-xs text-slate-400 flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Memuat pilihan penerima...</p>
       )}
+      {active && noCriteria(value.criteria) && (
+        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+          Kriteria kosong — notifikasi akan dikirim ke <b>semua karyawan aktif</b>.
+        </p>
+      )}
       <p className="text-xs text-slate-400">
-        Dikirim saat post dipublikasikan, ke user yang cocok dengan <b>salah satu</b> kriteria. Hanya dikirim sekali.
+        Dikirim saat post dipublikasikan, ke user yang cocok dengan <b>salah satu</b> kriteria (kosong = semua karyawan). Hanya dikirim sekali.
       </p>
     </div>
   );

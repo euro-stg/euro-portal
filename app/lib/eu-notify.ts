@@ -7,12 +7,14 @@ import { getNotifConfig } from "@/lib/system-config";
 const escapeHtml = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
+const EMAIL_CONCURRENCY = 5;
+
 /**
  * Blast notifikasi untuk satu post Euro Update (2026-10-15). Dikirim hanya kalau post sudah
- * publish, punya minimal satu kanal (notifyInApp / notifyEmail) & kriteria, dan BELUM pernah
- * dikirim (notifiedAt null) — jadi aman dipanggil setiap kali post dibuat/diubah. Penerima =
- * user aktif yang cocok salah satu kriteria (OR), sama dengan Kriteria Email Blast E Document;
- * penulis post sendiri tidak ikut. Tidak pernah throw: gagal kirim tidak boleh menggagalkan
+ * publish, punya minimal satu kanal (notifyInApp / notifyEmail), dan BELUM pernah dikirim
+ * (notifiedAt null) — jadi aman dipanggil setiap kali post dibuat/diubah. Penerima = user aktif
+ * yang cocok salah satu kriteria (OR), sama dengan Kriteria Email Blast E Document; kalau semua
+ * kriteria kosong → SEMUA user aktif (2026-10-20). Penulis post sendiri tidak ikut. Tidak pernah throw: gagal kirim tidak boleh menggagalkan
  * penyimpanan post. `origin` = base URL portal untuk link di email.
  */
 export async function sendEuPostNotification(postId: string, origin: string): Promise<void> {
@@ -33,8 +35,12 @@ export async function sendEuPostNotification(postId: string, origin: string): Pr
     const config = await getNotifConfig();
     const sendInApp = post.notifyInApp && config.inapp;
     const sendEmail = post.notifyEmail && config.email;
+    const noCriteria = Object.values(criteria).every((v) => v.length === 0);
     const recipients = sendInApp || sendEmail
-      ? (await matchCriteriaUsers(criteria, { requireEmail: false })).filter((u) => u.id !== post.authorId)
+      ? (noCriteria
+          ? await db.user.findMany({ where: { status: "active" }, select: { id: true, email: true } })
+          : await matchCriteriaUsers(criteria, { requireEmail: false })
+        ).filter((u) => u.id !== post.authorId)
       : [];
 
     // Tandai terkirim DULU (klaim atomik) supaya dua request bersamaan tidak mengirim dobel.
@@ -62,9 +68,16 @@ export async function sendEuPostNotification(postId: string, origin: string): Pr
     if (sendEmail) {
       const body = `${escapeHtml(excerpt)}${excerpt.length >= 160 ? "…" : ""}<br/><br/>` +
         `<a href="${origin}${refUrl}" style="color:#2563eb;">Buka di EuroPortal</a>`;
-      for (const u of recipients) {
-        if (u.email) sendNotificationEmail(u.email, escapeHtml(title), body, "Euro Update").catch(() => null);
-      }
+      // Penerima bisa ribuan (kriteria kosong = semua karyawan) dan tiap email membuka koneksi
+      // SMTP sendiri — kirim di background, maks. EMAIL_CONCURRENCY sekaligus, supaya server
+      // email tidak menolak/memblokir. sendNotificationEmail tidak pernah throw (gagal → EmailLog).
+      const emails = recipients.map((u) => u.email).filter((e): e is string => !!e);
+      void (async () => {
+        for (let i = 0; i < emails.length; i += EMAIL_CONCURRENCY) {
+          await Promise.all(emails.slice(i, i + EMAIL_CONCURRENCY)
+            .map((to) => sendNotificationEmail(to, escapeHtml(title), body, "Euro Update")));
+        }
+      })();
     }
   } catch (e) {
     console.error("[eu] gagal mengirim notifikasi post", e);
@@ -82,9 +95,6 @@ export function parseEuNotifyInput(body: Record<string, unknown>) {
     ...(list(body.notifyPositionIds) && { notifyPositionIds: list(body.notifyPositionIds) }),
     ...(list(body.notifyBusinessUnitCodes) && { notifyBusinessUnitCodes: list(body.notifyBusinessUnitCodes) }),
   };
-  const wantsNotify = Boolean(body.notifyInApp) || Boolean(body.notifyEmail);
-  const hasCriteria = [body.notifyBranchIds, body.notifyOrgIds, body.notifyPositionIds, body.notifyBusinessUnitCodes]
-    .some((v) => Array.isArray(v) && v.length > 0);
-  const error = wantsNotify && !hasCriteria ? "Pilih minimal satu kriteria penerima notifikasi" : null;
-  return { data, error };
+  // Kriteria kosong tidak lagi ditolak — artinya dikirim ke semua user aktif.
+  return { data, error: null as string | null };
 }

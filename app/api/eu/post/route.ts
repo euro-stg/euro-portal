@@ -17,13 +17,13 @@ export async function GET(request: Request) {
     const categoryId = searchParams.get("categoryId") ?? undefined;
     const search     = searchParams.get("search")?.trim() ?? undefined;
     const all        = searchParams.get("all") === "true";
-    const pinned     = searchParams.get("pinned") === "true";
+    // limit: dipakai slider beranda (3 post terbaru) — maks. PAGE_SIZE.
+    const limit      = Math.min(PAGE_SIZE, Math.max(0, Number(searchParams.get("limit") ?? "0") || 0));
 
     const where = {
       deletedAt: null,
       publishedAt: { not: null, lte: new Date() },
       ...(categoryId ? { categoryId } : {}),
-      ...(pinned ? { isPinned: true } : {}),
       ...(search ? {
         OR: [
           { title: { contains: search, mode: "insensitive" as const } },
@@ -41,8 +41,9 @@ export async function GET(request: Request) {
           attachments: { orderBy: { order: "asc" } },
           _count: { select: { readLogs: true } },
         },
-        orderBy: [{ isPinned: "desc" }, { publishedAt: "desc" }],
-        ...(all ? {} : { skip: (page - 1) * PAGE_SIZE, take: PAGE_SIZE }),
+        // Opsi pin dihapus (2026-10-20) — urutan murni terbaru dulu; kolom isPinned lama diabaikan.
+        orderBy: [{ publishedAt: "desc" }],
+        ...(limit ? { take: limit } : all ? {} : { skip: (page - 1) * PAGE_SIZE, take: PAGE_SIZE }),
       }),
       db.euPost.count({ where }),
     ]);
@@ -94,9 +95,9 @@ export async function POST(request: Request) {
     if (!canPost) return NextResponse.json({ message: "Anda tidak memiliki izin untuk membuat post" }, { status: 403 });
 
     const body = await request.json().catch(() => ({}));
-    const { title, content, categoryId, isPinned, isMandatory, targetBranchIds, targetOrgIds, targetPositionIds, publishNow, attachments } = body as {
+    const { title, content, categoryId, isMandatory, targetBranchIds, targetOrgIds, targetPositionIds, publishNow, attachments } = body as {
       title?: string; content?: string; categoryId?: string;
-      isPinned?: boolean; isMandatory?: boolean;
+      isMandatory?: boolean;
       targetBranchIds?: string[]; targetOrgIds?: string[]; targetPositionIds?: string[];
       publishNow?: boolean; attachments?: { name: string; url: string; mimeType?: string; size?: number; order?: number }[];
     };
@@ -113,7 +114,6 @@ export async function POST(request: Request) {
         content: content.trim(),
         categoryId,
         authorId: session.user.id,
-        isPinned:          isPinned ?? false,
         isMandatory:       isMandatory ?? false,
         targetBranchIds:   targetBranchIds ?? [],
         targetOrgIds:      targetOrgIds ?? [],

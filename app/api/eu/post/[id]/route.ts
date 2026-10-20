@@ -89,7 +89,7 @@ export async function PATCH(
 
     const { id } = await params;
     const body = await request.json().catch(() => ({}));
-    const { title, content, categoryId, isPinned, isMandatory, targetBranchIds, targetOrgIds, targetPositionIds, publishNow, unpublish, attachments } = body as Record<string, unknown>;
+    const { title, content, categoryId, isMandatory, targetBranchIds, targetOrgIds, targetPositionIds, publishNow, unpublish, attachments } = body as Record<string, unknown>;
 
     const post = await db.euPost.findFirst({ where: { id, deletedAt: null } });
     if (!post) return NextResponse.json({ message: "Post tidak ditemukan" }, { status: 404 });
@@ -134,7 +134,6 @@ export async function PATCH(
           ...(title     !== undefined ? { title:     String(title).trim() }     : {}),
           ...(content   !== undefined ? { content:   String(content).trim() }   : {}),
           ...(categoryId !== undefined ? { categoryId: String(categoryId) }      : {}),
-          ...(isPinned  !== undefined ? { isPinned:  Boolean(isPinned) }  : {}),
           ...(isMandatory !== undefined ? { isMandatory: Boolean(isMandatory) } : {}),
           ...(targetBranchIds   !== undefined ? { targetBranchIds:   targetBranchIds as string[] }   : {}),
           ...(targetOrgIds      !== undefined ? { targetOrgIds:      targetOrgIds as string[] }      : {}),

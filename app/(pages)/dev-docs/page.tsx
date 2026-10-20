@@ -249,13 +249,13 @@ const DOCS: AppDoc[] = [
       {
         heading: "Feed & Content",
         items: [
-          { label: "Categorized Posts", desc: "Every post is tied to a single category (Event, Announcement, News, etc.). Categories are configured by admins: name, color, emoji icon, and whether they can be pinned." },
-          { label: "Hero Slider (Pinned)", desc: "Pinned posts appear as a hero slider/carousel at the top of the feed. Admins can set the pin order. The slider only appears when there are pinned posts." },
+          { label: "Categorized Posts", desc: "Every post is tied to a single category (Event, Announcement, News, etc.). Categories are configured by admins: name, color, and emoji icon." },
+          { label: "Hero Slider (Latest)", desc: "The 3 most recently published posts appear as a hero slider/carousel at the top of the feed. There is no manual pin option, so no post can hold the slider permanently." },
           { label: "Filter & Search", desc: "Users can filter the feed by category or search by title/content. Category filters appear as a horizontally scrollable pill row. Search is debounced at 300ms to reduce requests." },
           { label: "Thumbnail & Rich Content", desc: "Posts can have an image thumbnail. On the portal dashboard, thumbnails are shown at a fixed size (172×129px). In the EU app, full HTML content is rendered in the post detail modal." },
           { label: "Pagination", desc: "The feed loads page by page (default 10 posts per page). Previous/Next navigation appears at the bottom of the feed." },
           { label: "Read Tracking", desc: "Every post click logs an EuRead entry per user — useful for content engagement analytics down the line." },
-          { label: "Create & Edit Post", desc: "Users with canPost permission can create a new post (title, rich-text content, category, thumbnail, pin toggle). Admins can edit or delete (soft delete) any post." },
+          { label: "Create & Edit Post", desc: "Users with canPost permission can create a new post (title, rich-text content, category, thumbnail, mandatory-read toggle). Admins can edit or delete (soft delete) any post." },
         ],
       },
       {
@@ -281,7 +281,7 @@ const DOCS: AppDoc[] = [
         items: [
           { label: "EU Settings", desc: "An admin-only configuration page for EU: category management (add/edit/delete), configuring who can post, and other settings." },
           { label: "Icon Registry", desc: "The Euro Update app card icon on the portal dashboard uses the 'Newspaper' icon (Lucide), registered in icon-registry.ts with the color text-orange-500." },
-          { label: "Dynamic Categories", desc: "Categories are configured in the database (EuCategory), not hardcoded. Color, emoji icon, and the pinnable flag can be changed without a redeploy." },
+          { label: "Dynamic Categories", desc: "Categories are configured in the database (EuCategory), not hardcoded. Color and emoji icon can be changed without a redeploy." },
         ],
       },
       {

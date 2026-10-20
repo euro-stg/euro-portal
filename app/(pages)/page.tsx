@@ -115,7 +115,7 @@ const Home = async () => {
             category:    { select: { name: true, color: true, icon: true } },
             attachments: { orderBy: { order: "asc" }, take: 1 },
           },
-          orderBy: [{ isPinned: "desc" }, { publishedAt: "desc" }],
+          orderBy: [{ publishedAt: "desc" }],
           take: 20,
         }),
       ]);
@@ -266,9 +266,6 @@ const Home = async () => {
                             >
                               {post.category.icon} {post.category.name}
                             </span>
-                            {post.isPinned && (
-                              <span className="text-xs px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 font-medium border border-amber-100">📌 Pinned</span>
-                            )}
                           </div>
 
                           {/* Title + content */}
