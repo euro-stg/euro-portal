@@ -497,7 +497,7 @@ export default function EDocFileDetailPage() {
         </div>
       )}
 
-      <FeedbackSection fileId={fileId} uploaderId={file.uploader.id} />
+      <FeedbackSection fileId={fileId} uploaderId={file.uploader.id} locked={file.status === "REJECTED"} />
 
       {file.category?.code === "IM" && file.requiresItemImport && (
         <ImProductSection fileId={fileId} uploaderId={file.uploader.id} bulkImported={file.bulkImported} businessUnitCodes={file.businessUnitCodes} />

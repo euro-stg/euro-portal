@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { unauthorized } from "@/lib/api-auth";
 import db from "@/lib/db/db";
-import { canManageFeedback, parseFeedbackImport } from "@/lib/edoc";
+import { canManageFeedback, parseFeedbackImport, isFeedbackLocked, FEEDBACK_LOCKED_MESSAGE } from "@/lib/edoc";
 
 // Import Excel yang sudah diisi -> bulk-generate soal. Additive terhadap soal yang sudah
 // ada (manual atau dari import sebelumnya), bukan replace.
@@ -15,8 +15,9 @@ export async function POST(
     if (!session?.user?.id) return unauthorized();
 
     const { id } = await params;
-    const { allowed } = await canManageFeedback(session.user.id, id);
+    const { allowed, fileStatus } = await canManageFeedback(session.user.id, id);
     if (!allowed) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+    if (isFeedbackLocked(fileStatus)) return NextResponse.json({ message: FEEDBACK_LOCKED_MESSAGE }, { status: 400 });
 
     const formData = await request.formData();
     const file = formData.get("file") as File | null;

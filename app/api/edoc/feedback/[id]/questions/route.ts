@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { unauthorized } from "@/lib/api-auth";
 import db from "@/lib/db/db";
-import { canManageFeedback, type FeedbackQuestionInput } from "@/lib/edoc";
+import { canManageFeedback, isFeedbackLocked, FEEDBACK_LOCKED_MESSAGE, type FeedbackQuestionInput } from "@/lib/edoc";
 
 // Tambah satu atau beberapa soal sekaligus — dipakai baik untuk input manual maupun
 // sebagai basis untuk endpoint import Excel (keduanya saling melengkapi, bukan eksklusif).
@@ -15,8 +15,9 @@ export async function POST(
     if (!session?.user?.id) return unauthorized();
 
     const { id } = await params;
-    const { allowed } = await canManageFeedback(session.user.id, id);
+    const { allowed, fileStatus } = await canManageFeedback(session.user.id, id);
     if (!allowed) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+    if (isFeedbackLocked(fileStatus)) return NextResponse.json({ message: FEEDBACK_LOCKED_MESSAGE }, { status: 400 });
 
     const body = await request.json().catch(() => ({}));
     const rawQuestions = Array.isArray(body?.questions) ? body.questions : [body];

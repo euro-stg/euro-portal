@@ -10,7 +10,8 @@ type Feedback = { id: string; fileId: string; questions: Question[] };
 
 const inputCls = "w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 bg-white transition-colors";
 
-export function FeedbackSection({ fileId, uploaderId }: { fileId: string; uploaderId: string }) {
+// locked = dokumen sedang REJECTED: Feedback tidak bisa dibuat/diubah/diisi (dicek juga di server).
+export function FeedbackSection({ fileId, uploaderId, locked = false }: { fileId: string; uploaderId: string; locked?: boolean }) {
   const [me, setMe] = useState<{ userId: string; isSuperadmin: boolean } | null>(null);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [alreadySubmitted, setAlreadySubmitted] = useState(false);
@@ -106,6 +107,8 @@ export function FeedbackSection({ fileId, uploaderId }: { fileId: string; upload
   };
 
   if (loading) return null;
+  // Dokumen ditolak & belum punya Feedback → section disembunyikan total (tidak ada yang bisa dilakukan).
+  if (locked && !feedback) return null;
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-6 mb-4">
@@ -114,6 +117,12 @@ export function FeedbackSection({ fileId, uploaderId }: { fileId: string; upload
       <p className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
         <FileQuestion className="w-4 h-4 text-amber-600" /> Feedback
       </p>
+
+      {locked && (
+        <p className="mb-3 text-xs text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+          Dokumen ditolak — Feedback dikunci. Revisi &amp; ajukan ulang dokumen untuk mengelolanya lagi.
+        </p>
+      )}
 
       {!feedback ? (
         canManage ? (
@@ -132,10 +141,12 @@ export function FeedbackSection({ fileId, uploaderId }: { fileId: string; upload
             <a href={`/api/edoc/feedback/${feedback.id}/template`}>
               <Button variant="outline" className="flex items-center gap-2"><Download className="w-4 h-4" /> Download Template</Button>
             </a>
+            {!locked && (<>
             <input ref={importRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleImport(f); }} />
             <Button variant="outline" disabled={importing} onClick={() => importRef.current?.click()} className="flex items-center gap-2">
               {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} Import Excel
             </Button>
+            </>)}
             <a href={`/api/edoc/feedback/${feedback.id}/export`}>
               <Button variant="outline" className="flex items-center gap-2"><Download className="w-4 h-4" /> Export Responses</Button>
             </a>
@@ -152,7 +163,7 @@ export function FeedbackSection({ fileId, uploaderId }: { fileId: string; upload
             </div>
           )}
 
-          <div className="pt-3 border-t border-slate-100 space-y-2">
+          {!locked && <div className="pt-3 border-t border-slate-100 space-y-2">
             <p className="text-xs font-medium text-slate-500">Tambah Soal Manual</p>
             <div className="flex gap-2">
               {(["ESSAY", "MULTIPLE_CHOICE"] as const).map((t) => (
@@ -168,13 +179,13 @@ export function FeedbackSection({ fileId, uploaderId }: { fileId: string; upload
             <Button onClick={addQuestion} disabled={addingQuestion} variant="outline" size="sm" className="flex items-center gap-2">
               {addingQuestion ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} Tambah Soal
             </Button>
-          </div>
+          </div>}
         </div>
       ) : alreadySubmitted ? (
         <div className="flex items-center gap-2 text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">
           <CheckCircle2 className="w-4 h-4" /> Anda sudah submit Feedback ini.
         </div>
-      ) : feedback.questions.length === 0 ? (
+      ) : locked ? null : feedback.questions.length === 0 ? (
         <p className="text-sm text-slate-400">Belum ada soal.</p>
       ) : (
         <div className="space-y-4">

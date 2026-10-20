@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { unauthorized } from "@/lib/api-auth";
 import db from "@/lib/db/db";
-import { isSuperadmin } from "@/lib/edoc";
+import { isSuperadmin, isFeedbackLocked, FEEDBACK_LOCKED_MESSAGE } from "@/lib/edoc";
 
 // Feedback dikelola sepenuhnya oleh uploader file-nya (bukan Folder Creator, bukan role
 // terpisah) — superadmin ikut sebagai safety net. Maksimal 1 Feedback per file.
@@ -52,6 +52,7 @@ export async function POST(request: Request) {
     if (!superadmin && file.uploadedBy !== userId) {
       return NextResponse.json({ message: "Hanya uploader file ini yang bisa membuat Feedback" }, { status: 403 });
     }
+    if (isFeedbackLocked(file.status)) return NextResponse.json({ message: FEEDBACK_LOCKED_MESSAGE }, { status: 400 });
 
     const existing = await db.eDocFeedback.findUnique({ where: { fileId } });
     if (existing) return NextResponse.json({ message: "File ini sudah punya Feedback" }, { status: 409 });

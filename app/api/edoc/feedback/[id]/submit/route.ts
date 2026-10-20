@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { unauthorized } from "@/lib/api-auth";
 import db from "@/lib/db/db";
+import { isFeedbackLocked, FEEDBACK_LOCKED_MESSAGE } from "@/lib/edoc";
 
 // Submit sekali, terkunci — enforced lewat unique constraint (feedbackId, userId) di
 // EDocFeedbackResponse. Tidak ada endpoint edit setelah submit.
@@ -17,9 +18,10 @@ export async function POST(
     const { id } = await params;
     const feedback = await db.eDocFeedback.findUnique({
       where: { id },
-      include: { questions: { select: { id: true, type: true } } },
+      include: { questions: { select: { id: true, type: true } }, file: { select: { status: true } } },
     });
     if (!feedback) return NextResponse.json({ message: "Feedback tidak ditemukan" }, { status: 404 });
+    if (isFeedbackLocked(feedback.file.status)) return NextResponse.json({ message: FEEDBACK_LOCKED_MESSAGE }, { status: 400 });
 
     const existing = await db.eDocFeedbackResponse.findUnique({ where: { feedbackId_userId: { feedbackId: id, userId } } });
     if (existing) return NextResponse.json({ message: "Anda sudah pernah submit Feedback ini" }, { status: 409 });
