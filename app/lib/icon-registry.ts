@@ -7,7 +7,7 @@ import {
   Code2, Scale, FolderOpen, BarChart2, Globe, Lock, Cpu,
   FileSignature, Send, CheckSquare, PenLine, ListChecks,
   Mail,
-  Stethoscope, Terminal, ScrollText, Star, Newspaper,
+  Stethoscope, Terminal, ScrollText, Star, Newspaper, History,
   type LucideIcon,
 } from "lucide-react";
 
@@ -20,7 +20,7 @@ export const iconRegistry: Record<string, LucideIcon> = {
   Code2, Scale, FolderOpen, BarChart2, Globe, Lock, Cpu,
   FileSignature, Send, CheckSquare, PenLine, ListChecks,
   Mail,
-  Stethoscope, Terminal, ScrollText, Star, Newspaper,
+  Stethoscope, Terminal, ScrollText, Star, Newspaper, History,
 };
 
 export const iconColorRegistry: Record<string, string> = {
@@ -64,6 +64,7 @@ export const iconColorRegistry: Record<string, string> = {
   ScrollText:      "text-blue-500",
   Star:            "text-amber-500",
   Newspaper:       "text-orange-500",
+  History:         "text-sky-500",
 };
 
 /** Untuk app card di dashboard — fallback ke Layers */
