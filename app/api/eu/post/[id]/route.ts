@@ -5,6 +5,8 @@ import { unauthorized } from "@/lib/api-auth";
 import { getEuPostPermission } from "@/lib/eu-permission";
 import { deleteFromNextcloud } from "@/lib/nextcloud";
 import { sendEuPostNotification, parseEuNotifyInput } from "@/lib/eu-notify";
+import { sanitizeEuContent } from "@/lib/eu-sanitize";
+import { contentToText } from "@/lib/eu-content";
 
 // Attachment.url disimpan sebagai "/api/eu/file?path=<path-nextcloud-ter-encode>" (lihat
 // _eu-feed.tsx saat upload) — untuk hapus fisiknya perlu diekstrak dulu query param `path`.
@@ -72,7 +74,7 @@ export async function GET(
       reactors[r.type].push(r.user);
     }
 
-    return NextResponse.json({ data: { ...post, reactions: reactionCounts, reactors, comments, myReaction: myReaction?.type ?? null } });
+    return NextResponse.json({ data: { ...post, content: sanitizeEuContent(post.content), reactions: reactionCounts, reactors, comments, myReaction: myReaction?.type ?? null } });
   } catch (err) {
     console.error(err);
     return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
@@ -102,6 +104,10 @@ export async function PATCH(
     // catatan penerimanya tetap sesuai yang benar-benar dikirim.
     const notify = parseEuNotifyInput(body as Record<string, unknown>);
     if (!post.notifiedAt && notify.error) return NextResponse.json({ message: notify.error }, { status: 400 });
+
+    const cleanContent = content !== undefined ? sanitizeEuContent(String(content).trim()) : undefined;
+    if (cleanContent !== undefined && !contentToText(cleanContent).trim())
+      return NextResponse.json({ message: "Konten wajib diisi" }, { status: 400 });
     const notifyData = post.notifiedAt ? {} : notify.data;
 
     type AttachmentInput = { name: string; url: string; mimeType?: string; size?: number; order?: number };
@@ -132,7 +138,7 @@ export async function PATCH(
         where: { id },
         data: {
           ...(title     !== undefined ? { title:     String(title).trim() }     : {}),
-          ...(content   !== undefined ? { content:   String(content).trim() }   : {}),
+          ...(cleanContent !== undefined ? { content: cleanContent } : {}),
           ...(categoryId !== undefined ? { categoryId: String(categoryId) }      : {}),
           ...(isMandatory !== undefined ? { isMandatory: Boolean(isMandatory) } : {}),
           ...(targetBranchIds   !== undefined ? { targetBranchIds:   targetBranchIds as string[] }   : {}),

@@ -4,6 +4,8 @@ import db from "@/lib/db/db";
 import { requireSession, unauthorized } from "@/lib/api-auth";
 import { getEuPostPermission } from "@/lib/eu-permission";
 import { sendEuPostNotification, parseEuNotifyInput } from "@/lib/eu-notify";
+import { sanitizeEuContent } from "@/lib/eu-sanitize";
+import { contentToText } from "@/lib/eu-content";
 
 const PAGE_SIZE = 10;
 
@@ -74,6 +76,7 @@ export async function GET(request: Request) {
 
     const data = posts.map((p) => ({
       ...p,
+      content: sanitizeEuContent(p.content),
       reactions: reactionMap[p.id] ?? {},
       myReaction: myReactionMap[p.id] ?? null,
       commentCount: commentMap[p.id] ?? 0,
@@ -103,7 +106,9 @@ export async function POST(request: Request) {
     };
 
     if (!title?.trim())     return NextResponse.json({ message: "Judul wajib diisi" }, { status: 400 });
-    if (!content?.trim())   return NextResponse.json({ message: "Konten wajib diisi" }, { status: 400 });
+    // Editor kosong menghasilkan "<p></p>" — cek isi teksnya, bukan string mentahnya.
+    const cleanContent = sanitizeEuContent(content?.trim() ?? "");
+    if (!contentToText(cleanContent).trim()) return NextResponse.json({ message: "Konten wajib diisi" }, { status: 400 });
     if (!categoryId)        return NextResponse.json({ message: "Kategori wajib dipilih" }, { status: 400 });
     const notify = parseEuNotifyInput(body as Record<string, unknown>);
     if (notify.error) return NextResponse.json({ message: notify.error }, { status: 400 });
@@ -111,7 +116,7 @@ export async function POST(request: Request) {
     const post = await db.euPost.create({
       data: {
         title: title.trim(),
-        content: content.trim(),
+        content: cleanContent,
         categoryId,
         authorId: session.user.id,
         isMandatory:       isMandatory ?? false,

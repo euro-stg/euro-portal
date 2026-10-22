@@ -3,6 +3,7 @@ import { sendNotificationEmail } from "@/lib/mailer";
 import { sseEmit } from "@/lib/sse-emitter";
 import { matchCriteriaUsers } from "@/lib/edoc";
 import { getNotifConfig } from "@/lib/system-config";
+import { contentToText } from "@/lib/eu-content";
 
 const escapeHtml = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -53,7 +54,7 @@ export async function sendEuPostNotification(postId: string, origin: string): Pr
     if (claimed.count === 0 || recipients.length === 0) return;
 
     const title = `${post.category?.name ?? "Euro Update"}: ${post.title}`;
-    const excerpt = post.content.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 160);
+    const excerpt = contentToText(post.content).replace(/\s+/g, " ").trim().slice(0, 160);
     const refUrl = `/apps/euro-update?post=${post.id}`;
 
     if (sendInApp) {

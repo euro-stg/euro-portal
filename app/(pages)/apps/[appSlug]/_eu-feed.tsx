@@ -6,6 +6,8 @@ import { Search, ChevronLeft, ChevronRight, MessageCircle, Paperclip, ShieldAler
 import { Alert } from "@/components/ui/alert";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
+import dynamic from "next/dynamic";
+import { contentToText, contentToHtml } from "@/lib/eu-content";
 import { BlastEmailCriteriaEditor, type BlastEmailCriteriaValue, type Reference as EdocReference } from "./_edoc-app";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -149,6 +151,12 @@ function LightboxModal({ url, alt, onClose }: { url: string; alt: string; onClos
 
 const CONTENT_PREVIEW_LEN = 280;
 
+// Editor rich-text dimuat hanya saat form post dibuka — pembaca feed tidak ikut mengunduhnya.
+const EuRichTextEditor = dynamic(() => import("./_eu-editor").then((m) => m.EuRichTextEditor), {
+  ssr: false,
+  loading: () => <div className="h-[182px] rounded-md border border-slate-200 bg-slate-50 animate-pulse" />,
+});
+
 function PostCard({ post, onReact, onOpenModal, me, onEdit, onDelete }: {
   post: Post;
   onReact: (postId: string, type: string) => void;
@@ -161,8 +169,9 @@ function PostCard({ post, onReact, onOpenModal, me, onEdit, onDelete }: {
   const [lightbox, setLightbox] = useState<{ url: string; alt: string } | null>(null);
   const images = post.attachments.filter((a) => isImage(a.mimeType));
   const files  = post.attachments.filter((a) => !isImage(a.mimeType));
-  const isLong = post.content.length > CONTENT_PREVIEW_LEN;
-  const displayContent = isLong && !expanded ? post.content.slice(0, CONTENT_PREVIEW_LEN) + "…" : post.content;
+  // Potongan = teks polos (tanpa format); "Baca selengkapnya" menampilkan konten berformat.
+  const plainContent = contentToText(post.content);
+  const isLong = plainContent.length > CONTENT_PREVIEW_LEN;
   const canManage = !!me && (me.isSuperadmin || me.canPost || post.author.id === me.userId);
 
   return (
@@ -220,7 +229,9 @@ function PostCard({ post, onReact, onOpenModal, me, onEdit, onDelete }: {
         <div className="flex flex-col-reverse sm:flex-row gap-3">
           <div className="flex-1 min-w-0">
             <h3 className="text-base font-bold text-slate-800 mb-1 leading-snug">{post.title}</h3>
-            <p className="text-sm text-slate-500 leading-relaxed whitespace-pre-line">{displayContent}</p>
+            {isLong && !expanded
+              ? <p className="text-sm text-slate-500 leading-relaxed whitespace-pre-line">{plainContent.slice(0, CONTENT_PREVIEW_LEN) + "…"}</p>
+              : <div className="eu-content text-sm text-slate-500 leading-relaxed" dangerouslySetInnerHTML={{ __html: contentToHtml(post.content) }} />}
             {isLong && (
               <button
                 onClick={() => setExpanded((v) => !v)}
@@ -406,12 +417,10 @@ function CreatePostModal({ categories, onClose, onCreated }: {
 
         <div className="flex flex-col gap-1.5">
           <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Konten *</label>
-          <textarea
-            className={`${inputCls} resize-none`}
-            rows={4}
+          <EuRichTextEditor
             placeholder="Tulis isi post di sini..."
             value={form.content}
-            onChange={(e) => setForm((p) => ({ ...p, content: e.target.value }))}
+            onChange={(html) => setForm((p) => ({ ...p, content: html }))}
           />
         </div>
 
@@ -625,11 +634,9 @@ function EditPostModal({ post, categories, onClose, onSaved }: {
 
         <div className="flex flex-col gap-1.5">
           <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Konten *</label>
-          <textarea
-            className={`${inputCls} resize-none`}
-            rows={4}
+          <EuRichTextEditor
             value={form.content}
-            onChange={(e) => setForm((p) => ({ ...p, content: e.target.value }))}
+            onChange={(html) => setForm((p) => ({ ...p, content: html }))}
           />
         </div>
 
@@ -905,7 +912,7 @@ function HeroSlider({ posts, onClickPost }: { posts: Post[]; onClickPost: (id: s
           </span>
         </div>
         <h2 className="text-white text-xl font-bold drop-shadow line-clamp-2 leading-snug">{post.title}</h2>
-        <p className="text-white/75 text-sm mt-1 line-clamp-2 leading-relaxed">{post.content}</p>
+        <p className="text-white/75 text-sm mt-1 line-clamp-2 leading-relaxed">{contentToText(post.content)}</p>
         <p className="text-white/50 text-xs mt-2">{post.author.name ?? ""}</p>
       </div>
       {posts.length > 1 && (
@@ -1150,7 +1157,8 @@ function PostDetailModal({
                     {post.isMandatory && <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-50 text-red-600 text-xs font-medium border border-red-200"><ShieldAlert className="w-3 h-3" /> Wajib Dibaca</span>}
                   </div>
                 )}
-                <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-line">{post.content}</p>
+                {/* Konten sudah disanitasi server (GET /api/eu/post/[id]); teks lama di-escape oleh contentToHtml. */}
+                <div className="eu-content text-sm text-slate-600 leading-relaxed" dangerouslySetInnerHTML={{ __html: contentToHtml(post.content) }} />
               </div>
 
               {/* Images */}

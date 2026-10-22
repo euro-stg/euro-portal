@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { contentToText } from "@/lib/eu-content";
 import { Lock, Layers, Cake, CalendarDays, Megaphone, ThumbsUp, MessageCircle, FileText } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -229,7 +230,7 @@ const Home = async () => {
                 {euFeedPosts.map((post) => {
                   const thumb    = post.attachments.find((a) => isImage(a.mimeType));
                   const fileAtt  = post.attachments.find((a) => !isImage(a.mimeType));
-                  const excerpt  = post.content.replace(/<[^>]*>/g, "").slice(0, 180);
+                  const excerpt  = contentToText(post.content).slice(0, 180);
                   const catColor = post.category.color;
                   return (
                     <EuLink
