@@ -2,6 +2,7 @@ import db from "@/lib/db/db";
 import { sendNotificationEmail } from "@/lib/mailer";
 import { sseEmit } from "@/lib/sse-emitter";
 import { matchCriteriaUsers } from "@/lib/edoc";
+import { activeEmployeeWhere } from "@/lib/employee";
 import { getNotifConfig } from "@/lib/system-config";
 import { contentToText } from "@/lib/eu-content";
 
@@ -39,7 +40,7 @@ export async function sendEuPostNotification(postId: string, origin: string): Pr
     const noCriteria = Object.values(criteria).every((v) => v.length === 0);
     const recipients = sendInApp || sendEmail
       ? (noCriteria
-          ? await db.user.findMany({ where: { status: "active" }, select: { id: true, email: true } })
+          ? await db.user.findMany({ where: activeEmployeeWhere(), select: { id: true, email: true } })
           : await matchCriteriaUsers(criteria, { requireEmail: false })
         ).filter((u) => u.id !== post.authorId)
       : [];

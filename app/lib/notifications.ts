@@ -1,4 +1,5 @@
 import db from "@/lib/db/db";
+import { activeEmployeeWhere } from "@/lib/employee";
 import { sendNotificationEmail } from "@/lib/mailer";
 import { getNotifConfig } from "@/lib/system-config";
 import { sseEmit } from "@/lib/sse-emitter";
@@ -99,7 +100,7 @@ export async function findStepUsers(step: {
   if (!step.jobPositionId && !step.organizationId && !step.branchId) return [];
   const users = await db.user.findMany({
     where: {
-      status: "active",
+      ...activeEmployeeWhere(),
       ...(step.jobPositionId ? { jobPositionId: step.jobPositionId } : {}),
       ...(step.organizationId ? { organizationId: step.organizationId } : {}),
       ...(step.branchId ? { branchId: step.branchId } : {}),
