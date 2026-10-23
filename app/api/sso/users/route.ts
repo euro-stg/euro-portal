@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db/db";
+import { calcAge } from "@/lib/user-query";
 import { writeApiLog, getClientIp, getUserAgent } from "@/lib/api-logger";
 import { verifyAppTokenJwt, hasPermission } from "@/lib/sso-jwt";
 
@@ -74,7 +75,7 @@ export async function GET(request: Request) {
           jobPositionId: true, jobPositionName: true, jobLevel: true,
           organizationId: true, organizationName: true,
           branchId: true, branchName: true,
-          employmentStatus: true, age: true,
+          employmentStatus: true,
           joinDate: true, resignDate: true,
           status: true, image: true,
         },
@@ -86,7 +87,7 @@ export async function GET(request: Request) {
     ]);
 
     log("SUCCESS", { appTokenId: appRecord.id, appName, statusCode: 200 });
-    return NextResponse.json({ data: users, total, page, limit, totalPages: Math.ceil(total / limit) });
+    return NextResponse.json({ data: users.map((u) => ({ ...u, age: calcAge(u.birthDate) })), total, page, limit, totalPages: Math.ceil(total / limit) });
   } catch (err) {
     console.error("[SSO Users]", err);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });

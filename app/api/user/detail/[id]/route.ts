@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/db/db";
 import { requireSession, unauthorized, forbidden } from "@/lib/api-auth";
 import { hasPortalModuleAccess, PORTAL_MODULE } from "@/lib/module-permission";
+import { calcAge } from "@/lib/user-query";
 
 export async function GET(
   _request: Request,
@@ -30,7 +31,6 @@ export async function GET(
         jobPositionName: true,
         branchId: true,
         branchName: true,
-        age: true,
         phone: true,
         mobilePhone: true,
         email: true,
@@ -66,6 +66,7 @@ export async function GET(
         message: "OK",
         data: {
           ...rest,
+          age: calcAge(rest.birthDate),
           role: userRoles.find((ur) => ur.role.appId === null)?.role.name ?? null,
           roles: userRoles.map((ur) => ({ name: ur.role.name, appId: ur.role.appId })),
           createdAt: row.createdAt ? row.createdAt.toISOString() : null,

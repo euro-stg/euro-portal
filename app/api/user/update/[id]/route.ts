@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 
 import prisma from "@/lib/db/db";
+import { calcAge } from "@/lib/user-query";
 import { requireSession, unauthorized, forbidden } from "@/lib/api-auth";
 import { hasPortalModuleAccess, PORTAL_MODULE } from "@/lib/module-permission";
 import { parseManualUserFields } from "@/lib/manual-user";
@@ -14,7 +15,6 @@ type UpdateBody = {
   organizationName?: string | null;
   jobPositionName?: string | null;
   branchName?: string | null;
-  age?: number | null;
   image?: string | null;
   joinDate?: string | null;
   resignDate?: string | null;
@@ -115,12 +115,6 @@ export async function PATCH(
             ? String(body.branchName).trim()
             : null
           : existing.branchName,
-      age:
-        body.age !== undefined
-          ? body.age != null && !isNaN(Number(body.age))
-            ? Number(body.age)
-            : null
-          : existing.age,
       image: body.image !== undefined ? body.image : existing.image,
       joinDate:
         body.joinDate !== undefined
@@ -179,7 +173,7 @@ export async function PATCH(
         organizationName: true,
         jobPositionName: true,
         branchName: true,
-        age: true,
+        birthDate: true,
         image: true,
         joinDate: true,
         resignDate: true,
@@ -189,9 +183,11 @@ export async function PATCH(
     /* =========================
        ✅ OUTPUT FLATTEN
     ========================= */
-    const { userRoles, ...updatedRest } = updated;
+    // Umur selalu dihitung dari tanggal lahir (kolom age tidak dipakai lagi, 2026-10-23).
+    const { userRoles, birthDate, ...updatedRest } = updated;
     const response = {
       ...updatedRest,
+      age: calcAge(birthDate),
       role: userRoles.find((ur) => ur.role.appId === null)?.role.name ?? null,
       roles: userRoles.map((ur) => ({ name: ur.role.name, appId: ur.role.appId })),
       joinDate: updated.joinDate ? updated.joinDate.toISOString() : null,

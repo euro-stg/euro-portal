@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Pagination } from "@/components/ui/pagination";
 import Link from "next/link";
 import Image from "next/image";
-import { RefreshCw, Users, CloudDownload, UserCheck, List, Layers, X, History, CheckCircle, AlertCircle, Clock, UserPlus, Trash2 } from "lucide-react";
+import { RefreshCw, Users, CloudDownload, UserCheck, List, Layers, X, History, CheckCircle, AlertCircle, Clock, UserPlus, Trash2, FileSpreadsheet } from "lucide-react";
 
 type RoleEntry = { name: string; appId: string | null };
 
@@ -569,6 +569,13 @@ export default function ListUserPage() {
             {showAll ? <Layers className="w-3.5 h-3.5" /> : <List className="w-3.5 h-3.5" />}
             {showAll ? "Per Halaman" : "Tampilkan Semua"}
           </button>
+          {/* Export mengikuti filter tabel saat ini (server: /api/user/export, khusus menu User). */}
+          <a href={`/api/user/export?${buildQuery(1, filters, true)}`}>
+            <Button variant="outline" size="sm">
+              <FileSpreadsheet className="w-3.5 h-3.5" />
+              Export Excel
+            </Button>
+          </a>
           <Link href="/user/bulk-assign">
             <Button variant="outline" size="sm">
               <UserCheck className="w-3.5 h-3.5" />
@@ -647,7 +654,7 @@ export default function ListUserPage() {
               <td className="px-3 py-2"><input className={inputSmCls} placeholder="Cari..." value={filters.organizationName} onChange={(e) => setFilters((p) => ({ ...p, organizationName: e.target.value }))} /></td>
               <td className="px-3 py-2"><input className={inputSmCls} placeholder="Cari..." value={filters.branchName} onChange={(e) => setFilters((p) => ({ ...p, branchName: e.target.value }))} /></td>
               <td className="px-3 py-2"><input className={inputSmCls} placeholder="Cari..." value={filters.jobPositionName} onChange={(e) => setFilters((p) => ({ ...p, jobPositionName: e.target.value }))} /></td>
-              <td className="px-3 py-2"><input className={inputSmCls} placeholder="e.g. 25" value={filters.age} onChange={(e) => setFilters((p) => ({ ...p, age: e.target.value }))} /></td>
+              <td className="px-3 py-2"><input className={inputSmCls} placeholder="25 / 25-30" value={filters.age} onChange={(e) => setFilters((p) => ({ ...p, age: e.target.value }))} /></td>
               <td className="px-3 py-2">
                 <select className={selectSmCls} value={filters.roleId} onChange={(e) => setFilters((p) => ({ ...p, roleId: e.target.value }))}>
                   <option value="">Semua</option>

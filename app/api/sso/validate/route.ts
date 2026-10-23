@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db/db";
+import { calcAge } from "@/lib/user-query";
 import { writeApiLog, getClientIp, getUserAgent } from "@/lib/api-logger";
 import { verifyAppTokenJwt, hasPermission } from "@/lib/sso-jwt";
 
@@ -105,7 +106,7 @@ export async function GET(request: Request) {
       log("SUCCESS", { appTokenId: appRecord.id, appName, userId: redirectToken.userId, statusCode: 200 });
 
       const { password: _, ...userFields } = redirectToken.user as typeof redirectToken.user & { password?: string };
-      return NextResponse.json({ valid: true, mode: "redirect", sessionToken, expiresAt, user: userFields });
+      return NextResponse.json({ valid: true, mode: "redirect", sessionToken, expiresAt, user: { ...userFields, age: calcAge(userFields.birthDate) } });
     }
 
     // ── Mode 2: Bearer token dari login API ──
@@ -146,7 +147,7 @@ export async function GET(request: Request) {
       log("SUCCESS", { appTokenId: appRecord.id, appName, userId: session.userId, statusCode: 200 });
 
       const { password: _, ...userFields } = session.user as typeof session.user & { password?: string };
-      return NextResponse.json({ valid: true, mode: "session", expiresAt: session.expiresAt, user: userFields });
+      return NextResponse.json({ valid: true, mode: "session", expiresAt: session.expiresAt, user: { ...userFields, age: calcAge(userFields.birthDate) } });
     }
 
     log("FAILED", { appTokenId: appRecord.id, appName, statusCode: 400, reason: "sso_token atau Authorization header diperlukan" });

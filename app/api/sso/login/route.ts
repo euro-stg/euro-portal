@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import db from "@/lib/db/db";
+import { calcAge } from "@/lib/user-query";
 import { writeApiLog, getClientIp, getUserAgent } from "@/lib/api-logger";
 import { verifyAppTokenJwt, hasPermission } from "@/lib/sso-jwt";
 
@@ -106,7 +107,7 @@ export async function POST(request: Request) {
     log("SUCCESS", { appTokenId: appRecord.id, appName, userId: user.id, statusCode: 200 });
 
     const { password: _, ...rest } = user as typeof user & { password?: string };
-    return NextResponse.json({ token, expiresAt, user: rest });
+    return NextResponse.json({ token, expiresAt, user: { ...rest, age: calcAge(rest.birthDate) } });
   } catch (err) {
     console.error("[SSO Login]", err);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
