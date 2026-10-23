@@ -154,7 +154,7 @@ const CONTENT_PREVIEW_LEN = 280;
 // Editor rich-text dimuat hanya saat form post dibuka — pembaca feed tidak ikut mengunduhnya.
 const EuRichTextEditor = dynamic(() => import("./_eu-editor").then((m) => m.EuRichTextEditor), {
   ssr: false,
-  loading: () => <div className="h-[182px] rounded-md border border-slate-200 bg-slate-50 animate-pulse" />,
+  loading: () => <div className="h-[262px] rounded-md border border-slate-200 bg-slate-50 animate-pulse" />,
 });
 
 function PostCard({ post, onReact, onOpenModal, me, onEdit, onDelete }: {
@@ -396,7 +396,7 @@ function CreatePostModal({ categories, onClose, onCreated }: {
   const files  = attachments.filter((a) => !a.mimeType.startsWith("image/"));
 
   return (
-    <Modal open title="Tulis Post" onClose={onClose} boxClassName="w-full max-w-lg">
+    <Modal open title="Tulis Post" onClose={onClose} boxClassName="w-full max-w-3xl">
       <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
         {error && <Alert variant="error" message={error} />}
 
@@ -613,7 +613,7 @@ function EditPostModal({ post, categories, onClose, onSaved }: {
   const files  = attachments.filter((a) => !a.mimeType.startsWith("image/"));
 
   return (
-    <Modal open title="Edit Post" onClose={onClose} boxClassName="w-full max-w-lg">
+    <Modal open title="Edit Post" onClose={onClose} boxClassName="w-full max-w-3xl">
       <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
         {error && <Alert variant="error" message={error} />}
 
@@ -1519,7 +1519,18 @@ function EuNotifySection({ value, onChange, sentAt = null, sentCount = null }: {
   value: EuNotifyValue; onChange: (v: EuNotifyValue) => void; sentAt?: string | null; sentCount?: number | null;
 }) {
   const [reference, setReference] = useState<EdocReference | null>(null);
+  const [channels, setChannels] = useState<{ inapp: boolean; email: boolean } | null>(null);
   const active = value.notifyInApp || value.notifyEmail;
+  useEffect(() => {
+    if (sentAt) return;
+    let cancelled = false;
+    fetch("/api/eu/me").then((r) => r.json()).then((j) => { if (!cancelled && j.notifChannels) setChannels(j.notifChannels); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [sentAt]);
+  const blocked = [
+    value.notifyInApp && channels && !channels.inapp && "Notifikasi aplikasi",
+    value.notifyEmail && channels && !channels.email && "Email",
+  ].filter(Boolean) as string[];
   useEffect(() => {
     if (!active || reference || sentAt) return;
     let cancelled = false;
@@ -1561,6 +1572,12 @@ function EuNotifySection({ value, onChange, sentAt = null, sentCount = null }: {
         reference
           ? <BlastEmailCriteriaEditor reference={reference} value={value.criteria} onChange={(criteria) => onChange({ ...value, criteria })} />
           : <p className="text-xs text-slate-400 flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Memuat pilihan penerima...</p>
+      )}
+      {blocked.length > 0 && (
+        <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded px-2 py-1.5">
+          <b>{blocked.join(" & ")}</b> sedang dimatikan di Pengaturan Notifikasi — tidak akan terkirim walau dicentang.
+          Minta admin menyalakannya dulu sebelum publish.
+        </p>
       )}
       {active && noCriteria(value.criteria) && (
         <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">

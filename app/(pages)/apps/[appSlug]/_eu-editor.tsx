@@ -25,7 +25,7 @@ export function EuRichTextEditor({ value, onChange, placeholder, disabled }: {
     immediatelyRender: false, // wajib untuk Next (SSR) — editor baru dibuat di client
     editorProps: {
       attributes: {
-        class: "eu-content min-h-[140px] max-h-[360px] overflow-y-auto px-3 py-2 text-sm text-slate-700 focus:outline-none",
+        class: "eu-content min-h-[220px] max-h-[50vh] overflow-y-auto px-3 py-2 text-sm text-slate-700 focus:outline-none",
         ...(placeholder ? { "data-placeholder": placeholder } : {}),
       },
     },
