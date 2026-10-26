@@ -30,7 +30,7 @@ const SEGMENT_INFO: Record<string, { label: string; example: string }> = {
   ORG_DEPT_CODE: { label: "Kode Organisasi/Departemen file", example: "BUS" },
   MONTH_ROMAN: { label: "Bulan approve (angka romawi)", example: "VII" },
   YEAR: { label: "Tahun approve", example: "2026" },
-  REF_MAIN_DOCUMENT_NUMBER: { label: "Rujuk balik ke Document Number file ini (khusus MOC)", example: "486/Euromedica/IM/BUS/VII/2026" },
+  REF_MAIN_DOCUMENT_NUMBER: { label: "Rujuk balik ke nomor urut Document Number file ini (khusus MOC)", example: "486 (dari 486/Euromedica/IM/BUS/VII/2026)" },
 };
 
 export function CategoryFormatManager({ onError, onSuccess }: { onError: (m: string) => void; onSuccess: (m: string) => void }) {

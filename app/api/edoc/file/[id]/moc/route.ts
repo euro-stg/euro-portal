@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { unauthorized } from "@/lib/api-auth";
 import db from "@/lib/db/db";
 import {
-  isSuperadmin, isEDocDocumentApprover, generateEDocNumber,
+  isSuperadmin, isEDocDocumentApprover, generateEDocNumber, validateManualEDocNumber,
   downloadEDocFile, stampEDocPdf, uploadEDocFileToFolder,
 } from "@/lib/edoc";
 
@@ -14,7 +14,7 @@ import {
 // posisinya sendiri (independen dari posisi Document Number) — versi sebelumnya dicatat
 // di EDocFileRevisionLog.
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -37,9 +37,21 @@ export async function POST(
       return NextResponse.json({ message: "MOC Number untuk file ini sudah pernah digenerate" }, { status: 409 });
     }
 
+    // Body opsional: { manualNumber } = nomor diketik approver sendiri (divalidasi terhadap
+    // format Category, tidak menaikkan counter urut). Tanpa body = otomatis dari format.
+    const body = await request.json().catch(() => ({}));
+    const manualNumber = typeof body?.manualNumber === "string" ? body.manualNumber : null;
+
     let mocNumber: string;
     try {
-      mocNumber = await generateEDocNumber(id, "MOC_NUMBER");
+      if (manualNumber !== null) {
+        mocNumber = await validateManualEDocNumber(id, "MOC_NUMBER", manualNumber);
+        // MOC Number harus unik di seluruh file (yang belum dihapus).
+        const dup = await db.eDocFile.findFirst({ where: { mocNumber, deletedAt: null, id: { not: id } }, select: { id: true } });
+        if (dup) return NextResponse.json({ message: `MOC Number "${mocNumber}" sudah dipakai file lain` }, { status: 409 });
+      } else {
+        mocNumber = await generateEDocNumber(id, "MOC_NUMBER");
+      }
     } catch (e) {
       return NextResponse.json({ message: e instanceof Error ? e.message : "Gagal generate MOC Number" }, { status: 400 });
     }

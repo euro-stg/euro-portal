@@ -100,6 +100,8 @@ export default function EDocFileDetailPage() {
   const [rejecting, setRejecting] = useState(false);
   const [showRejectForm, setShowRejectForm] = useState(false);
   const [generatingMoc, setGeneratingMoc] = useState(false);
+  const [mocManual, setMocManual] = useState(false);
+  const [mocManualNumber, setMocManualNumber] = useState("");
   const [revising, setRevising] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const revisionFileRef = useRef<HTMLInputElement>(null);
@@ -219,10 +221,14 @@ export default function EDocFileDetailPage() {
   const handleGenerateMoc = async () => {
     setGeneratingMoc(true);
     try {
-      const res = await fetch(`/api/edoc/file/${fileId}/moc`, { method: "POST" });
+      const res = await fetch(`/api/edoc/file/${fileId}/moc`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(mocManual ? { manualNumber: mocManualNumber } : {}),
+      });
       const json = await res.json();
       if (!res.ok) { showToast("error", json.message || "Gagal generate MOC Number"); return; }
       showToast("success", "MOC Number berhasil digenerate");
+      setMocManual(false); setMocManualNumber("");
       void load();
     } finally { setGeneratingMoc(false); }
   };
@@ -487,7 +493,18 @@ export default function EDocFileDetailPage() {
 
           {file.status === "RELEASE" && !file.mocNumber && (
             <div className="mt-3 pt-3 border-t border-slate-100">
-              <Button onClick={handleGenerateMoc} disabled={generatingMoc} variant="outline" className="flex items-center gap-2">
+              <div className="flex gap-4 mb-2 text-sm">
+                <label className="flex items-center gap-1.5"><input type="radio" checked={!mocManual} onChange={() => setMocManual(false)} /> Otomatis</label>
+                <label className="flex items-center gap-1.5"><input type="radio" checked={mocManual} onChange={() => setMocManual(true)} /> Manual</label>
+              </div>
+              {mocManual && (
+                <input
+                  value={mocManualNumber} onChange={(e) => setMocManualNumber(e.target.value)}
+                  placeholder="Ketik MOC Number sesuai format Category"
+                  className="mb-2 w-full max-w-md rounded-md border border-slate-300 px-3 py-2 text-sm"
+                />
+              )}
+              <Button onClick={handleGenerateMoc} disabled={generatingMoc || (mocManual && !mocManualNumber.trim())} variant="outline" className="flex items-center gap-2">
                 {generatingMoc && <Loader2 className="w-4 h-4 animate-spin" />}
                 {generatingMoc ? "Memproses..." : "Generate MOC Number"}
               </Button>
