@@ -65,7 +65,8 @@ export async function GET(
 
     // Download (2026-10-07) murni ikut flag per file — tidak ada role yang dikecualikan,
     // lihat EDocFile.allowDownload. Melihat isi PDF selalu boleh lewat viewer (/view).
-    const canDownload = file.allowDownload;
+    // File diproteksi tetap bisa di-download superadmin & Document Approver (2026-10-28).
+    const canDownload = file.allowDownload || superadmin || approver;
 
     return NextResponse.json({
       data: file, canWrite: canManage, canDelete: canManage, canManageBlast, canEditMetadata, canMove, canDownload,

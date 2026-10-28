@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { unauthorized, forbidden } from "@/lib/api-auth";
 import db from "@/lib/db/db";
-import { resolveFolderContentAccess, uploadEDocFileToFolder, extractDocumentNumberFromFilename, isSuperadmin } from "@/lib/edoc";
+import { resolveFolderContentAccess, uploadEDocFileToFolder, extractDocumentNumberFromFilename, isSuperadmin, isEDocDocumentApprover } from "@/lib/edoc";
 
 export const maxDuration = 120;
 
@@ -33,10 +33,12 @@ export async function POST(request: Request) {
     const session = await auth();
     if (!session?.user?.id) return unauthorized();
     const userId = session.user.id;
-    // Khusus superadmin (2026-10-14) — sebelumnya siapa pun yang punya akses tulis ke folder.
-    // Bulk Upload langsung RELEASE tanpa approval & tanpa Document Number, jadi dibatasi
-    // sama seperti "Cocokkan & Import Item".
-    if (!(await isSuperadmin(userId))) return forbidden("Bulk Upload hanya untuk superadmin");
+    // Khusus superadmin (2026-10-14) & Document Approver (2026-10-28) — sebelumnya siapa pun
+    // yang punya akses tulis ke folder. Bulk Upload langsung RELEASE tanpa approval & tanpa
+    // Document Number. Akses tulis ke folder tujuan tetap dicek di bawah (superadmin selalu
+    // punya; approver mengikuti ACL folder).
+    const [superadmin, approver] = await Promise.all([isSuperadmin(userId), isEDocDocumentApprover(userId)]);
+    if (!superadmin && !approver) return forbidden("Bulk Upload hanya untuk superadmin dan Document Approver");
 
     const formData = await request.formData();
     const folderId = formData.get("folderId") as string | null;

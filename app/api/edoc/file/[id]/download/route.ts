@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { unauthorized } from "@/lib/api-auth";
 import db from "@/lib/db/db";
-import { canViewFile, downloadEDocFile } from "@/lib/edoc";
+import { canViewFile, canDownloadProtectedFile, downloadEDocFile } from "@/lib/edoc";
 
 export async function GET(
   _request: Request,
@@ -22,9 +22,10 @@ export async function GET(
     // buka PDF-nya (404 di sini). Dibenerin 2026-09-21 pakai canViewFile yang konsisten
     // dengan gerbang di GET /api/edoc/file/[id].
     if (!(await canViewFile(userId, file))) return NextResponse.json({ message: "File tidak ditemukan" }, { status: 404 });
-    // Izin download per file (2026-10-07) — tanpa pengecualian role, superadmin/uploader juga
-    // ikut flag ini. Melihat isinya tetap bisa lewat /view (viewer internal).
-    if (!file.allowDownload) {
+    // Izin download per file (2026-10-07) — file yang diproteksi hanya bisa di-download
+    // superadmin & Document Approver (2026-10-28); user lain (termasuk uploader) ikut flag
+    // ini. Melihat isinya tetap bisa lewat /view (viewer internal).
+    if (!file.allowDownload && !(await canDownloadProtectedFile(userId))) {
       return NextResponse.json({ message: "File ini tidak diizinkan untuk di-download" }, { status: 403 });
     }
 

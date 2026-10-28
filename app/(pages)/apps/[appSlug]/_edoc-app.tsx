@@ -376,7 +376,9 @@ export function EDocApp() {
               <Plus className="w-4 h-4" /> Folder Baru
             </Button>
           )}
-          {currentFolderId && me?.isSuperadmin && (
+          {/* Bulk Upload: superadmin, atau Document Approver di folder yang bisa ia tulisi
+              (2026-10-28) — server mengecek hal yang sama. */}
+          {currentFolderId && (me?.isSuperadmin || (me?.isDocumentApprover && canWriteCurrent)) && (
             <Button onClick={() => setShowBulkUpload(true)} variant="outline" className="flex items-center gap-2">
               <Upload className="w-4 h-4" /> Bulk Upload
             </Button>
