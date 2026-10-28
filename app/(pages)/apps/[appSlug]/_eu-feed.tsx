@@ -172,7 +172,8 @@ function PostCard({ post, onReact, onOpenModal, me, onEdit, onDelete }: {
   // Potongan = teks polos (tanpa format); "Baca selengkapnya" menampilkan konten berformat.
   const plainContent = contentToText(post.content);
   const isLong = plainContent.length > CONTENT_PREVIEW_LEN;
-  const canManage = !!me && (me.isSuperadmin || me.canPost || post.author.id === me.userId);
+  // Sama dengan server: hanya pembuat post atau superadmin yang bisa edit/hapus.
+  const canManage = !!me && (me.isSuperadmin || post.author.id === me.userId);
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">

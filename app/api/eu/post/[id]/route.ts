@@ -96,8 +96,10 @@ export async function PATCH(
     const post = await db.euPost.findFirst({ where: { id, deletedAt: null } });
     if (!post) return NextResponse.json({ message: "Post tidak ditemukan" }, { status: 404 });
 
-    const { canPost, isSuperadmin } = await getEuPostPermission(session.user.id);
-    const canManage = isSuperadmin || canPost || post.authorId === session.user.id;
+    // Edit & hapus post hanya oleh pembuatnya atau superadmin (2026-10-28) — hak posting
+    // (canPost) cukup untuk MEMBUAT post, bukan untuk mengubah post orang lain.
+    const { isSuperadmin } = await getEuPostPermission(session.user.id);
+    const canManage = isSuperadmin || post.authorId === session.user.id;
     if (!canManage) return NextResponse.json({ message: "Anda tidak memiliki izin untuk mengubah post ini" }, { status: 403 });
 
     // Pengaturan notifikasi dikunci setelah blast terkirim (notifiedAt terisi) supaya
@@ -184,8 +186,10 @@ export async function DELETE(
     const post = await db.euPost.findFirst({ where: { id, deletedAt: null } });
     if (!post) return NextResponse.json({ message: "Post tidak ditemukan" }, { status: 404 });
 
-    const { canPost, isSuperadmin } = await getEuPostPermission(session.user.id);
-    const canManage = isSuperadmin || canPost || post.authorId === session.user.id;
+    // Edit & hapus post hanya oleh pembuatnya atau superadmin (2026-10-28) — hak posting
+    // (canPost) cukup untuk MEMBUAT post, bukan untuk mengubah post orang lain.
+    const { isSuperadmin } = await getEuPostPermission(session.user.id);
+    const canManage = isSuperadmin || post.authorId === session.user.id;
     if (!canManage) return NextResponse.json({ message: "Anda tidak memiliki izin untuk menghapus post ini" }, { status: 403 });
 
     // Hapus fisik attachment DULU, sebelum post ditandai terhapus (2026-10-01 — sebelumnya
