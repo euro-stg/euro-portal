@@ -42,7 +42,7 @@ export default function BulkAssignPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [listError, setListError]     = useState<string | null>(null);
-  const [filters, setFilters]         = useState({ name: "", branchName: "", organizationName: "", roleId: "", source: "" });
+  const [filters, setFilters]         = useState({ name: "", jobPositionName: "", branchName: "", organizationName: "", roleId: "", source: "" });
 
   // ── Show All ──────────────────────────────────────────────────
   const [showAll, setShowAll]         = useState(false);
@@ -84,6 +84,7 @@ export default function BulkAssignPage() {
       if (all) { p.set("all", "true"); }
       else     { p.set("page", String(page)); }
       if (f.name.trim())             p.set("name", f.name.trim());
+      if (f.jobPositionName.trim())  p.set("jobPositionName", f.jobPositionName.trim());
       if (f.branchName.trim())       p.set("branchName", f.branchName.trim());
       if (f.organizationName.trim()) p.set("organizationName", f.organizationName.trim());
       if (f.roleId.trim())           p.set("roleId", f.roleId.trim());
@@ -112,7 +113,7 @@ export default function BulkAssignPage() {
     const t = setTimeout(() => { void loadUsers(1, filters, showAll); }, 400);
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.name, filters.branchName, filters.organizationName, filters.roleId, filters.source]);
+  }, [filters.name, filters.jobPositionName, filters.branchName, filters.organizationName, filters.roleId, filters.source]);
 
   const toggleShowAll = () => {
     const next = !showAll;
@@ -337,6 +338,12 @@ export default function BulkAssignPage() {
             placeholder="Cari nama..."
             value={filters.name}
             onChange={(e) => setFilters((p) => ({ ...p, name: e.target.value }))}
+          />
+          <input
+            className={inputCls + " flex-1 min-w-[140px]"}
+            placeholder="Filter jabatan..."
+            value={filters.jobPositionName}
+            onChange={(e) => setFilters((p) => ({ ...p, jobPositionName: e.target.value }))}
           />
           <input
             className={inputCls + " flex-1 min-w-[140px]"}
