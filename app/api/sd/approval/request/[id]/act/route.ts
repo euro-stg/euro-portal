@@ -3,6 +3,14 @@ import { auth } from "@/lib/auth";
 import db from "@/lib/db/db";
 import { createNotification, notifyMany, findStepUsers } from "@/lib/notifications";
 
+async function isPortalSuperadmin(userId: string) {
+  const row = await db.userRole.findFirst({
+    where: { userId, appId: null, role: { appId: null, name: "superadmin", status: "active", deletedAt: null } },
+    select: { id: true },
+  });
+  return !!row;
+}
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -48,12 +56,25 @@ export async function POST(
     );
     if (!activeStep) return NextResponse.json({ message: "Tidak ada step aktif" }, { status: 400 });
 
-    if (activeStep.jobPositionId && activeStep.jobPositionId !== me.jobPositionId)
-      return NextResponse.json({ message: "Posisi jabatan tidak sesuai" }, { status: 403 });
-    if (activeStep.organizationId && activeStep.organizationId !== me.organizationId)
-      return NextResponse.json({ message: "Departemen tidak sesuai" }, { status: 403 });
-    if (activeStep.branchId && activeStep.branchId !== me.branchId)
+    // Superadmin boleh memproses step aktif walau jabatan/departemen/branch-nya tidak cocok
+    // (2026-10-28) — untuk pengajuan yang menggantung karena routing approval salah (mis.
+    // jabatan yang dituju tidak dipegang siapa pun). Tercatat sebagai override di step &
+    // riwayat aktivitas.
+    const matchesStep =
+      (!activeStep.jobPositionId || activeStep.jobPositionId === me.jobPositionId) &&
+      (!activeStep.organizationId || activeStep.organizationId === me.organizationId) &&
+      (!activeStep.branchId || activeStep.branchId === me.branchId);
+    const isOverride = !matchesStep && (await isPortalSuperadmin(userId));
+    if (!matchesStep && !isOverride) {
+      if (activeStep.jobPositionId && activeStep.jobPositionId !== me.jobPositionId)
+        return NextResponse.json({ message: "Posisi jabatan tidak sesuai" }, { status: 403 });
+      if (activeStep.organizationId && activeStep.organizationId !== me.organizationId)
+        return NextResponse.json({ message: "Departemen tidak sesuai" }, { status: 403 });
       return NextResponse.json({ message: "Branch tidak sesuai" }, { status: 403 });
+    }
+    const stepNote = isOverride
+      ? `[Diproses superadmin]${note?.trim() ? " " + note.trim() : ""}`
+      : note?.trim() || null;
 
     const isLastStep = approvalReq.currentStep === approvalReq.steps.length;
     const sdRequestId = approvalReq.sdRequestId;
@@ -61,8 +82,16 @@ export async function POST(
     await db.$transaction(async (tx) => {
       await tx.sdApprovalRequestStep.update({
         where: { id: activeStep.id },
-        data: { status: action, actorId: userId, note: note?.trim() || null, actedAt: new Date() },
+        data: { status: action, actorId: userId, note: stepNote, actedAt: new Date() },
       });
+      if (isOverride) {
+        await tx.sdActivity.create({
+          data: {
+            requestId: sdRequestId, userId, action: "APPROVAL_OVERRIDE",
+            note: `Step ${activeStep.step} (${activeStep.label}) ${action === "APPROVED" ? "disetujui" : "ditolak"} oleh superadmin atas nama approver`,
+          },
+        });
+      }
 
       if (action === "REJECTED") {
         await tx.sdApprovalRequest.update({

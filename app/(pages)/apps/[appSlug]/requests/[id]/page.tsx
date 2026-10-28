@@ -100,6 +100,7 @@ const ACTION_LABEL: Record<string, string> = {
   REJECTED: "Pengajuan ditolak",
   CANCELLED: "Pengajuan dibatalkan",
   ASSIGN_PIC: "PIC di-assign",
+  APPROVAL_OVERRIDE: "Approval diproses superadmin",
 };
 
 const inputCls = "w-full border border-slate-200 rounded-md px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 bg-white transition-colors";
@@ -585,16 +586,19 @@ export default function RequestDetailPage() {
     (s) => s.step === data.approvalRequest!.currentStep && s.status === "PENDING"
   ) ?? null;
 
+  const matchesActiveStep = !!myProfile && !!activeApprovalStep &&
+    (!activeApprovalStep.jobPositionId || activeApprovalStep.jobPositionId === myProfile.jobPositionId) &&
+    (!activeApprovalStep.organizationId || activeApprovalStep.organizationId === myProfile.organizationId) &&
+    (!activeApprovalStep.branchId || activeApprovalStep.branchId === myProfile.branchId);
   const canActOnApproval = (() => {
     if (!myProfile || !activeApprovalStep || !data.approvalRequest) return false;
     if (finished) return false;
     if (data.approvalRequest.status !== "PENDING") return false;
     if (myId === data.requester.id) return false;
-    if (activeApprovalStep.jobPositionId && activeApprovalStep.jobPositionId !== myProfile.jobPositionId) return false;
-    if (activeApprovalStep.organizationId && activeApprovalStep.organizationId !== myProfile.organizationId) return false;
-    if (activeApprovalStep.branchId && activeApprovalStep.branchId !== myProfile.branchId) return false;
-    return true;
+    // Superadmin boleh memproses step yang bukan untuknya (routing salah) — dicek juga di server.
+    return matchesActiveStep || isSuperadmin;
   })();
+  const actingAsSuperadmin = canActOnApproval && !matchesActiveStep;
 
   const attachByCategory = (cat: string) => data.attachments.filter((a) => a.category === cat);
   const isOverdue = !finished && !!data.estimatedCompletedAt && new Date(data.estimatedCompletedAt) < new Date();
@@ -782,7 +786,12 @@ export default function RequestDetailPage() {
                     {activeApprovalStep.jobPositionName && <span> · <span className="font-medium">{activeApprovalStep.jobPositionName}</span></span>}
                     {activeApprovalStep.organizationName && <span> dari <span className="font-medium">{activeApprovalStep.organizationName}</span></span>}
                     {activeApprovalStep.branchName && <span> – {activeApprovalStep.branchName}</span>}
-                    {canActOnApproval && <span className="ml-2 font-bold text-amber-900">(Anda yang ditunggu)</span>}
+                    {canActOnApproval && !actingAsSuperadmin && <span className="ml-2 font-bold text-amber-900">(Anda yang ditunggu)</span>}
+                    {actingAsSuperadmin && (
+                      <p className="mt-1 text-amber-900">
+                        Anda <b>superadmin</b>{" "}&mdash; bisa memproses step ini atas nama approver (misalnya karena routing approval salah). Tindakan akan tercatat sebagai &ldquo;Diproses superadmin&rdquo;.
+                      </p>
+                    )}
                   </div>
                 </div>
               )}
