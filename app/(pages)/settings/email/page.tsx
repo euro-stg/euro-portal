@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Mail, Send, Eye, EyeOff, Loader2, RefreshCw, CheckCircle2, AlertCircle, List, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
+import { BlastIntervalCard, BlastQueueSummary } from "./_blast-queue";
 
 type SmtpData = { host: string; port: string; secure: boolean; user: string; hasPass: boolean; from: string };
 type LogRow = { id: string; to: string; subject: string; source: string; status: string; error: string | null; createdAt: string };
@@ -12,6 +13,7 @@ const inputCls = "w-full border border-slate-200 rounded-lg px-3 py-2 text-sm te
 const labelCls = "block text-sm font-medium text-slate-700 mb-1.5";
 
 const SOURCE_LABELS: Record<string, string> = { ssd: "SSD", sd: "SD", portal: "Portal", system: "System" };
+// "Euro Update" & "E Document" (email blast) sudah berupa label, tampil apa adanya.
 const SOURCE_COLORS: Record<string, string> = {
   ssd:    "bg-violet-100 text-violet-700",
   sd:     "bg-blue-100 text-blue-700",
@@ -264,6 +266,8 @@ export default function EmailSettingsPage() {
               )}
             </div>
 
+            <BlastIntervalCard onToast={showToast} />
+
             <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-500 leading-relaxed">
               <strong className="text-slate-600">Catatan:</strong> Jika SMTP belum dikonfigurasi, portal tidak akan mengirim email apapun. Password disimpan terenkripsi AES-256-GCM.
             </div>
@@ -274,6 +278,8 @@ export default function EmailSettingsPage() {
       {/* ── Tab: Log Keluar ── */}
       {tab === "log" && (
         <div className="space-y-4">
+          <BlastQueueSummary onToast={showToast} onRetried={() => void loadLogs(1)} />
+
           {/* Filter bar */}
           <div className="bg-white rounded-xl border border-slate-200 p-4">
             <div className="flex flex-wrap gap-3 items-end">

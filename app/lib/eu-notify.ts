@@ -1,5 +1,5 @@
 import db from "@/lib/db/db";
-import { sendNotificationEmail } from "@/lib/mailer";
+import { enqueueEmails } from "@/lib/email-queue";
 import { sseEmit } from "@/lib/sse-emitter";
 import { matchCriteriaUsers } from "@/lib/edoc";
 import { activeEmployeeWhere } from "@/lib/employee";
@@ -9,7 +9,6 @@ import { contentToText } from "@/lib/eu-content";
 const escapeHtml = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-const EMAIL_CONCURRENCY = 5;
 
 /**
  * Blast notifikasi untuk satu post Euro Update (2026-10-15). Dikirim hanya kalau post sudah
@@ -70,16 +69,11 @@ export async function sendEuPostNotification(postId: string, origin: string): Pr
     if (sendEmail) {
       const body = `${escapeHtml(excerpt)}${excerpt.length >= 160 ? "…" : ""}<br/><br/>` +
         `<a href="${origin}${refUrl}" style="color:#2563eb;">Buka di EuroPortal</a>`;
-      // Penerima bisa ribuan (kriteria kosong = semua karyawan) dan tiap email membuka koneksi
-      // SMTP sendiri — kirim di background, maks. EMAIL_CONCURRENCY sekaligus, supaya server
-      // email tidak menolak/memblokir. sendNotificationEmail tidak pernah throw (gagal → EmailLog).
-      const emails = recipients.map((u) => u.email).filter((e): e is string => !!e);
-      void (async () => {
-        for (let i = 0; i < emails.length; i += EMAIL_CONCURRENCY) {
-          await Promise.all(emails.slice(i, i + EMAIL_CONCURRENCY)
-            .map((to) => sendNotificationEmail(to, escapeHtml(title), body, "Euro Update")));
-        }
-      })();
+      // Penerima bisa ribuan (kriteria kosong = semua karyawan) — masuk antrean blast, dikirim
+      // worker satu per satu dengan jeda dari Pengaturan Email (app/lib/email-queue.ts).
+      await enqueueEmails(recipients
+        .filter((u): u is typeof u & { email: string } => !!u.email)
+        .map((u) => ({ to: u.email, title: escapeHtml(title), body, source: "Euro Update" })));
     }
   } catch (e) {
     console.error("[eu] gagal mengirim notifikasi post", e);

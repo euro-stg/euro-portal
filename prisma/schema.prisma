@@ -759,6 +759,29 @@ model SsdOrgAdmin {
 
 // ===================== EMAIL LOG =====================
 
+// Antrean email blast (2026-10-28) — blast Euro Update & blast E Document tidak dikirim
+// langsung, tapi dimasukkan ke sini lalu dikirim worker (instrumentation.ts →
+// app/lib/email-queue.ts) satu per satu dengan jeda dari Pengaturan Email (default 10 detik),
+// supaya server email tidak menolak/memblokir pengiriman massal. Email realtime (approval,
+// notifikasi biasa, lupa password) TIDAK lewat sini. Baris dihapus setelah terkirim (hasilnya
+// tercatat di EmailLog); yang gagal permanen tetap di sini berstatus "failed" agar bisa
+// dikirim ulang dari halaman Email Log.
+model EmailQueue {
+  id          String    @id @default(cuid())
+  to          String
+  title       String // judul tanpa prefix "[EuroPortal]" — ditambahkan saat kirim
+  body        String    @db.Text // isi HTML (sudah di-escape oleh pemanggil)
+  source      String // "Euro Update" | "E Document" — label sumber, sama seperti EmailLog
+  status      String    @default("queued") // queued | sending | failed
+  attempts    Int       @default(0)
+  lastError   String?   @db.Text
+  scheduledAt DateTime  @default(now()) // kapan boleh dikirim (dimundurkan saat retry)
+  lockedAt    DateTime? // diisi saat diklaim worker; klaim yang macet > 5 menit diambil ulang
+  createdAt   DateTime  @default(now())
+
+  @@index([status, scheduledAt])
+}
+
 model EmailLog {
   id        String   @id @default(cuid())
   to        String

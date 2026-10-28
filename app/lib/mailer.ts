@@ -14,17 +14,28 @@ async function getTransporter() {
   };
 }
 
-async function logEmail(to: string, subject: string, source: string, status: "sent" | "failed", error?: string) {
+/** true kalau SMTP sudah dikonfigurasi di Pengaturan Email (host, user, password terisi). */
+export async function isSmtpConfigured(): Promise<boolean> {
+  return !!(await getSmtpConfig().catch(() => null));
+}
+
+export async function logEmail(to: string, subject: string, source: string, status: "sent" | "failed", error?: string) {
   await db.emailLog.create({ data: { to, subject, source, status, error: error ?? null } }).catch(() => null);
 }
 
-export async function sendNotificationEmail(to: string, title: string, body: string, source = "portal") {
-  const subject = `[EuroPortal] ${title}`;
+export const notificationSubject = (title: string) => `[EuroPortal] ${title}`;
+
+/**
+ * Kirim satu email notifikasi TANPA mencatat log & tanpa menelan error — hasilnya
+ * dikembalikan supaya pemanggil bisa memutuskan (dipakai worker antrean blast untuk retry,
+ * app/lib/email-queue.ts). Pemanggil realtime cukup pakai sendNotificationEmail.
+ */
+export async function deliverNotificationEmail(to: string, title: string, body: string, source = "portal"): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
     const { transport, from } = await getTransporter();
     await transport.sendMail({
       from, to,
-      subject,
+      subject: notificationSubject(title),
       html: `
         <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;">
           <div style="margin:0 0 16px;">
@@ -39,11 +50,16 @@ export async function sendNotificationEmail(to: string, title: string, body: str
         </div>
       `,
     });
-    await logEmail(to, subject, source, "sent");
+    return { ok: true };
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Unknown error";
-    await logEmail(to, subject, source, "failed", msg);
+    return { ok: false, error: err instanceof Error ? err.message : "Unknown error" };
   }
+}
+
+/** Kirim langsung (realtime) + catat ke EmailLog. Tidak pernah throw. */
+export async function sendNotificationEmail(to: string, title: string, body: string, source = "portal") {
+  const result = await deliverNotificationEmail(to, title, body, source);
+  await logEmail(to, notificationSubject(title), source, result.ok ? "sent" : "failed", result.ok ? undefined : result.error);
 }
 
 export async function sendPasswordResetEmail(to: string, name: string, resetUrl: string) {
