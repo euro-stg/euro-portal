@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import db from "@/lib/db/db";
 import { deliverNotificationEmail, isSmtpConfigured, logEmail, notificationSubject } from "@/lib/mailer";
 import { getNotifConfig } from "@/lib/system-config";
@@ -22,12 +23,16 @@ const STALE_LOCK_MS = 5 * 60_000;
 
 export type QueuedEmail = { to: string; title: string; body: string; source: string };
 
-/** Masukkan email ke antrean. Penerima tanpa alamat dibuang. */
+/**
+ * Masukkan satu blast ke antrean — semua email dalam satu panggilan mendapat batchId yang
+ * sama (untuk dikelompokkan / dibatalkan di halaman Email Log). Penerima tanpa alamat dibuang.
+ */
 export async function enqueueEmails(items: QueuedEmail[]): Promise<number> {
   const rows = items.filter((i) => i.to?.trim());
   if (rows.length === 0) return 0;
+  const batchId = randomUUID();
   const { count } = await db.emailQueue.createMany({
-    data: rows.map((r) => ({ to: r.to.trim(), title: r.title, body: r.body, source: r.source })),
+    data: rows.map((r) => ({ batchId, to: r.to.trim(), title: r.title, body: r.body, source: r.source })),
   });
   return count;
 }

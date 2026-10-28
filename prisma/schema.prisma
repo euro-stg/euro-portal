@@ -768,6 +768,9 @@ model SsdOrgAdmin {
 // dikirim ulang dari halaman Email Log.
 model EmailQueue {
   id          String    @id @default(cuid())
+  // Satu ID per pemanggilan blast (1 post / 1 dokumen) — dipakai halaman Email Log untuk
+  // mengelompokkan antrean, melihat detail, dan membatalkan sisa satu blast (2026-10-28).
+  batchId     String
   to          String
   title       String // judul tanpa prefix "[EuroPortal]" — ditambahkan saat kirim
   body        String    @db.Text // isi HTML (sudah di-escape oleh pemanggil)
@@ -780,6 +783,7 @@ model EmailQueue {
   createdAt   DateTime  @default(now())
 
   @@index([status, scheduledAt])
+  @@index([batchId])
 }
 
 model EmailLog {
