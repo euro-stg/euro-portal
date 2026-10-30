@@ -13,7 +13,7 @@ export async function POST(request: Request) {
   try {
     const r = await syncMasterItems("manual", { full: !!body.full });
     return NextResponse.json({
-      message: `Sync ${r.full ? "penuh " : ""}selesai — diproses ${r.processed}, baru ${r.created}, berubah ${r.updated}, discontinued ${r.discontinued}, harga standar berubah ${r.pricesUpdated}`,
+      message: `Sync ${r.full ? "penuh " : ""}selesai — diproses ${r.processed}, baru ${r.created}, berubah ${r.updated}, discontinued ${r.discontinued}, dikecualikan ${r.excluded}, harga standar berubah ${r.pricesUpdated}`,
       data: r,
     });
   } catch (err) {

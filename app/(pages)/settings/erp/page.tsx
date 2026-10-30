@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Database, Eye, EyeOff, Loader2, PlugZap, CheckCircle2, AlertCircle } from "lucide-react";
+import { Database, Eye, EyeOff, Loader2, PlugZap, CheckCircle2, AlertCircle, Filter } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 
@@ -20,6 +20,10 @@ export default function ErpSettingsPage() {
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string; companies?: string[] } | null>(null);
   const [toast, setToast] = useState<{ variant: "success" | "error"; message: string } | null>(null);
+  // Pengecualian Master Item (2026-10-30): company/business yang tidak dipakai lagi.
+  const [options, setOptions] = useState<{ companies: string[]; businesses: string[] }>({ companies: [], businesses: [] });
+  const [excl, setExcl] = useState<{ companies: string[]; businesses: string[]; noCompany: boolean }>({ companies: [], businesses: [], noCompany: true });
+  const [savingExcl, setSavingExcl] = useState(false);
   const toastTimer = useRef<NodeJS.Timeout | null>(null);
 
   const showToast = (variant: "success" | "error", message: string) => {
@@ -34,6 +38,8 @@ export default function ErpSettingsPage() {
       if (cancelled || !j.data) return;
       setForm({ url: j.data.url, username: j.data.username, password: "" });
       setHasPassword(!!j.data.hasPassword);
+      if (j.options) setOptions(j.options);
+      if (j.exclusions) setExcl(j.exclusions);
     }).catch(() => {}).finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, []);
@@ -46,6 +52,21 @@ export default function ErpSettingsPage() {
       showToast(res.ok ? "success" : "error", json.message ?? "Gagal menyimpan");
       if (res.ok) { setForm((f) => ({ ...f, password: "" })); if (form.password) setHasPassword(true); }
     } finally { setSaving(false); }
+  };
+
+  const toggle = (kind: "companies" | "businesses", value: string) =>
+    setExcl((e) => ({ ...e, [kind]: e[kind].includes(value) ? e[kind].filter((v) => v !== value) : [...e[kind], value] }));
+
+  const saveExcl = async () => {
+    setSavingExcl(true);
+    try {
+      const res = await fetch("/api/system/erp", {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ excludeCompanies: excl.companies, excludeBusinesses: excl.businesses, excludeNoCompany: excl.noCompany }),
+      });
+      const json = await res.json();
+      showToast(res.ok ? "success" : "error", json.message ?? "Gagal menyimpan");
+    } finally { setSavingExcl(false); }
   };
 
   const test = async () => {
@@ -112,6 +133,45 @@ export default function ErpSettingsPage() {
                 </div>
               </div>
             )}
+          </div>
+
+          <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-4">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-700 flex items-center gap-2"><Filter className="w-4 h-4 text-slate-400" /> Pengecualian Data Master Item</h2>
+              <p className="text-xs text-slate-400 mt-1">
+                Item dari company / business yang dicentang <b>tidak diambil</b> dari ERP dan <b>dihapus</b> dari Master Item saat disimpan —
+                untuk company atau business yang sudah tidak dipakai, supaya tidak rancu dengan item aktif bernama sama.
+              </p>
+            </div>
+            {([["companies", "Company", options.companies], ["businesses", "Business", options.businesses]] as const).map(([kind, label, list]) => (
+              <div key={kind}>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">{label} dikecualikan</p>
+                {list.length === 0 ? (
+                  <p className="text-xs text-slate-400">Belum ada data — jalankan Sync ERP di Master Item dulu.</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {list.map((v) => {
+                      const on = excl[kind].includes(v);
+                      return (
+                        <label key={v} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm cursor-pointer select-none ${on ? "border-red-200 bg-red-50 text-red-700" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}>
+                          <input type="checkbox" className="rounded" checked={on} onChange={() => toggle(kind, v)} /> {v}
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            ))}
+            <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer select-none">
+              <input type="checkbox" className="rounded" checked={excl.noCompany} onChange={(e) => setExcl((x) => ({ ...x, noCompany: e.target.checked }))} />
+              Kecualikan item yang tidak punya company di ERP
+            </label>
+            <div className="flex items-center gap-3">
+              <Button onClick={() => void saveExcl()} disabled={savingExcl} className="bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-2">
+                {savingExcl && <Loader2 className="w-4 h-4 animate-spin" />} Simpan Pengecualian
+              </Button>
+              <p className="text-xs text-slate-400">Kalau ada yang dihapus dari daftar ini, sync berikutnya otomatis mengambil ulang semua item.</p>
+            </div>
           </div>
 
           <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-500 leading-relaxed">

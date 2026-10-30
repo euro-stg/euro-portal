@@ -10,7 +10,40 @@ export const MASTER_ITEM_GROUPS = [
   "Retail Product 01", "Retail Product 02", "Discontinued",
 ] as const;
 const DISCONTINUED_GROUP = "Discontinued";
-const CURSOR_KEY = "erp.itemSync.cursor";
+export const CURSOR_KEY = "erp.itemSync.cursor";
+
+// Pengecualian (2026-10-30) — company/business yang sudah tidak dipakai (mis. DMI, SKIN+ MBS)
+// tidak masuk Master Item supaya tidak rancu dengan item aktif bernama sama. Diatur di
+// Pengaturan → ERP; isian awal dibuat migrasi 20261030100000_master_item_exclusions.
+export const EXCLUDE_KEYS = {
+  companies: "erp.exclude.companies",   // JSON string[]
+  businesses: "erp.exclude.businesses", // JSON string[]
+  noCompany: "erp.exclude.noCompany",   // "true" | "false"
+} as const;
+export type MasterItemExclusions = { companies: string[]; businesses: string[]; noCompany: boolean };
+
+export async function getMasterItemExclusions(): Promise<MasterItemExclusions> {
+  const rows = await db.systemConfig.findMany({ where: { key: { in: Object.values(EXCLUDE_KEYS) } } });
+  const map = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+  const list = (v: string | undefined) => { try { const a = JSON.parse(v ?? "[]"); return Array.isArray(a) ? a.map(String) : []; } catch { return []; } };
+  return { companies: list(map[EXCLUDE_KEYS.companies]), businesses: list(map[EXCLUDE_KEYS.businesses]), noCompany: map[EXCLUDE_KEYS.noCompany] === "true" };
+}
+
+const isExcluded = (ex: MasterItemExclusions, company: string | null, business: string | null) =>
+  (!company && ex.noCompany) || (!!company && ex.companies.includes(company)) || (!!business && ex.businesses.includes(business));
+
+/** Hapus item yang terkena pengecualian dari Master Item. Return jumlah yang dihapus. */
+export async function purgeExcludedMasterItems(ex?: MasterItemExclusions): Promise<number> {
+  const e = ex ?? (await getMasterItemExclusions());
+  const OR = [
+    ...(e.companies.length ? [{ company: { in: e.companies } }] : []),
+    ...(e.businesses.length ? [{ business: { in: e.businesses } }] : []),
+    ...(e.noCompany ? [{ company: null }] : []),
+  ];
+  if (!OR.length) return 0;
+  const { count } = await db.masterItem.deleteMany({ where: { OR } });
+  return count;
+}
 const STALE_RUN_MS = 30 * 60_000; // sync "running" lebih lama dari ini dianggap macet
 
 /** Nama dinormalisasi untuk pencocokan by nama (huruf kecil, spasi tunggal). */
@@ -25,7 +58,7 @@ type ErpItemPrice = { item_code: string; company: string | null; price_list_rate
 
 const STANDARD_PRICE_LIST = "Standard Selling";
 
-export type SyncResult = { processed: number; created: number; updated: number; discontinued: number; pricesUpdated: number; full: boolean };
+export type SyncResult = { processed: number; created: number; updated: number; discontinued: number; excluded: number; pricesUpdated: number; full: boolean };
 
 export async function syncMasterItems(trigger: "manual" | "scheduled", opts: { full?: boolean } = {}): Promise<SyncResult> {
   const running = await db.syncLog.findFirst({
@@ -59,7 +92,8 @@ export async function syncMasterItems(trigger: "manual" | "scheduled", opts: { f
         .map((m) => [m.itemCode, m]),
     );
 
-    let created = 0, updated = 0, discontinued = 0;
+    const exclusions = await getMasterItemExclusions();
+    let created = 0, updated = 0, discontinued = 0, excluded = 0;
     let maxModified = cursorRow?.value ?? "";
     const seen = new Set<string>();
 
@@ -67,6 +101,11 @@ export async function syncMasterItems(trigger: "manual" | "scheduled", opts: { f
       if (it.modified > maxModified) maxModified = it.modified;
       const inScope = (MASTER_ITEM_GROUPS as readonly string[]).includes(it.item_group);
       const prev = existing.get(it.item_code);
+      if (isExcluded(exclusions, it.company || null, it.business || null)) {
+        // Company/business dikecualikan → tidak masuk master; kalau sudah ada, dihapus.
+        if (prev) { await db.masterItem.delete({ where: { itemCode: it.item_code } }); excluded++; }
+        continue;
+      }
       if (!inScope && !prev) continue; // item di luar cakupan yang belum pernah masuk master
       seen.add(it.item_code);
 
@@ -101,12 +140,14 @@ export async function syncMasterItems(trigger: "manual" | "scheduled", opts: { f
       }
     }
 
+    // Jaga-jaga: item lama yang terkena pengecualian tapi tidak ikut terambil sync bertahap.
+    excluded += await purgeExcludedMasterItems(exclusions);
     const pricesUpdated = await refreshStandardPrices();
 
     if (maxModified) {
       await db.systemConfig.upsert({ where: { key: CURSOR_KEY }, create: { key: CURSOR_KEY, value: maxModified }, update: { value: maxModified } });
     }
-    const result = { processed: items.length, created, updated, discontinued, pricesUpdated, full };
+    const result = { processed: items.length, created, updated, discontinued, excluded, pricesUpdated, full };
     await db.syncLog.update({ where: { id: log.id }, data: { status: "success", processed: items.length, created, updated, finishedAt: new Date() } });
     return result;
   } catch (err) {
