@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { RefreshCw, CloudDownload, History, Package, CheckCircle, AlertCircle, Clock, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
@@ -12,6 +12,9 @@ import { Pagination } from "@/components/ui/pagination";
 type ItemRow = {
   id: string; itemCode: string; itemName: string; itemGroup: string; stockUom: string | null;
   erpDisabled: boolean; status: string; erpModified: string | null; syncedAt: string;
+  company: string | null; business: string | null; treatmentType: string | null; qtyPackage: number | null;
+  description: string | null; isSalesItem: boolean;
+  standardPrice: number | null; standardPriceValidFrom: string | null; standardPriceValidUpto: string | null;
 };
 type SyncLog = {
   id: string; trigger: string; status: string; processed: number | null; created: number | null;
@@ -19,6 +22,11 @@ type SyncLog = {
 };
 
 const fmt = (d: string) => new Date(d).toLocaleString("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+const rupiah = (n: number) => n.toLocaleString("id-ID");
+const todayWib = () => new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
+// Harga standar diambil yang terbaru walau periodenya sudah lewat — tandai "berakhir".
+const isExpired = (upto: string | null) => !!upto && upto < todayWib();
+const fmtDay = (d: string | null) => (d ? new Date(`${d}T00:00:00`).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : null);
 const selectCls = "h-9 border border-slate-200 rounded-lg px-2 text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20";
 
 export default function MasterItemPage() {
@@ -29,8 +37,11 @@ export default function MasterItemPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [summary, setSummary] = useState({ active: 0, discontinued: 0 });
   const [groups, setGroups] = useState<string[]>([]);
+  const [companies, setCompanies] = useState<string[]>([]);
+  const [businesses, setBusinesses] = useState<string[]>([]);
+  const [openId, setOpenId] = useState<string | null>(null);
   const [lastSync, setLastSync] = useState<SyncLog | null>(null);
-  const [filters, setFilters] = useState({ q: "", group: "", status: "" });
+  const [filters, setFilters] = useState({ q: "", group: "", status: "", company: "", business: "" });
   const [qInput, setQInput] = useState("");
   const qTimer = useRef<NodeJS.Timeout | null>(null);
   const [syncing, setSyncing] = useState<"" | "inc" | "full">("");
@@ -52,11 +63,14 @@ export default function MasterItemPage() {
       if (f.q) params.set("q", f.q);
       if (f.group) params.set("group", f.group);
       if (f.status) params.set("status", f.status);
+      if (f.company) params.set("company", f.company);
+      if (f.business) params.set("business", f.business);
       const res = await fetch(`/api/master-item?${params}`);
       if (!res.ok) return;
       const j = await res.json();
       setRows(j.data ?? []); setTotal(j.total ?? 0); setTotalPages(j.totalPages ?? 1); setPage(p);
       setSummary(j.summary ?? { active: 0, discontinued: 0 }); setGroups(j.groups ?? []); setLastSync(j.lastSync ?? null);
+      setCompanies(j.companies ?? []); setBusinesses(j.businesses ?? []);
     } finally { setLoading(false); }
   }, []);
 
@@ -133,6 +147,14 @@ export default function MasterItemPage() {
           <option value="">Semua grup</option>
           {groups.map((g) => <option key={g} value={g}>{g}</option>)}
         </select>
+        <select className={selectCls} value={filters.company} onChange={(e) => setFilters((f) => ({ ...f, company: e.target.value }))}>
+          <option value="">Semua company</option>
+          {companies.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <select className={selectCls} value={filters.business} onChange={(e) => setFilters((f) => ({ ...f, business: e.target.value }))}>
+          <option value="">Semua business</option>
+          {businesses.map((b) => <option key={b} value={b}>{b}</option>)}
+        </select>
         <select className={selectCls} value={filters.status} onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))}>
           <option value="">Semua status</option>
           <option value="ACTIVE">Aktif</option>
@@ -148,7 +170,7 @@ export default function MasterItemPage() {
           <div className="text-center py-16">
             <Package className="w-10 h-10 text-slate-200 mx-auto mb-2" />
             <p className="text-sm text-slate-400">
-              {filters.q || filters.group || filters.status ? "Tidak ada item untuk filter ini." : "Belum ada data. Atur koneksi di Pengaturan → ERP, lalu klik Sync ERP."}
+              {filters.q || filters.group || filters.status || filters.company || filters.business ? "Tidak ada item untuk filter ini." : "Belum ada data. Atur koneksi di Pengaturan → ERP, lalu klik Sync ERP."}
             </p>
           </div>
         ) : (
@@ -156,26 +178,61 @@ export default function MasterItemPage() {
             <table className={`w-full text-sm ${loading ? "opacity-60" : ""}`}>
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50">
-                  {["Kode", "Nama Item", "Grup", "Satuan", "Status", "Diubah di ERP"].map((h) => (
-                    <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
+                  {["Kode", "Nama Item", "Grup", "Company", "Business", "Jenis Treatment", "Harga Standar", "Status"].map((h) => (
+                    <th key={h} className={`${h === "Harga Standar" ? "text-right" : "text-left"} px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap`}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => (
-                  <tr key={r.id} className="border-b border-slate-50 hover:bg-slate-50/50">
-                    <td className="px-4 py-2.5"><span className="font-mono text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">{r.itemCode}</span></td>
-                    <td className="px-4 py-2.5 font-medium text-slate-800">{r.itemName}</td>
-                    <td className="px-4 py-2.5 text-xs text-slate-500 whitespace-nowrap">{r.itemGroup}</td>
-                    <td className="px-4 py-2.5 text-xs text-slate-500">{r.stockUom ?? "—"}</td>
-                    <td className="px-4 py-2.5">
-                      {r.status === "ACTIVE"
-                        ? <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-medium">Aktif</span>
-                        : <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium" title={r.erpDisabled ? "Disabled di ERP" : r.itemGroup === "Discontinued" ? "Grup Discontinued" : "Di luar cakupan / tidak ada di ERP"}>Discontinued</span>}
-                    </td>
-                    <td className="px-4 py-2.5 text-xs text-slate-400 whitespace-nowrap">{r.erpModified ? r.erpModified.slice(0, 16) : "—"}</td>
-                  </tr>
-                ))}
+                {rows.map((r) => {
+                  const open = openId === r.id;
+                  return (
+                    <Fragment key={r.id}>
+                      <tr onClick={() => setOpenId(open ? null : r.id)} className={`border-b border-slate-50 cursor-pointer ${open ? "bg-emerald-50/40" : "hover:bg-slate-50/50"}`}>
+                        <td className="px-4 py-2.5"><span className="font-mono text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">{r.itemCode}</span></td>
+                        <td className="px-4 py-2.5 font-medium text-slate-800">{r.itemName}</td>
+                        <td className="px-4 py-2.5 text-xs text-slate-500 whitespace-nowrap">{r.itemGroup}</td>
+                        <td className="px-4 py-2.5 text-xs text-slate-600 whitespace-nowrap">{r.company ?? "—"}</td>
+                        <td className="px-4 py-2.5 text-xs text-slate-600 whitespace-nowrap">{r.business ?? "—"}</td>
+                        <td className="px-4 py-2.5 text-xs text-slate-500 whitespace-nowrap">{r.treatmentType ?? "—"}</td>
+                        <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                          {r.standardPrice != null ? (
+                            <>
+                              <span className="font-medium text-slate-800">{rupiah(r.standardPrice)}</span>
+                              {isExpired(r.standardPriceValidUpto)
+                                ? <span className="block text-[10px] text-amber-600">berakhir {fmtDay(r.standardPriceValidUpto)}</span>
+                                : <span className="block text-[10px] text-slate-400">{r.standardPriceValidUpto ? `s/d ${fmtDay(r.standardPriceValidUpto)}` : "tanpa batas"}</span>}
+                            </>
+                          ) : <span className="text-xs text-slate-300">—</span>}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          {r.status === "ACTIVE"
+                            ? <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-medium">Aktif</span>
+                            : <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium" title={r.erpDisabled ? "Disabled di ERP" : r.itemGroup === "Discontinued" ? "Grup Discontinued" : "Di luar cakupan / tidak ada di ERP"}>Discontinued</span>}
+                        </td>
+                      </tr>
+                      {open && (
+                        <tr className="border-b border-slate-100 bg-slate-50/60">
+                          <td colSpan={8} className="px-4 py-3">
+                            <dl className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-2 text-xs">
+                              <div><dt className="text-slate-400">Satuan</dt><dd className="text-slate-700">{r.stockUom ?? "—"}</dd></div>
+                              <div><dt className="text-slate-400">Qty Paket</dt><dd className="text-slate-700">{r.qtyPackage ?? "—"}</dd></div>
+                              <div><dt className="text-slate-400">Item Penjualan</dt><dd className="text-slate-700">{r.isSalesItem ? "Ya" : "Tidak"}</dd></div>
+                              <div><dt className="text-slate-400">Diubah di ERP</dt><dd className="text-slate-700">{r.erpModified ? r.erpModified.slice(0, 16) : "—"}</dd></div>
+                              <div className="col-span-2 md:col-span-2"><dt className="text-slate-400">Harga Standar (Standard Selling)</dt><dd className="text-slate-700">
+                                {r.standardPrice != null
+                                  ? <>{rupiah(r.standardPrice)} · berlaku {fmtDay(r.standardPriceValidFrom) ?? "—"} – {fmtDay(r.standardPriceValidUpto) ?? "tanpa batas"}
+                                      {isExpired(r.standardPriceValidUpto) && <span className="ml-1 text-amber-600">(periode sudah berakhir — harga terbaru di ERP)</span>}</>
+                                  : `Tidak ada harga untuk company ${r.company ?? "item ini"}`}
+                              </dd></div>
+                              <div className="col-span-2 md:col-span-4"><dt className="text-slate-400">Deskripsi</dt><dd className="text-slate-700 whitespace-pre-line">{r.description ?? "—"}</dd></div>
+                            </dl>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>

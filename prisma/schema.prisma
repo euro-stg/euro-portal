@@ -575,6 +575,20 @@ model MasterItem {
   nameKey     String
   itemGroup   String
   stockUom    String?
+  // Field tambahan dari Item ERP (2026-10-30). benchmark COGS sengaja TIDAK diambil (data
+  // sensitif; Master Item akan dibuka lewat API).
+  company       String? // company pemilik item (field custom ERP), mis. "SKIN+ DEI"
+  business      String? // mis. "SKIN+"
+  treatmentType String? // mis. "Non Injectable"
+  qtyPackage    Float?
+  description   String?   @db.Text
+  isSalesItem   Boolean   @default(true)
+  // Harga standar = Item Price di Price List "Standard Selling" untuk company item ini yang
+  // berlaku hari ini (dihitung ulang setiap sync — perubahan harga tidak mengubah "modified"
+  // Item di ERP). Null kalau company item tidak punya harga di Standard Selling.
+  standardPrice          Float?
+  standardPriceValidFrom String? // YYYY-MM-DD apa adanya dari ERP
+  standardPriceValidUpto String? // null = tanpa batas
   erpDisabled Boolean   @default(false)
   // ACTIVE | DISCONTINUED — DISCONTINUED kalau grup "Discontinued", disabled di ERP, pindah
   // ke grup di luar cakupan, atau sudah tidak ada di ERP (terdeteksi saat sync penuh).
@@ -587,6 +601,8 @@ model MasterItem {
   @@index([nameKey])
   @@index([status])
   @@index([itemGroup])
+  @@index([company])
+  @@index([business])
 }
 
 model SyncLog {

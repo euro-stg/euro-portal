@@ -16,9 +16,16 @@ const STALE_RUN_MS = 30 * 60_000; // sync "running" lebih lama dari ini dianggap
 /** Nama dinormalisasi untuk pencocokan by nama (huruf kecil, spasi tunggal). */
 export const normalizeItemName = (s: string) => s.trim().replace(/\s+/g, " ").toLowerCase();
 
-type ErpItem = { item_code: string; item_name: string; item_group: string; stock_uom: string | null; disabled: number; modified: string };
+type ErpItem = {
+  item_code: string; item_name: string; item_group: string; stock_uom: string | null; disabled: number; modified: string;
+  company: string | null; business: string | null; treatment_type: string | null; qty_package: number | null;
+  description: string | null; is_sales_item: number;
+};
+type ErpItemPrice = { item_code: string; company: string | null; price_list_rate: number; valid_from: string | null; valid_upto: string | null };
 
-export type SyncResult = { processed: number; created: number; updated: number; discontinued: number; full: boolean };
+const STANDARD_PRICE_LIST = "Standard Selling";
+
+export type SyncResult = { processed: number; created: number; updated: number; discontinued: number; pricesUpdated: number; full: boolean };
 
 export async function syncMasterItems(trigger: "manual" | "scheduled", opts: { full?: boolean } = {}): Promise<SyncResult> {
   const running = await db.syncLog.findFirst({
@@ -33,14 +40,22 @@ export async function syncMasterItems(trigger: "manual" | "scheduled", opts: { f
     const cursorRow = await db.systemConfig.findUnique({ where: { key: CURSOR_KEY } });
     const full = !!opts.full || !cursorRow?.value;
 
-    const fields = ["item_code", "item_name", "item_group", "stock_uom", "disabled", "modified"];
+    const fields = [
+      "item_code", "item_name", "item_group", "stock_uom", "disabled", "modified",
+      "company", "business", "treatment_type", "qty_package", "description", "is_sales_item",
+    ];
     const items = await erpListAll<ErpItem>("Item", {
       fields,
       filters: full ? [["item_group", "in", [...MASTER_ITEM_GROUPS]]] : [["modified", ">=", cursorRow!.value]],
     });
 
     const existing = new Map(
-      (await db.masterItem.findMany({ select: { itemCode: true, itemName: true, itemGroup: true, stockUom: true, erpDisabled: true, status: true } }))
+      (await db.masterItem.findMany({
+        select: {
+          itemCode: true, itemName: true, itemGroup: true, stockUom: true, erpDisabled: true, status: true,
+          company: true, business: true, treatmentType: true, qtyPackage: true, description: true, isSalesItem: true,
+        },
+      }))
         .map((m) => [m.itemCode, m]),
     );
 
@@ -59,6 +74,8 @@ export async function syncMasterItems(trigger: "manual" | "scheduled", opts: { f
       const data = {
         itemName: it.item_name, nameKey: normalizeItemName(it.item_name), itemGroup: it.item_group,
         stockUom: it.stock_uom, erpDisabled: !!it.disabled, status, erpModified: it.modified, syncedAt: new Date(),
+        company: it.company || null, business: it.business || null, treatmentType: it.treatment_type || null,
+        qtyPackage: it.qty_package ?? null, description: it.description || null, isSalesItem: !!it.is_sales_item,
       };
 
       if (!prev) {
@@ -67,7 +84,9 @@ export async function syncMasterItems(trigger: "manual" | "scheduled", opts: { f
         continue;
       }
       const changed = prev.itemName !== data.itemName || prev.itemGroup !== data.itemGroup || prev.stockUom !== data.stockUom
-        || prev.erpDisabled !== data.erpDisabled || prev.status !== status;
+        || prev.erpDisabled !== data.erpDisabled || prev.status !== status || prev.company !== data.company
+        || prev.business !== data.business || prev.treatmentType !== data.treatmentType || prev.qtyPackage !== data.qtyPackage
+        || prev.description !== data.description || prev.isSalesItem !== data.isSalesItem;
       await db.masterItem.update({ where: { itemCode: it.item_code }, data });
       if (changed) updated++;
       if (prev.status !== "DISCONTINUED" && status === "DISCONTINUED") discontinued++;
@@ -82,10 +101,12 @@ export async function syncMasterItems(trigger: "manual" | "scheduled", opts: { f
       }
     }
 
+    const pricesUpdated = await refreshStandardPrices();
+
     if (maxModified) {
       await db.systemConfig.upsert({ where: { key: CURSOR_KEY }, create: { key: CURSOR_KEY, value: maxModified }, update: { value: maxModified } });
     }
-    const result = { processed: items.length, created, updated, discontinued, full };
+    const result = { processed: items.length, created, updated, discontinued, pricesUpdated, full };
     await db.syncLog.update({ where: { id: log.id }, data: { status: "success", processed: items.length, created, updated, finishedAt: new Date() } });
     return result;
   } catch (err) {
@@ -93,6 +114,44 @@ export async function syncMasterItems(trigger: "manual" | "scheduled", opts: { f
     await db.syncLog.update({ where: { id: log.id }, data: { status: "error", error: msg, finishedAt: new Date() } });
     throw err;
   }
+}
+
+/**
+ * Harga standar per item = Item Price TERBARU di Price List "Standard Selling" untuk company
+ * item itu (2026-10-30): baris dengan tanggal mulai paling baru yang sudah dimulai (bukan harga
+ * masa depan), walau periodenya sudah lewat — di ERP harga standar dicatat per tahun & sering
+ * belum diperpanjang; tampilan menandai yang sudah lewat sebagai "berakhir". Diambil ulang
+ * SETIAP sync karena perubahan harga di ERP tidak mengubah "modified" Item. Return jumlah item
+ * yang harganya berubah.
+ */
+async function refreshStandardPrices(): Promise<number> {
+  const prices = await erpListAll<ErpItemPrice>("Item Price", {
+    fields: ["item_code", "company", "price_list_rate", "valid_from", "valid_upto"],
+    filters: [["price_list", "=", STANDARD_PRICE_LIST]],
+    orderBy: "valid_from asc",
+  });
+  const today = new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
+  // Per (item, company): baris terbaru yang sudah dimulai (valid_from <= hari ini).
+  const current = new Map<string, ErpItemPrice>();
+  for (const p of prices) {
+    if (p.valid_from && p.valid_from > today) continue;
+    const key = `${p.item_code}|${p.company ?? ""}`;
+    const prev = current.get(key);
+    if (!prev || (p.valid_from ?? "") >= (prev.valid_from ?? "")) current.set(key, p);
+  }
+
+  const items = await db.masterItem.findMany({
+    select: { itemCode: true, company: true, standardPrice: true, standardPriceValidFrom: true, standardPriceValidUpto: true },
+  });
+  let changed = 0;
+  for (const m of items) {
+    const p = current.get(`${m.itemCode}|${m.company ?? ""}`);
+    const next = { standardPrice: p?.price_list_rate ?? null, standardPriceValidFrom: p?.valid_from ?? null, standardPriceValidUpto: p?.valid_upto ?? null };
+    if (m.standardPrice === next.standardPrice && m.standardPriceValidFrom === next.standardPriceValidFrom && m.standardPriceValidUpto === next.standardPriceValidUpto) continue;
+    await db.masterItem.update({ where: { itemCode: m.itemCode }, data: next });
+    changed++;
+  }
+  return changed;
 }
 
 /** Waktu & hasil sync terakhir (untuk ditampilkan di halaman). */
@@ -122,7 +181,7 @@ export function startMasterItemScheduler() {
       // Tandai dulu supaya tidak dobel walau sync gagal (dicoba lagi besok / manual).
       await db.systemConfig.upsert({ where: { key: AUTO_DATE_KEY }, create: { key: AUTO_DATE_KEY, value: today }, update: { value: today } });
       const r = await syncMasterItems("scheduled");
-      console.log(`[master-item] sync terjadwal selesai — diproses ${r.processed}, baru ${r.created}, berubah ${r.updated}`);
+      console.log(`[master-item] sync terjadwal selesai — diproses ${r.processed}, baru ${r.created}, berubah ${r.updated}, harga berubah ${r.pricesUpdated}`);
     } catch (err) {
       console.error("[master-item] sync terjadwal gagal", err);
     }
