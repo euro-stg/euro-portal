@@ -4,7 +4,7 @@ import db from "@/lib/db/db";
 import { getLastMasterItemSync, MASTER_ITEM_GROUPS } from "@/lib/master-item-sync";
 
 // Daftar Master Item (2026-10-28) — cukup login: dibaca juga oleh E Document (validasi item IM).
-// Query: q (nama/kode), group, status (ACTIVE | DISCONTINUED), company, business, page, limit (maks 100).
+// Query: q (nama/SKU), group, status (ACTIVE | DISCONTINUED), company, business, page, limit (maks 100).
 export async function GET(request: Request) {
   try {
     if (!(await requireSession())) return unauthorized();

@@ -1350,10 +1350,51 @@ model EDocImProduct {
 
   file     EDocFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
   importer User     @relation("EDocImProductImporter", fields: [importedBy], references: [id])
+  skus     EDocImProductSku[]
 
   @@index([fileId])
   @@index([itemName])
   @@index([sku])
+}
+
+// Mapping SKU baris item IM ke Master Item (2026-10-30) — dipilih/diverifikasi user saat
+// import (atau pemetaan item lama). SATU SKU PER COMPANY per baris: IM milik satu BU biasanya
+// cuma 1 baris SKU; IM HO/tanpa BU bisa beberapa (item sama, SKU beda per company di ERP).
+// Baris tanpa mapping = "belum dipetakan" (tidak ikut cek discontinued berbasis SKU).
+// itemCode sengaja plain string (bukan FK) — Master Item bisa terhapus oleh pengecualian
+// company/business, tapi jejak mapping di IM tetap utuh.
+model EDocImProductSku {
+  id        String   @id @default(cuid())
+  productId String
+  company   String
+  itemCode  String
+  mappedBy  String
+  mappedAt  DateTime @default(now())
+
+  product EDocImProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, company])
+  @@index([itemCode])
+}
+
+// Riwayat baris item IM yang dikeluarkan (2026-10-30) — mis. karena SKU-nya Discontinued.
+// Baris di EDocImProduct DIHAPUS, isinya disimpan utuh di snapshot supaya bisa dikembalikan
+// (tombol "Kembalikan" membuat ulang baris & mapping SKU-nya di IM asal).
+model EDocImProductRemoval {
+  id           String    @id @default(cuid())
+  fileId       String // IM asal (plain string — IM bisa terhapus belakangan)
+  productId    String // id baris lama (sudah terhapus)
+  itemName     String
+  reason       String // "DISCONTINUED" | lainnya
+  snapshot     Json // isi baris EDocImProduct + skus saat dikeluarkan
+  removedBy    String
+  removedAt    DateTime  @default(now())
+  restoredAt   DateTime?
+  restoredBy   String?
+  restoredAsId String? // id baris baru setelah dikembalikan
+
+  @@index([fileId])
+  @@index([removedAt])
 }
 
 // Master Pricelist Category IM — sifatnya cuma LAMPIRAN FILE per Business Unit (2026-09-29,

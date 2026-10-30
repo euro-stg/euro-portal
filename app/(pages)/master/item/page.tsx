@@ -141,7 +141,7 @@ export default function MasterItemPage() {
         <div className="relative w-72">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
           <input className="w-full pl-8 pr-3 h-9 border border-slate-200 rounded-lg text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 bg-white"
-            placeholder="Cari nama atau kode item..." value={qInput} onChange={(e) => onSearch(e.target.value)} />
+            placeholder="Cari nama atau SKU..." value={qInput} onChange={(e) => onSearch(e.target.value)} />
         </div>
         <select className={selectCls} value={filters.group} onChange={(e) => setFilters((f) => ({ ...f, group: e.target.value }))}>
           <option value="">Semua grup</option>
@@ -178,7 +178,7 @@ export default function MasterItemPage() {
             <table className={`w-full text-sm ${loading ? "opacity-60" : ""}`}>
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50">
-                  {["Kode", "Nama Item", "Grup", "Company", "Business", "Jenis Treatment", "Harga Standar", "Status"].map((h) => (
+                  {["SKU", "Nama Item", "Grup", "Company", "Business", "Jenis Treatment", "Harga Standar", "Status"].map((h) => (
                     <th key={h} className={`${h === "Harga Standar" ? "text-right" : "text-left"} px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap`}>{h}</th>
                   ))}
                 </tr>
