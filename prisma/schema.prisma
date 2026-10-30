@@ -561,9 +561,37 @@ model Company {
 
 // ===================== SYNC LOG =====================
 
+// Master Item (2026-10-28) — salinan item dari ERP (ERPNext) untuk grup Treatment,
+// Treatment Product 01/02, Retail Product 01/02, dan Discontinued. Di-sync otomatis tiap malam
+// + manual dari halaman Master Item (app/lib/master-item-sync.ts). Data hanya diubah di ERP;
+// portal cuma membaca. Dipakai E Document (validasi import item IM by nama, item
+// Discontinued keluar dari IM, Sync Item ke IM) & API eksternal nantinya.
+model MasterItem {
+  id          String    @id @default(cuid())
+  itemCode    String    @unique // item_code ERP
+  itemName    String
+  // Nama dinormalisasi (huruf kecil, spasi tunggal) — kunci pencocokan by nama dengan
+  // Excel IM. Satu nama bisa dipakai beberapa itemCode di ERP.
+  nameKey     String
+  itemGroup   String
+  stockUom    String?
+  erpDisabled Boolean   @default(false)
+  // ACTIVE | DISCONTINUED — DISCONTINUED kalau grup "Discontinued", disabled di ERP, pindah
+  // ke grup di luar cakupan, atau sudah tidak ada di ERP (terdeteksi saat sync penuh).
+  status      String    @default("ACTIVE")
+  erpModified String? // nilai "modified" ERP apa adanya — kursor sync bertahap
+  syncedAt    DateTime  @default(now())
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime? @updatedAt
+
+  @@index([nameKey])
+  @@index([status])
+  @@index([itemGroup])
+}
+
 model SyncLog {
   id         String    @id @default(cuid())
-  type       String    @default("user") // "user" | "branch" | "job_position"
+  type       String    @default("user") // "user" | "branch" | "job_position" | "master_item"
   trigger    String // "manual" | "scheduled"
   status     String // "running" | "success" | "error"
   processed  Int?

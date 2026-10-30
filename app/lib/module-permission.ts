@@ -74,6 +74,8 @@ export const PORTAL_MODULE = {
   organization: "/master/organization",
   branch: "/master/branch",
   jobPosition: "/master/job-position",
+  masterItem: "/master/item",
   email: "/settings/email",
   notification: "/settings/notification",
+  erp: "/settings/erp",
 } as const;
