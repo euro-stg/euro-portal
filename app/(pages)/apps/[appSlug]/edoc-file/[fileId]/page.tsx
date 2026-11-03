@@ -517,7 +517,7 @@ export default function EDocFileDetailPage() {
       <FeedbackSection fileId={fileId} uploaderId={file.uploader.id} locked={file.status === "REJECTED"} />
 
       {file.category?.code === "IM" && file.requiresItemImport && (
-        <ImProductSection fileId={fileId} uploaderId={file.uploader.id} bulkImported={file.bulkImported} businessUnitCodes={file.businessUnitCodes} />
+        <ImProductSection fileId={fileId} canImport={canEditMetadata} businessUnitCodes={file.businessUnitCodes} />
       )}
 
       {showViewer && (

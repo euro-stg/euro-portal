@@ -2,83 +2,41 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { unauthorized } from "@/lib/api-auth";
 import db from "@/lib/db/db";
-import { canEditFileMetadata, parseImProductImport } from "@/lib/edoc";
+import { canEditFileMetadata } from "@/lib/edoc";
+import { createImProducts, validateReviewedRows } from "@/lib/im-import";
 
-// Hardcoded khusus Category IM (code === "IM") — bukan kemampuan generic per-category.
-// Akses: uploader file itu sendiri, atau superadmin (pola sama seperti Feedback).
+// Simpan item IM hasil review mapping SKU (2026-10-30) — JSON { fileId, rows: [{ product,
+// skus: [{ company, itemCode }] }] } dari layar review (lihat /api/edoc/im-product/preview).
+// Excel tidak lagi disimpan langsung: setiap baris WAJIB punya SKU (import diblokir kalau
+// belum). Hardcoded khusus Category IM. Akses = canEditFileMetadata (superadmin, Document
+// Approver, uploader selagi requiresNumber=false, Folder Creator/penulis folder untuk file
+// Bulk Import) — sama dengan edit metadata.
 export async function POST(request: Request) {
   try {
     const session = await auth();
     if (!session?.user?.id) return unauthorized();
     const userId = session.user.id;
 
-    const formData = await request.formData();
-    const fileId = formData.get("fileId") as string | null;
-    const file = formData.get("file") as File | null;
-    if (!fileId) return NextResponse.json({ message: "fileId wajib diisi" }, { status: 400 });
-    if (!file) return NextResponse.json({ message: "File Excel wajib diupload" }, { status: 400 });
+    const body = (await request.json().catch(() => ({}))) as { fileId?: string; rows?: unknown };
+    if (!body.fileId) return NextResponse.json({ message: "fileId wajib diisi" }, { status: 400 });
+    const fileId = body.fileId;
 
-    const edocFile = await db.eDocFile.findFirst({
-      where: { id: fileId, deletedAt: null },
-      include: { category: { select: { code: true } } },
-    });
+    const edocFile = await db.eDocFile.findFirst({ where: { id: fileId, deletedAt: null }, include: { category: { select: { code: true } } } });
     if (!edocFile) return NextResponse.json({ message: "File tidak ditemukan" }, { status: 404 });
-    if (edocFile.category.code !== "IM") {
-      return NextResponse.json({ message: "Lampiran produk/SKU hanya berlaku untuk file Category IM" }, { status: 400 });
-    }
-
-    // Sama seperti PATCH /api/edoc/file/[id] (edit metadata) — superadmin, Folder Creator
-    // manapun kalau file ini hasil Bulk Import, atau uploader-nya sendiri selagi
-    // requiresNumber=false (2026-09-21, disatukan supaya dua jalur "lengkapi data file
-    // Bulk Import" ini tidak drift beda aturan).
+    if (edocFile.category.code !== "IM") return NextResponse.json({ message: "Lampiran produk/SKU hanya berlaku untuk file Category IM" }, { status: 400 });
     if (!(await canEditFileMetadata(userId, edocFile))) {
       return NextResponse.json({ message: "Anda tidak memiliki izin untuk import data produk ke file ini" }, { status: 403 });
     }
 
-    let products, warnings;
-    try {
-      ({ products, warnings } = parseImProductImport(await file.arrayBuffer(), edocFile.documentNumber));
-    } catch (e) {
-      return NextResponse.json({ message: e instanceof Error ? e.message : "Gagal membaca file" }, { status: 400 });
-    }
+    const v = await validateReviewedRows(body.rows);
+    if ("error" in v) return NextResponse.json({ message: v.error }, { status: 400 });
 
-    // Delete-then-insert (2026-09-25) — sebelumnya import ulang cuma NAMBAH row baru di
-    // atas yang lama, jadi re-upload Excel yang sama/koreksi kecil bikin data dobel
-    // menumpuk. Sekarang re-import = replace total: hapus SEMUA item lama punya file ini
-    // dulu, baru masukkan yang baru dari Excel — 1 transaksi atomic (kalau create manapun
-    // gagal di tengah, delete-nya ikut di-rollback, tidak pernah nyisa "file tanpa item").
+    // Replace total dalam 1 transaksi (sejak 2026-09-25): import ulang = ganti semua item lama.
     const created = await db.$transaction(async (tx) => {
       await tx.eDocImProduct.deleteMany({ where: { fileId } });
-      return Promise.all(
-        products.map((p) =>
-          tx.eDocImProduct.create({
-            data: {
-              fileId,
-              itemName: p.itemName,
-              sku: p.sku,
-              category: p.category,
-              discountClass: p.discountClass,
-              normalPrice: p.normalPrice,
-              promoType: p.promoType,
-              promoDetail: p.promoDetail,
-              promoPrice: p.promoPrice,
-              discountPercent: p.discountPercent,
-              qty: p.qty,
-              imNumber: p.imNumber,
-              imSubject: p.imSubject,
-              validity: p.validity,
-              eligibleClient: p.eligibleClient,
-              keyConditions: p.keyConditions,
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              extra: p.extra as any,
-              importedBy: userId,
-            },
-          })
-        )
-      );
+      return createImProducts(tx, fileId, v.rows, userId);
     });
-
-    return NextResponse.json({ data: created, imported: created.length, warnings }, { status: 201 });
+    return NextResponse.json({ data: created, imported: created.length }, { status: 201 });
   } catch (err) {
     console.error(err);
     return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });

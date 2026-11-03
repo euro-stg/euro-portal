@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { unauthorized } from "@/lib/api-auth";
 import db from "@/lib/db/db";
-import { resolveFolderContentAccess, uploadEDocFileToFolder, parseImProductImport, isSuperadmin, isEDocDocumentApprover } from "@/lib/edoc";
+import { resolveFolderContentAccess, uploadEDocFileToFolder, isSuperadmin, isEDocDocumentApprover } from "@/lib/edoc";
+import { createImProducts, validateReviewedRows, type ReviewedRow } from "@/lib/im-import";
 import { checkValidity, resolveInitiator } from "@/lib/edoc-file-fields";
 
 export const maxDuration = 60;
@@ -137,10 +138,9 @@ export async function GET(request: Request) {
 
 const ALLOWED_MIME = ["application/pdf"];
 
-// Kalau requiresItemImport dicentang, Excel produk/promo WAJIB diupload di request yang
-// SAMA (bukan langkah terpisah setelah file dibuat) — di-parse & divalidasi DULU, sebelum
-// PDF diupload atau row EDocFile dibuat, supaya Excel yang gagal dibaca tidak meninggalkan
-// file "setengah jadi" (tanpa item) yang butuh rollback.
+// Kalau requiresItemImport dicentang, item promo WAJIB dikirim di request yang SAMA sebagai
+// `productRows` (hasil review mapping SKU, 2026-10-30) — divalidasi DULU sebelum PDF diupload,
+// lalu file + item dibuat dalam satu transaksi, supaya tidak pernah ada file promo tanpa item.
 export async function POST(request: Request) {
   try {
     const session = await auth();
@@ -179,7 +179,9 @@ export async function POST(request: Request) {
     const requiresItemImport = formData.get("requiresItemImport") === "true";
     // Default TIDAK bisa download (2026-10-07) — cuma true kalau dicentang eksplisit di form.
     const allowDownload = formData.get("allowDownload") === "true";
-    const productExcel = formData.get("productExcel") as File | null;
+    // Item promo hasil review mapping SKU (2026-10-30) — JSON [{ product, skus }] dari layar
+    // review di modal upload (lihat /api/edoc/im-product/preview), bukan Excel mentah.
+    const productRowsRaw = formData.get("productRows") as string | null;
 
     if (!folderId) return NextResponse.json({ message: "folderId wajib diisi" }, { status: 400 });
     if (!title) return NextResponse.json({ message: "Title wajib diisi" }, { status: 400 });
@@ -239,19 +241,20 @@ export async function POST(request: Request) {
       if (blastFolder.type === "OBSOLETE") return NextResponse.json({ message: "Tidak bisa blast ke folder Obsolete" }, { status: 400 });
     }
 
-    // Validasi & parse Excel produk/promo DULU (belum ada side effect apapun sampai titik
-    // ini) — kalau requiresItemImport dicentang tapi Excel tidak ada/gagal dibaca, batalkan
+    // Validasi item promo DULU (belum ada side effect apapun sampai titik ini) — kalau
+    // requiresItemImport dicentang tapi item belum direview / ada baris tanpa SKU, batalkan
     // di sini, sebelum PDF sempat diupload atau row EDocFile sempat dibuat.
-    let parsedProducts: Awaited<ReturnType<typeof parseImProductImport>>["products"] = [];
+    let productRows: ReviewedRow[] = [];
     if (requiresItemImport) {
-      if (!productExcel) {
-        return NextResponse.json({ message: "File ini ditandai promo — Excel produk/item wajib diupload sekarang" }, { status: 400 });
+      if (category.code !== "IM") return NextResponse.json({ message: "Lampiran item promo hanya untuk Category IM" }, { status: 400 });
+      if (!productRowsRaw) {
+        return NextResponse.json({ message: "File ini ditandai promo — upload Excel item & review mapping SKU-nya dulu" }, { status: 400 });
       }
-      try {
-        parsedProducts = parseImProductImport(await productExcel.arrayBuffer()).products;
-      } catch (e) {
-        return NextResponse.json({ message: e instanceof Error ? e.message : "Gagal membaca Excel produk/item" }, { status: 400 });
-      }
+      let parsedJson: unknown;
+      try { parsedJson = JSON.parse(productRowsRaw); } catch { return NextResponse.json({ message: "Data item tidak valid" }, { status: 400 }); }
+      const v = await validateReviewedRows(parsedJson);
+      if ("error" in v) return NextResponse.json({ message: v.error }, { status: 400 });
+      productRows = v.rows;
     }
 
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
@@ -270,59 +273,48 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: e instanceof Error ? e.message : "Gagal upload ke Nextcloud" }, { status: 502 });
     }
 
-    const created = await db.eDocFile.create({
-      data: {
-        folderId,
-        title,
-        description,
-        categoryId,
-        categoryTypeId,
-        businessUnitCodes,
-        branchIds,
-        organizationId,
-        notifyBranchIds,
-        notifyOrgIds,
-        notifyPositionIds,
-        notifyBusinessUnitCodes,
-        startDate: startDateRaw ? new Date(startDateRaw) : null,
-        endDate,
-        obsoleteDestinationFolderId,
-        validityType: validity.value,
-        initiatorId: initiator.initiatorId,
-        initiatorJobPositionName: initiator.initiatorJobPositionName,
-        fileUrl,
-        requiresNumber,
-        requiresItemImport,
-        allowDownload,
-        status: "DRAFT",
-        uploadedBy: userId,
-      },
+    // File + blast folder + item promo dalam SATU transaksi (2026-10-30) — sebelumnya item
+    // disimpan terpisah sehingga kegagalan menyisakan file promo tanpa item.
+    const created = await db.$transaction(async (tx) => {
+      const file = await tx.eDocFile.create({
+        data: {
+          folderId,
+          title,
+          description,
+          categoryId,
+          categoryTypeId,
+          businessUnitCodes,
+          branchIds,
+          organizationId,
+          notifyBranchIds,
+          notifyOrgIds,
+          notifyPositionIds,
+          notifyBusinessUnitCodes,
+          startDate: startDateRaw ? new Date(startDateRaw) : null,
+          endDate,
+          obsoleteDestinationFolderId,
+          validityType: validity.value,
+          initiatorId: initiator.initiatorId,
+          initiatorJobPositionName: initiator.initiatorJobPositionName,
+          fileUrl,
+          requiresNumber,
+          requiresItemImport,
+          allowDownload,
+          status: "DRAFT",
+          uploadedBy: userId,
+        },
+      });
+
+      if (uniqueBlastFolderIds.length > 0) {
+        await tx.eDocFileBlastFolder.createMany({
+          data: uniqueBlastFolderIds.map((bfId) => ({ fileId: file.id, folderId: bfId, createdBy: userId })),
+        });
+      }
+      if (productRows.length > 0) await createImProducts(tx, file.id, productRows, userId);
+      return file;
     });
 
-    if (uniqueBlastFolderIds.length > 0) {
-      await db.eDocFileBlastFolder.createMany({
-        data: uniqueBlastFolderIds.map((bfId) => ({ fileId: created.id, folderId: bfId, createdBy: userId })),
-      });
-    }
-
-    if (parsedProducts.length > 0) {
-      await db.$transaction(
-        parsedProducts.map((p) =>
-          db.eDocImProduct.create({
-            data: {
-              fileId: created.id, itemName: p.itemName, sku: p.sku, category: p.category, discountClass: p.discountClass,
-              normalPrice: p.normalPrice, promoType: p.promoType, promoDetail: p.promoDetail, promoPrice: p.promoPrice,
-              discountPercent: p.discountPercent, qty: p.qty, imNumber: p.imNumber, imSubject: p.imSubject,
-              validity: p.validity, eligibleClient: p.eligibleClient, keyConditions: p.keyConditions,
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              extra: p.extra as any, importedBy: userId,
-            },
-          })
-        )
-      );
-    }
-
-    return NextResponse.json({ data: created, importedProducts: parsedProducts.length }, { status: 201 });
+    return NextResponse.json({ data: created, importedProducts: productRows.length }, { status: 201 });
   } catch (err) {
     console.error(err);
     return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });

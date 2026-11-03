@@ -23,7 +23,10 @@ export async function GET(request: Request) {
     const fileId = searchParams.get("fileId");
 
     if (fileId) {
-      const products = await db.eDocImProduct.findMany({ where: { fileId }, orderBy: { itemName: "asc" } });
+      const products = await db.eDocImProduct.findMany({
+        where: { fileId }, orderBy: { itemName: "asc" },
+        include: { skus: { select: { company: true, itemCode: true }, orderBy: { company: "asc" } } },
+      });
       return NextResponse.json({ data: products });
     }
 

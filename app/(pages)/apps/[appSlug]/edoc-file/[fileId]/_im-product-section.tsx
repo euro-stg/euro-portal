@@ -5,20 +5,26 @@ import { Loader2, Upload, Download, Package, Search, X, FileSpreadsheet } from "
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { Table } from "@/components/ui/table";
+import { Modal } from "@/components/ui/modal";
+import { ImSkuConfirm, type ConfirmedRowPayload, type ImportPreviewData } from "../../_im-sku-confirm";
 
 type Product = {
   id: string; itemName: string; sku: string | null; category: string | null; discountClass: string | null;
   normalPrice: number | null; promoType: string | null; promoDetail: string | null;
   promoPrice: number | null; discountPercent: number | null; qty: number | null;
   validity: string | null; eligibleClient: string | null; keyConditions: string | null;
+  skus: { company: string; itemCode: string }[];
 };
 
 const fmtRupiah = (n: number | null) => (n == null ? "-" : `Rp${n.toLocaleString("id-ID")}`);
 const inputCls = "w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 bg-white transition-colors";
 
-export function ImProductSection({ fileId, uploaderId, bulkImported, businessUnitCodes }: { fileId: string; uploaderId: string; bulkImported?: boolean; businessUnitCodes?: string[] }) {
-  const [me, setMe] = useState<{ userId: string; isSuperadmin: boolean; isFolderCreator: boolean } | null>(null);
+// canImport = flag canEditMetadata dari GET /api/edoc/file/[id] — aturan yang SAMA dengan
+// server import (2026-10-30; sebelumnya dihitung sendiri di sini dan bisa beda dengan server).
+export function ImProductSection({ fileId, canImport, businessUnitCodes }: { fileId: string; canImport: boolean; businessUnitCodes?: string[] }) {
   const [products, setProducts] = useState<Product[]>([]);
+  const [preview, setPreview] = useState<ImportPreviewData | null>(null);
+  const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
@@ -36,11 +42,7 @@ export function ImProductSection({ fileId, uploaderId, bulkImported, businessUni
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [meRes, prodRes] = await Promise.all([
-        fetch("/api/edoc/me").then((r) => r.json()),
-        fetch(`/api/edoc/im-product?fileId=${fileId}`).then((r) => r.json()),
-      ]);
-      setMe(meRes);
+      const prodRes = await fetch(`/api/edoc/im-product?fileId=${fileId}`).then((r) => r.json());
       setProducts(prodRes.data ?? []);
     } finally { setLoading(false); }
   }, [fileId]);
@@ -53,31 +55,41 @@ export function ImProductSection({ fileId, uploaderId, bulkImported, businessUni
   const filteredProducts = useMemo(() => {
     if (!search.trim()) return products;
     const s = search.trim().toLowerCase();
-    return products.filter((p) => p.itemName.toLowerCase().includes(s) || (p.sku ?? "").toLowerCase().includes(s));
+    return products.filter((p) => p.itemName.toLowerCase().includes(s) || (p.sku ?? "").toLowerCase().includes(s) || p.skus.some((k) => k.itemCode.toLowerCase().includes(s)));
   }, [products, search]);
 
-  // Folder Creator manapun boleh ikut lengkapi item promo untuk file hasil Bulk Import
-  // (2026-09-21) — bukan cuma uploader aslinya, sama seperti canEditFileMetadata di server.
-  const canManage = !!me && (me.isSuperadmin || me.userId === uploaderId || (me.isFolderCreator && !!bulkImported));
+  const canManage = canImport;
+  const unmapped = products.filter((p) => p.skus.length === 0).length;
 
+  // Import 2 langkah (2026-10-30; berbasis SKU sejak 2026-11-02): Excel → konfirmasi → simpan.
   const handleImport = async (file: File) => {
     setImporting(true);
     try {
       const fd = new FormData();
       fd.append("fileId", fileId);
       fd.append("file", file);
-      const res = await fetch("/api/edoc/im-product/import", { method: "POST", body: fd });
+      const res = await fetch("/api/edoc/im-product/preview", { method: "POST", body: fd });
       const json = await res.json();
-      if (!res.ok) { showToast("error", json.message || "Gagal import"); return; }
-      // Konfirmasi konkret item apa yang sudah tersimpan (nama + SKU), bukan cuma jumlah —
-      // biar bisa langsung dicek apakah item yang dimaksud memang masuk.
-      const savedItems: { itemName: string; sku: string | null }[] = json.data ?? [];
-      const preview = savedItems.slice(0, 3).map((p) => (p.sku ? `${p.sku} - ${p.itemName}` : p.itemName)).join(", ");
-      const more = savedItems.length > 3 ? ` (+${savedItems.length - 3} lainnya)` : "";
-      const warnMsg = json.warnings?.length ? ` — ${json.warnings.length} peringatan: ${json.warnings[0]}` : "";
-      showToast(json.warnings?.length ? "error" : "success", `${json.imported} item tersimpan: ${preview}${more}${warnMsg}`);
+      if (!res.ok) { showToast("error", json.message || "Gagal membaca Excel"); return; }
+      setPreview(json);
+    } finally {
+      setImporting(false);
+      if (importRef.current) importRef.current.value = "";
+    }
+  };
+
+  const saveReviewed = async (rows: ConfirmedRowPayload[]) => {
+    setSaving(true);
+    try {
+      const res = await fetch("/api/edoc/im-product/import", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fileId, rows }),
+      });
+      const json = await res.json();
+      if (!res.ok) { showToast("error", json.message || "Gagal menyimpan"); return; }
+      setPreview(null);
+      showToast("success", `${json.imported} item tersimpan`);
       void load();
-    } finally { setImporting(false); }
+    } finally { setSaving(false); }
   };
 
   const handleDownloadTemplate = async () => {
@@ -147,6 +159,24 @@ export function ImProductSection({ fileId, uploaderId, bulkImported, businessUni
         )}
       </div>
 
+      {unmapped > 0 && products.length > 0 && (
+        <p className="mb-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+          {unmapped} item belum punya SKU (hasil import lama){canManage ? " — import ulang Excel yang berisi kolom SKU untuk melengkapinya." : "."}
+        </p>
+      )}
+
+      <Modal open={!!preview} title="Konfirmasi Import Item" onClose={() => { if (!saving) setPreview(null); }} boxClassName="w-full max-w-5xl">
+        {preview && (
+          <>
+            <p className="text-xs text-slate-500 mb-3">
+              SKU setiap baris dicek ke Master Item; nama item mengikuti nama resmi Master Item.
+              Item lama di IM ini akan <b>diganti</b> dengan isi Excel.
+            </p>
+            <ImSkuConfirm preview={preview} saving={saving} onSubmit={(rows) => void saveReviewed(rows)} onCancel={() => setPreview(null)} submitLabel="Simpan item" />
+          </>
+        )}
+      </Modal>
+
       {products.length === 0 ? (
         <p className="text-sm text-slate-400">Belum ada produk/promo yang di-attach ke file ini. Download template untuk mulai isi datanya.</p>
       ) : (
@@ -184,7 +214,13 @@ export function ImProductSection({ fileId, uploaderId, bulkImported, businessUni
                     <tr key={p.id} className="hover:bg-slate-50/60 transition-colors align-top">
                       <td className="px-3 py-2.5 min-w-32">
                         <p className="text-sm font-medium text-slate-800">{p.itemName}</p>
-                        {p.sku && <p className="text-xs font-mono text-slate-400">SKU: {p.sku}</p>}
+                        {p.skus.length > 0 ? (
+                          <div className="flex flex-wrap gap-1 mt-0.5">
+                            {p.skus.map((k) => (
+                              <span key={k.company} className="text-[10px] font-mono px-1.5 py-px rounded bg-slate-100 text-slate-600" title={k.company}>{k.itemCode}</span>
+                            ))}
+                          </div>
+                        ) : <p className="text-[10px] text-amber-600">SKU belum dipetakan</p>}
                       </td>
                       <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">{p.category ?? "-"}</td>
                       <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">{p.discountClass ?? "-"}</td>
