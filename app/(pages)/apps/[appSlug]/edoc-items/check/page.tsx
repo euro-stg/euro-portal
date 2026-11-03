@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { Alert } from "@/components/ui/alert";
 import { Pagination } from "@/components/ui/pagination";
+import { ErpSyncTab } from "./_erp-sync";
 
 // Cek Item vs Master Item (2026-11-02, Tahap 3) — khusus superadmin & Document Approver.
 // Cakupan: item di IM aktif (sama dengan Item Browser). Tiga tab:
@@ -14,6 +15,7 @@ import { Pagination } from "@/components/ui/pagination";
 //                    dikeluarkan (masuk Riwayat, bisa dikembalikan). Tidak ada yang otomatis.
 //   Belum ber-SKU  — item lama tanpa SKU → pilih SKU dari saran nama / cari manual → simpan.
 //   Riwayat        — item yang dikeluarkan + tombol Kembalikan.
+//   Sync dari ERP  — (Tahap 4, 2026-11-03) usulan baris promo dari Pricing Rule ERP per item.
 
 type SkuInfo = { company: string; itemCode: string; itemName: string | null; status: string | null };
 type FileRef = { id: string; title: string; documentNumber: string | null; businessUnitCodes: string[]; endDate: string | null };
@@ -35,7 +37,7 @@ const candLabel = (c: Candidate) => `${c.itemCode} — ${c.itemName} (${c.compan
 export default function EDocItemCheckPage() {
   const { appSlug } = useParams<{ appSlug: string }>();
   const router = useRouter();
-  const [tab, setTab] = useState<"discontinued" | "unmapped" | "history">("discontinued");
+  const [tab, setTab] = useState<"discontinued" | "unmapped" | "history" | "erp">("discontinued");
   const [summary, setSummary] = useState<Summary | null>(null);
   const [forbidden, setForbidden] = useState(false);
   const [toast, setToast] = useState<{ variant: "success" | "error"; message: string } | null>(null);
@@ -181,6 +183,7 @@ export default function EDocItemCheckPage() {
     { key: "discontinued" as const, label: "Discontinued", count: summary?.discontinued },
     { key: "unmapped" as const, label: "Belum ber-SKU", count: summary?.unmapped },
     { key: "history" as const, label: "Riwayat dikeluarkan", count: summary?.removed },
+    { key: "erp" as const, label: "Sync dari ERP", count: undefined },
   ];
 
   return (
@@ -399,6 +402,8 @@ export default function EDocItemCheckPage() {
           </div>
         )
       )}
+
+      {tab === "erp" && <ErpSyncTab onToast={showToast} onSaved={() => void loadCheck()} />}
 
       <Modal open={confirmRemove} title="Keluarkan item discontinued?" onClose={() => { if (!removing) setConfirmRemove(false); }} boxClassName="max-w-lg">
         <p className="text-sm text-slate-600">

@@ -69,7 +69,7 @@ const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : type
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : typeof v === "string" && v.trim() && Number.isFinite(Number(v)) ? Number(v) : null);
 
 /** Bersihkan field baris dari client (JSON) — hanya field EDocImProduct yang dikenal. */
-function sanitizeProduct(p: Record<string, unknown>): ImProductInput {
+export function sanitizeProduct(p: Record<string, unknown>): ImProductInput {
   const extra = p.extra && typeof p.extra === "object" && !Array.isArray(p.extra) ? (p.extra as Record<string, unknown>) : null;
   return {
     itemName: str(p.itemName) ?? "", sku: str(p.sku), category: str(p.category), discountClass: str(p.discountClass),
