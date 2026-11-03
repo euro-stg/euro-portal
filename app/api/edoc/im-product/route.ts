@@ -98,7 +98,10 @@ export async function GET(request: Request) {
     // dilihat user ini, bukan "kebetulan ada di top-N global lalu lolos ACL".
     const allMatching = await db.eDocImProduct.findMany({
       where: productWhere,
-      include: { file: { select: { id: true, title: true, documentNumber: true, status: true, folderId: true, startDate: true, endDate: true } } },
+      include: {
+        file: { select: { id: true, title: true, documentNumber: true, status: true, folderId: true, startDate: true, endDate: true } },
+        skus: { select: { company: true, itemCode: true }, orderBy: { company: "asc" } },
+      },
       orderBy: [{ importedAt: "desc" }, { id: "desc" }],
     });
 
@@ -132,7 +135,18 @@ export async function GET(request: Request) {
     // dikirim di halaman pertama (`!cursor`), sama seperti "N File" di daftar file folder.
     const totalCount = cursor ? null : visibleAll.length;
 
-    return NextResponse.json({ data: visible, hasMore, nextCursor, totalCount });
+    // Status SKU per baris (2026-11-02) — badge di Item Browser: Discontinued (semua SKU),
+    // sebagian, atau belum dipetakan. Hanya untuk baris di halaman ini.
+    const codes = [...new Set(visible.flatMap((p) => p.skus.map((s) => s.itemCode)))];
+    const statusByCode = new Map((await db.masterItem.findMany({ where: { itemCode: { in: codes } }, select: { itemCode: true, status: true } })).map((m) => [m.itemCode, m.status]));
+    const data = visible.map((p) => {
+      const known = p.skus.map((s) => statusByCode.get(s.itemCode)).filter((x): x is NonNullable<typeof x> => !!x);
+      const off = known.filter((st) => st === "DISCONTINUED").length;
+      const skuStatus = p.skus.length === 0 ? "UNMAPPED" : known.length > 0 && off === known.length ? "DISCONTINUED" : off > 0 ? "PARTIAL" : "ACTIVE";
+      return { ...p, skuStatus };
+    });
+
+    return NextResponse.json({ data, hasMore, nextCursor, totalCount });
   } catch (err) {
     console.error(err);
     return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });

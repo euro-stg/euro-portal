@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Search, X, Loader2, Package, ChevronRight } from "lucide-react";
+import { ArrowLeft, Search, X, Loader2, Package, ChevronRight, ShieldCheck } from "lucide-react";
 
 type Product = {
   id: string; itemName: string; sku: string | null; category: string | null; discountClass: string | null;
@@ -10,7 +10,10 @@ type Product = {
   promoPrice: number | null; discountPercent: number | null; qty: number | null;
   imSubject: string | null; validity: string | null; eligibleClient: string | null; keyConditions: string | null;
   file: { id: string; title: string; documentNumber: string | null; startDate: string | null; endDate: string | null };
+  skus: { company: string; itemCode: string }[];
+  skuStatus: "ACTIVE" | "DISCONTINUED" | "PARTIAL" | "UNMAPPED";
 };
+type CheckSummary = { total: number; active: number; discontinued: number; partial: number; unmapped: number; removed: number };
 
 const inputCls = "w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 bg-white transition-colors";
 const fmtRupiah = (n: number | null) => (n == null ? "-" : `Rp${n.toLocaleString("id-ID")}`);
@@ -41,6 +44,16 @@ export default function EDocItemsPage() {
   const loadingMoreRef = useRef(false);
   const unmountedRef = useRef(false);
   useEffect(() => () => { unmountedRef.current = true; }, []);
+
+  // Tombol "Cek vs Master Item" (2026-11-02) — hanya tampil kalau endpoint-nya mengizinkan
+  // (superadmin & Document Approver); ringkasannya jadi badge jumlah yang perlu ditindak.
+  const [check, setCheck] = useState<CheckSummary | null>(null);
+  useEffect(() => {
+    fetch("/api/edoc/im-product/check?summary=1")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (j?.summary) setCheck(j.summary); })
+      .catch(() => {});
+  }, []);
 
   const buildParams = useCallback((withCursor?: string) => {
     const p = new URLSearchParams();
@@ -142,6 +155,16 @@ export default function EDocItemsPage() {
             <p className="text-xs text-slate-400">Cari promo item lintas semua file IM, klik untuk buka file-nya</p>
           </div>
         </div>
+        {check && (
+          <button
+            onClick={() => router.push(`/apps/${appSlug}/edoc-items/check`)}
+            className="ml-auto flex items-center gap-2 text-sm border border-slate-200 rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-50 transition-colors shrink-0"
+          >
+            <ShieldCheck className="w-4 h-4 text-amber-600" /> Cek vs Master Item
+            {check.discontinued > 0 && <span className="px-1.5 py-0.5 rounded-full bg-red-50 text-red-700 text-xs font-medium">{check.discontinued} discontinued</span>}
+            {check.unmapped > 0 && <span className="px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 text-xs font-medium">{check.unmapped} belum ber-SKU</span>}
+          </button>
+        )}
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 p-4 mb-4 space-y-2">
@@ -219,6 +242,9 @@ export default function EDocItemsPage() {
                     <td className="px-3 py-3 min-w-32">
                       <p className="text-sm font-medium text-slate-800">{p.itemName}</p>
                       {p.sku && <p className="text-xs font-mono text-slate-400">SKU: {p.sku}</p>}
+                      {p.skuStatus === "DISCONTINUED" && <span className="inline-block mt-1 px-1.5 py-0.5 rounded bg-red-50 text-red-700 text-[11px] font-medium">Discontinued</span>}
+                      {p.skuStatus === "PARTIAL" && <span className="inline-block mt-1 px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 text-[11px] font-medium">Sebagian SKU discontinued</span>}
+                      {p.skuStatus === "UNMAPPED" && <span className="inline-block mt-1 px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 text-[11px]">Belum ber-SKU</span>}
                     </td>
                     <td className="px-3 py-3 text-xs text-slate-400 max-w-48">{p.imSubject ?? "-"}</td>
                     <td className="px-3 py-3 text-xs text-slate-500 whitespace-nowrap">{p.category ?? "-"}</td>
