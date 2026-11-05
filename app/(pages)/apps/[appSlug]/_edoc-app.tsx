@@ -1106,6 +1106,9 @@ export function BlastFolderPicker({ selected, onChange }: { selected: BlastFolde
     const hasChildren = node.children.length > 0;
     const isExpanded = searchActive ? true : expandedIds.has(node.id);
     const isSelected = selected.some((s) => s.id === node.id);
+    // Folder paling atas (mis. HO) tidak bisa dipilih — wajib pilih sub-folder di dalamnya
+    // (2026-11-05, UI saja). Yang terlanjur terpilih tetap bisa di-uncheck.
+    const isRootLocked = depth === 0 && !isSelected;
     return (
       <div key={node.id}>
         <div className="flex items-center gap-1 py-1 rounded hover:bg-amber-50/50" style={{ paddingLeft: depth * 18 }}>
@@ -1116,10 +1119,11 @@ export function BlastFolderPicker({ selected, onChange }: { selected: BlastFolde
           ) : (
             <span className="w-[18px] shrink-0" />
           )}
-          <label className="flex items-center gap-1.5 flex-1 min-w-0 cursor-pointer">
-            <input type="checkbox" checked={isSelected} onChange={() => (isSelected ? remove(node.id) : add(node.id))} className="shrink-0 accent-amber-600" />
+          <label className={`flex items-center gap-1.5 flex-1 min-w-0 ${isRootLocked ? "cursor-not-allowed" : "cursor-pointer"}`} title={isRootLocked ? "Folder utama tidak bisa dipilih — pilih sub-folder di dalamnya" : undefined}>
+            <input type="checkbox" checked={isSelected} disabled={isRootLocked} onChange={() => (isSelected ? remove(node.id) : add(node.id))} className="shrink-0 accent-amber-600 disabled:opacity-40" />
             <Folder className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-            <span className="text-sm text-slate-700 truncate">{node.name}</span>
+            <span className={`text-sm truncate ${isRootLocked ? "text-slate-500" : "text-slate-700"}`}>{node.name}</span>
+            {isRootLocked && <span className="text-[10px] text-slate-400 shrink-0">pilih sub-folder</span>}
           </label>
         </div>
         {hasChildren && isExpanded && <div>{node.children.map((c) => renderNode(c, depth + 1))}</div>}
@@ -1151,7 +1155,7 @@ export function BlastFolderPicker({ selected, onChange }: { selected: BlastFolde
             <input className={`${inputCls} pl-9`} placeholder="Cari nama folder untuk filter tree..." value={query} onChange={(e) => setQuery(e.target.value)} />
           </div>
 
-          <p className="text-xs text-slate-400">Klik panah untuk buka sub-folder, centang folder yang mau jadi tujuan Blast.</p>
+          <p className="text-xs text-slate-400">Klik panah untuk buka sub-folder, centang folder yang mau jadi tujuan Blast. Folder utama (paling atas) tidak bisa dipilih — pilih sub-folder di dalamnya.</p>
 
           {loading ? (
             <div className="flex items-center justify-center py-8 text-slate-400"><Loader2 className="w-5 h-5 animate-spin" /></div>
