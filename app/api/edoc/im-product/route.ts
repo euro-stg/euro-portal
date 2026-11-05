@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { unauthorized } from "@/lib/api-auth";
 import db from "@/lib/db/db";
-import { resolveFolderContentAccessBatch } from "@/lib/edoc";
+import { resolveFolderContentAccessBatch, edocExpiryCutoff } from "@/lib/edoc";
 
 const PAGE_SIZE = 30;
 
@@ -45,7 +45,7 @@ export async function GET(request: Request) {
       deletedAt: null,
       status: "RELEASE",
       folder: { type: { not: "OBSOLETE" } },
-      AND: [{ OR: [{ endDate: null }, { endDate: { gt: new Date() } }] }],
+      AND: [{ OR: [{ endDate: null }, { endDate: { gt: edocExpiryCutoff() } }] }],
     };
     // Sama persis logic overlap di GET /api/edoc/search — "masih berlaku pada rentang
     // [validFrom, validTo]" terhadap startDate/endDate FILE (bukan teks validity per item,

@@ -4,8 +4,7 @@ import { unauthorized } from "@/lib/api-auth";
 import db from "@/lib/db/db";
 import {
   resolveFolderContentAccessBatch, resolveFolderVisibilityBatch, getEDocFolderBreadcrumb,
-  isSuperadmin, isEDocDocumentApprover,
-} from "@/lib/edoc";
+  isSuperadmin, isEDocDocumentApprover, edocExpiryCutoff } from "@/lib/edoc";
 
 const RESULT_LIMIT = 50;
 
@@ -37,7 +36,7 @@ export async function GET(request: Request) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const fileWhere: any = {
       deletedAt: null,
-      AND: [{ OR: [{ endDate: null }, { endDate: { gt: new Date() } }] }],
+      AND: [{ OR: [{ endDate: null }, { endDate: { gt: edocExpiryCutoff() } }] }],
     };
     if (categoryId) fileWhere.categoryId = categoryId;
     if (categoryTypeId) fileWhere.categoryTypeId = categoryTypeId;

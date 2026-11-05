@@ -1,5 +1,5 @@
 import db from "@/lib/db/db";
-import { isEDocDocumentApprover, isSuperadmin } from "@/lib/edoc";
+import { isEDocDocumentApprover, isSuperadmin, edocExpiryCutoff } from "@/lib/edoc";
 import { evaluateMappedSkus, loadMasterIndex, matchKey, resolveRow, type MasterIndex, type SkuCandidate } from "@/lib/im-sku";
 
 // Cek Item vs Master Item (2026-11-02, Tahap 3) — dibuka dari Item/Promo Browser. Cakupan =
@@ -21,7 +21,7 @@ export const activeImFileWhere = () => ({
   status: "RELEASE" as const,
   category: { code: "IM" },
   folder: { type: { not: "OBSOLETE" as const } },
-  OR: [{ endDate: null }, { endDate: { gt: new Date() } }],
+  OR: [{ endDate: null }, { endDate: { gt: edocExpiryCutoff() } }],
 });
 
 const fileSelect = { id: true, title: true, documentNumber: true, businessUnitCodes: true, endDate: true } as const;

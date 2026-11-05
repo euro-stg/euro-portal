@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { unauthorized } from "@/lib/api-auth";
 import db from "@/lib/db/db";
-import { resolveFolderContentAccess, uploadEDocFileToFolder, isSuperadmin, isEDocDocumentApprover } from "@/lib/edoc";
+import { resolveFolderContentAccess, uploadEDocFileToFolder, isSuperadmin, isEDocDocumentApprover, edocExpiryCutoff } from "@/lib/edoc";
 import { createImProducts, validateReviewedRows, type ReviewedRow } from "@/lib/im-import";
 import { checkValidity, resolveInitiator } from "@/lib/edoc-file-fields";
 import { orgLevelFor, orgLevelLabel, orgMatchesLevel } from "@/lib/edoc-org-level";
@@ -59,7 +59,7 @@ export async function GET(request: Request) {
     // sudah expired supaya tetap bisa dilihat, bukan disembunyikan lagi).
     const visibilityFilter = access.folder.type === "OBSOLETE"
       ? { deletedAt: null }
-      : { deletedAt: null, OR: [{ endDate: null }, { endDate: { gt: new Date() } }] };
+      : { deletedAt: null, OR: [{ endDate: null }, { endDate: { gt: edocExpiryCutoff() } }] };
 
     // Isi listing = file yang folderId-nya PERSIS folder ini, DITAMBAH (halaman pertama
     // saja) file dari folder lain yang "Blast" ke sini (link, bukan copy — lihat
