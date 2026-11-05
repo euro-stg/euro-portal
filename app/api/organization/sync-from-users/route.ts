@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireSession, unauthorized, forbidden } from "@/lib/api-auth";
 import { hasPortalModuleAccess, PORTAL_MODULE } from "@/lib/module-permission";
 import db from "@/lib/db/db";
+import { removeResignedOrgs } from "@/lib/org-cleanup";
 
 export async function POST() {
   try {
@@ -34,7 +35,10 @@ export async function POST() {
       created++;
     }
 
-    return NextResponse.json({ message: `${created} org ditambahkan, ${skipped} sudah ada`, created, skipped });
+    const removed = await removeResignedOrgs();
+
+    const msg = `${created} org ditambahkan, ${skipped} sudah ada` + (removed.length ? `, ${removed.length} org dihapus (semua karyawannya resign)` : "");
+    return NextResponse.json({ message: msg, created, skipped, removed: removed.length });
   } catch (err) {
     console.error(err);
     return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
