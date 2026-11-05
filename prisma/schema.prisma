@@ -1162,9 +1162,39 @@ model EDocFile {
   imProducts          EDocImProduct[]
   feedback            EDocFeedback?
   blastFolders        EDocFileBlastFolder[]
+  replaces            EDocFileReplacement[] @relation("EDocFileReplacementNew")
+  replacedBy          EDocFileReplacement?  @relation("EDocFileReplacementOld")
 
   @@index([folderId])
   @@index([categoryId])
+}
+
+// Penggantian IM (2026-11-05) — IM baru MENGGANTIKAN IM lama. Ditautkan saat upload / di
+// detail selama IM baru belum Release (sesudahnya hanya superadmin). Saat IM baru di-approve,
+// IM lama diakhiri: endDate = H-1 dari startDate IM baru (atau tanggal approve), jadi Temporer,
+// dan folder Obsolete-nya diisi kalau dipilih — lalu ikut mekanisme relocateExpiredFiles.
+// endDate tidak pernah dimundurkan (kalau sudah lebih awal, dibiarkan). Satu IM baru boleh
+// menggantikan beberapa IM lama; satu IM lama hanya bisa digantikan SATU IM (oldFileId unik).
+// Detail kedua IM menampilkan link "Menggantikan" / "Digantikan oleh".
+model EDocFileReplacement {
+  id               String   @id @default(cuid())
+  newFileId        String
+  oldFileId        String   @unique
+  obsoleteFolderId String? // folder Obsolete untuk IM lama (opsional), diterapkan saat approve
+  createdBy        String
+  createdAt        DateTime @default(now())
+
+  // Diisi saat IM baru di-approve & IM lama sudah diakhiri — nilai lama disimpan untuk jejak.
+  appliedAt                DateTime?
+  appliedEndDate           DateTime?
+  previousEndDate          DateTime?
+  previousValidityType     String?
+  previousObsoleteFolderId String?
+
+  newFile EDocFile @relation("EDocFileReplacementNew", fields: [newFileId], references: [id], onDelete: Cascade)
+  oldFile EDocFile @relation("EDocFileReplacementOld", fields: [oldFileId], references: [id], onDelete: Cascade)
+
+  @@index([newFileId])
 }
 
 // "Blast" — file yang SAMA (1 master record, bukan disalin) juga muncul di listing folder

@@ -13,6 +13,7 @@ import { MultiSelect, type MultiSelectOption } from "./_edoc-multiselect";
 import { buildFolderTree, type FlatFolder, type FolderTreeNode, FolderTreeSingleSelectBody } from "./_edoc-folder-tree-picker";
 import { ImSkuConfirm, confirmedRows, type ConfirmedRowPayload, type ImportPreviewData } from "./_im-sku-confirm";
 import { orgLevelFor, orgLevelLabel, orgMatchesLevel } from "@/lib/edoc-org-level";
+import { ReplacementEditor, type ReplacementDraft } from "./_im-replacement";
 
 type Me = { userId: string; isSuperadmin: boolean; isFolderCreator: boolean; isDocumentApprover: boolean; businessUnits: string[] };
 type FolderItem = { id: string; name: string; type: string; createdBy: string; createdAt: string; canRead: boolean; canWrite: boolean };
@@ -1271,6 +1272,8 @@ function UploadFileModal({
   const [obsoleteDestinationFolderId, setObsoleteDestinationFolderId] = useState("");
   const [obsoleteFolders, setObsoleteFolders] = useState<{ id: string; name: string }[]>([]);
   const [requiresItemImport, setRequiresItemImport] = useState(false);
+  // IM lama yang digantikan IM ini (2026-11-05) — hanya Category IM.
+  const [replacements, setReplacements] = useState<ReplacementDraft[]>([]);
   const [allowDownload, setAllowDownload] = useState(false);
   const [validityType, setValidityType] = useState("");
   // Default inisiator = user yang sedang upload (bisa diganti).
@@ -1408,6 +1411,9 @@ function UploadFileModal({
       fd.append("requiresItemImport", String(requiresItemImport));
       fd.append("allowDownload", String(allowDownload));
       if (requiresItemImport && reviewedRows) fd.append("productRows", JSON.stringify(reviewedRows));
+      if (selectedCategory?.code === "IM" && replacements.length > 0) {
+        fd.append("replacements", JSON.stringify(replacements.map((r) => ({ oldFileId: r.candidate.id, obsoleteFolderId: r.obsoleteFolderId || null }))));
+      }
       fd.append("file", file);
 
       const res = await fetch("/api/edoc/file", { method: "POST", body: fd });
@@ -1571,6 +1577,17 @@ function UploadFileModal({
           </label>
           <p className="text-xs text-slate-400 mt-1 pl-6">Kalau tidak dicentang, file hanya bisa dilihat lewat viewer (tanpa download/print).</p>
         </div>
+
+        {selectedCategory?.code === "IM" && (
+          <div>
+            <label className={labelCls}>Menggantikan IM (opsional)</label>
+            <p className="text-xs text-slate-400 mb-2">
+              Pilih IM lama yang digantikan IM ini. Saat IM ini di-approve, IM lama otomatis berakhir H-1 dari Start Date IM ini,
+              dan keduanya saling menampilkan link &ldquo;Menggantikan&rdquo; / &ldquo;Digantikan oleh&rdquo;.
+            </p>
+            <ReplacementEditor value={replacements} onChange={setReplacements} newStartDate={startDate || null} />
+          </div>
+        )}
 
         {selectedCategory?.code === "IM" && (
           <div>

@@ -10,6 +10,7 @@ import { Modal } from "@/components/ui/modal";
 import { Alert } from "@/components/ui/alert";
 import { FeedbackSection } from "./_feedback-section";
 import { ImProductSection } from "./_im-product-section";
+import { ImReplacementSection } from "../../_im-replacement";
 import { BlastFolderPicker, type BlastFolderOption, BlastEmailCriteriaEditor, type BlastEmailCriteriaValue, InitiatorPicker, type InitiatorValue, ValidityTypePicker } from "../../_edoc-app";
 import { MoveFileButton } from "./_move-file-modal";
 import { PdfViewerModal } from "./_pdf-viewer";
@@ -450,6 +451,11 @@ export default function EDocFileDetailPage() {
           {file.rejectionNote && <p className="text-sm text-red-600 mt-1">Alasan: {file.rejectionNote}</p>}
           <p className="text-xs text-red-400 mt-2">Upload revisi untuk memperbaiki dan mengajukan ulang — status akan otomatis kembali ke Draft.</p>
         </div>
+      )}
+
+      {/* Penggantian IM (2026-11-05) — tepat di bawah kartu utama supaya "Digantikan oleh" langsung terlihat; remount saat status berubah (approve menerapkan penggantian). */}
+      {file.category?.code === "IM" && (
+        <ImReplacementSection key={`${file.status}-${file.startDate}`} fileId={fileId} newStartDate={file.startDate} onError={(m) => showToast("error", m)} />
       )}
 
       {isDocumentApprover && (

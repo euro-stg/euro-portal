@@ -6,6 +6,7 @@ import {
   isSuperadmin, isEDocDocumentApprover, generateEDocNumber,
   downloadEDocFile, stampEDocPdf, uploadEDocFileToFolder, sendBlastEmailNotification,
 } from "@/lib/edoc";
+import { applyReplacements, relocateAfterApply } from "@/lib/im-replacement";
 
 // Approve = generate Document Number (via Number Format Builder milik Category file ini),
 // stempel Document Number + Watermark (kalau Category-nya sudah punya EDocWatermarkConfig)
@@ -89,6 +90,8 @@ export async function POST(
       if (newFileUrl !== file.fileUrl) {
         await tx.eDocFileRevisionLog.create({ data: { fileId: id, previousFileUrl: file.fileUrl, replacedBy: userId } });
       }
+      // Penggantian IM (2026-11-05): IM lama yang digantikan berakhir H-1 dari Start Date ini.
+      await applyReplacements(tx, file);
       return tx.eDocFile.update({
         where: { id },
         data: {
@@ -106,6 +109,7 @@ export async function POST(
     // pernah lewat sini, nomornya di-set langsung tanpa approve). Tidak pernah menggagalkan
     // response approve ini sendiri (fungsinya sudah self-catching), tapi tetap dibungkus
     // .catch() di sini juga sebagai lapisan pertahanan kedua.
+    await relocateAfterApply();
     const origin = process.env.NEXT_PUBLIC_APP_URL ?? new URL(request.url).origin;
     await sendBlastEmailNotification(id, origin).catch((e) => console.error("[edoc] blast email gagal:", e));
 

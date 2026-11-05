@@ -6,6 +6,7 @@ import { resolveFolderContentAccess, uploadEDocFileToFolder, isSuperadmin, isEDo
 import { createImProducts, validateReviewedRows, type ReviewedRow } from "@/lib/im-import";
 import { checkValidity, resolveInitiator } from "@/lib/edoc-file-fields";
 import { orgLevelFor, orgLevelLabel, orgMatchesLevel } from "@/lib/edoc-org-level";
+import { createReplacements, parseReplacementInput, validateReplacements, type ReplacementInput } from "@/lib/im-replacement";
 
 export const maxDuration = 60;
 
@@ -263,6 +264,20 @@ export async function POST(request: Request) {
       productRows = v.rows;
     }
 
+    // IM yang digantikan (2026-11-05) — divalidasi sebelum PDF diupload.
+    let replacements: ReplacementInput[] = [];
+    const replacementsRaw = formData.get("replacements") as string | null;
+    if (replacementsRaw) {
+      if (category.code !== "IM") return NextResponse.json({ message: "Penggantian dokumen hanya untuk Category IM" }, { status: 400 });
+      let parsed: unknown;
+      try { parsed = JSON.parse(replacementsRaw); } catch { return NextResponse.json({ message: "Data IM yang digantikan tidak valid" }, { status: 400 }); }
+      const links = parseReplacementInput(parsed);
+      if ("error" in links) return NextResponse.json({ message: links.error }, { status: 400 });
+      const err = await validateReplacements(null, links);
+      if (err) return NextResponse.json({ message: err }, { status: 400 });
+      replacements = links;
+    }
+
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
     const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
     const filename = `${ts}-${safeName}`;
@@ -317,6 +332,7 @@ export async function POST(request: Request) {
         });
       }
       if (productRows.length > 0) await createImProducts(tx, file.id, productRows, userId);
+      if (replacements.length > 0) await createReplacements(tx, file.id, replacements, userId);
       return file;
     });
 
