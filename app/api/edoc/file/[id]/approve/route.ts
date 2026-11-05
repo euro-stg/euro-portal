@@ -70,7 +70,8 @@ export async function POST(
         stamps.push({ text: documentNumber, positionXMm: docNumberFormat.positionXMm, positionYMm: docNumberFormat.positionYMm, fontSize: docNumberFormat.fontSize ?? undefined });
       }
       if (watermark) {
-        stamps.push({ text: watermark.text, positionXMm: watermark.positionXMm, positionYMm: watermark.positionYMm, fontSize: watermark.fontSize, color: watermark.color });
+        // Watermark di SEMUA halaman (2026-11-04); Document Number tetap halaman 1.
+        stamps.push({ text: watermark.text, positionXMm: watermark.positionXMm, positionYMm: watermark.positionYMm, fontSize: watermark.fontSize, color: watermark.color, allPages: true });
       }
 
       if (stamps.length > 0) {

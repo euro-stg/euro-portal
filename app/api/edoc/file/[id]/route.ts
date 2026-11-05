@@ -4,6 +4,7 @@ import { unauthorized } from "@/lib/api-auth";
 import db from "@/lib/db/db";
 import { isEDocDocumentApprover, isSuperadmin, deleteEDocFile, canViewFile, canEditFileMetadata } from "@/lib/edoc";
 import { checkValidity, resolveInitiator } from "@/lib/edoc-file-fields";
+import { orgLevelFor, orgLevelLabel, orgMatchesLevel } from "@/lib/edoc-org-level";
 
 // DRAFT files are visible only to superadmin, their own uploader, or any Document
 // Approver (flat global pool, bypasses folder ACL — same rule as the pending-approval
@@ -195,6 +196,18 @@ export async function PATCH(
         return NextResponse.json({ message: "Organisasi/Departemen ini belum punya kode — isi kodenya di Master Organization dulu" }, { status: 400 });
       }
       data.organizationId = org.id;
+    }
+    // Level organisasi per kategori (2026-11-04) — hanya dicek kalau organisasi/kategori
+    // DIUBAH, supaya file lama yang belum sesuai tetap bisa diedit field lainnya.
+    if ((data.organizationId && data.organizationId !== file.organizationId) || (data.categoryId && data.categoryId !== file.categoryId)) {
+      const [cat, org] = await Promise.all([
+        db.eDocCategory.findUnique({ where: { id: data.categoryId ?? file.categoryId }, select: { code: true } }),
+        db.organization.findFirst({ where: { id: data.organizationId ?? file.organizationId ?? "" }, select: { parentOrganizationId: true } }),
+      ]);
+      const level = orgLevelFor(cat?.code);
+      if (level && (!org || !orgMatchesLevel(org, level))) {
+        return NextResponse.json({ message: `Category ${cat!.code} hanya boleh memilih ${orgLevelLabel(level)} — ganti Organisasi/Departemen-nya` }, { status: 400 });
+      }
     }
 
     if ("startDate" in body) data.startDate = body.startDate ? new Date(body.startDate) : null;

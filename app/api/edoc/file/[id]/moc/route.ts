@@ -65,7 +65,8 @@ export async function POST(
         if (!nextcloudRes.ok) throw new Error(`File tidak ditemukan di storage (${nextcloudRes.status})`);
         const originalBuffer = await nextcloudRes.arrayBuffer();
         const stampedBuffer = await stampEDocPdf(originalBuffer, [
-          { text: mocNumber, positionXMm: mocFormat.positionXMm, positionYMm: mocFormat.positionYMm, fontSize: mocFormat.fontSize ?? undefined },
+          // MOC Number di SEMUA halaman (2026-11-04).
+          { text: mocNumber, positionXMm: mocFormat.positionXMm, positionYMm: mocFormat.positionYMm, fontSize: mocFormat.fontSize ?? undefined, allPages: true },
         ]);
         newFileUrl = await uploadEDocFileToFolder(stampedBuffer, `moc-${Date.now()}.pdf`, file.folderId);
       } catch (e) {

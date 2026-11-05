@@ -42,7 +42,7 @@ export async function PUT(request: Request) {
     const body = await request.json().catch(() => ({}));
     const { categoryId, type, sequenceScope, segments, positionXMm, positionYMm, fontSize } = body as {
       categoryId?: string; type?: string; sequenceScope?: string;
-      segments?: { segmentType: string; literalValue?: string; separatorAfter?: string }[];
+      segments?: { segmentType: string; literalValue?: string; separatorAfter?: string; padLength?: number | null }[];
       positionXMm?: number; positionYMm?: number; fontSize?: number;
     };
 
@@ -68,6 +68,9 @@ export async function PUT(request: Request) {
       if (s.segmentType === "LITERAL_TEXT" && !s.literalValue?.trim()) {
         return NextResponse.json({ message: "Segment LITERAL_TEXT wajib punya literalValue" }, { status: 400 });
       }
+      if (s.segmentType === "SEQUENCE" && s.padLength != null && (!Number.isInteger(s.padLength) || s.padLength < 1 || s.padLength > 10)) {
+        return NextResponse.json({ message: "Jumlah digit nomor urut harus 1–10" }, { status: 400 });
+      }
     }
 
     const category = await db.eDocCategory.findFirst({ where: { id: categoryId, deletedAt: null } });
@@ -91,6 +94,7 @@ export async function PUT(request: Request) {
           numberFormatId: f.id, order: i, segmentType: s.segmentType,
           literalValue: s.segmentType === "LITERAL_TEXT" ? s.literalValue!.trim() : null,
           separatorAfter: s.separatorAfter ?? "/",
+          padLength: s.segmentType === "SEQUENCE" ? (s.padLength ?? null) : null,
         })),
       });
       return tx.eDocNumberFormat.findUnique({ where: { id: f.id }, include: { segments: { orderBy: { order: "asc" } } } });

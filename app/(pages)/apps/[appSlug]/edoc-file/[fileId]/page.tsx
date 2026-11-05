@@ -14,6 +14,7 @@ import { BlastFolderPicker, type BlastFolderOption, BlastEmailCriteriaEditor, ty
 import { MoveFileButton } from "./_move-file-modal";
 import { PdfViewerModal } from "./_pdf-viewer";
 import { MultiSelect, type MultiSelectOption } from "../../_edoc-multiselect";
+import { orgLevelFor, orgLevelLabel, orgMatchesLevel } from "@/lib/edoc-org-level";
 
 type FileDetail = {
   id: string; folderId: string; title: string; description: string | null; fileUrl: string;
@@ -36,7 +37,7 @@ type FileDetail = {
 };
 type Reference = {
   branches: MultiSelectOption[]; positions: MultiSelectOption[]; businessUnits: { code: string; name: string }[];
-  organizations: { id: string; name: string; code: string | null }[];
+  organizations: { id: string; name: string; code: string | null; parentOrganizationId: string | null }[];
   categories: { id: string; code: string; name: string; categoryTypes: { id: string; code: string; name: string }[] }[];
   branchPrefixMappings: { prefix: string; businessUnitCodes: string[] }[];
 };
@@ -565,6 +566,7 @@ function EditFileModal({
   // kosong supaya user langsung diminta memilih yang valid, bukan error saat simpan.
   const [organizationId, setOrganizationId] = useState(() =>
     reference.organizations.some((o) => o.id === file.organizationId && o.code) ? file.organizationId ?? "" : "");
+  const editOrgLevel = orgLevelFor(reference.categories.find((c) => c.id === categoryId)?.code);
   const [startDate, setStartDate] = useState(file.startDate ? file.startDate.slice(0, 10) : "");
   const [endDate, setEndDate] = useState(file.endDate ? file.endDate.slice(0, 10) : "");
   const [validityType, setValidityType] = useState(file.validityType);
@@ -670,7 +672,13 @@ function EditFileModal({
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className={labelCls}>Category</label>
-            <select className={inputCls} value={categoryId} onChange={(e) => { setCategoryId(e.target.value); setCategoryTypeId(""); }}>
+            <select className={inputCls} value={categoryId} onChange={(e) => {
+              setCategoryId(e.target.value); setCategoryTypeId("");
+              // Organisasi yang tidak sesuai level kategori baru dikosongkan (2026-11-04).
+              const lvl = orgLevelFor(reference.categories.find((c) => c.id === e.target.value)?.code);
+              const cur = reference.organizations.find((o) => o.id === organizationId);
+              if (cur && !orgMatchesLevel(cur, lvl)) setOrganizationId("");
+            }}>
               {reference.categories.map((c) => <option key={c.id} value={c.id}>{c.code} — {c.name}</option>)}
             </select>
           </div>
@@ -692,11 +700,18 @@ function EditFileModal({
         </div>
 
         <div>
-          <label className={labelCls}>Organisasi/Departemen <span className="text-red-500">*</span></label>
+          <label className={labelCls}>
+            Organisasi/Departemen <span className="text-red-500">*</span>
+            {editOrgLevel && <span className="ml-1 text-xs font-normal text-slate-400">(Category ini: {orgLevelLabel(editOrgLevel)} saja)</span>}
+          </label>
           <select className={inputCls} value={organizationId} onChange={(e) => setOrganizationId(e.target.value)}>
             <option value="">Pilih organisasi/departemen...</option>
-            {/* Hanya organisasi yang sudah punya kode (2026-10-15) — kode dipakai di nomor dokumen. */}
-            {reference.organizations.filter((o) => o.code).map((o) => <option key={o.id} value={o.id}>{o.code} — {o.name}</option>)}
+            {/* Hanya organisasi yang sudah punya kode (2026-10-15) — kode dipakai di nomor dokumen;
+                disaring per level kategori (2026-11-04). Organisasi file lama yang tidak sesuai
+                level tetap ditampilkan selama kategorinya tidak diubah (dibiarkan, keputusan user). */}
+            {reference.organizations
+              .filter((o) => o.code && (orgMatchesLevel(o, editOrgLevel) || (o.id === file.organizationId && categoryId === file.categoryId)))
+              .map((o) => <option key={o.id} value={o.id}>{o.code} — {o.name}</option>)}
           </select>
         </div>
 

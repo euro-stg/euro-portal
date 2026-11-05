@@ -12,6 +12,7 @@ import { Alert } from "@/components/ui/alert";
 import { MultiSelect, type MultiSelectOption } from "./_edoc-multiselect";
 import { buildFolderTree, type FlatFolder, type FolderTreeNode, FolderTreeSingleSelectBody } from "./_edoc-folder-tree-picker";
 import { ImSkuConfirm, confirmedRows, type ConfirmedRowPayload, type ImportPreviewData } from "./_im-sku-confirm";
+import { orgLevelFor, orgLevelLabel, orgMatchesLevel } from "@/lib/edoc-org-level";
 
 type Me = { userId: string; isSuperadmin: boolean; isFolderCreator: boolean; isDocumentApprover: boolean; businessUnits: string[] };
 type FolderItem = { id: string; name: string; type: string; createdBy: string; createdAt: string; canRead: boolean; canWrite: boolean };
@@ -25,7 +26,7 @@ type FileItem = {
 };
 export type Reference = {
   branches: MultiSelectOption[]; positions: MultiSelectOption[];
-  organizations: { id: string; name: string; code: string | null }[];
+  organizations: { id: string; name: string; code: string | null; parentOrganizationId: string | null }[];
   businessUnits: { code: string; name: string }[];
   categories: { id: string; code: string; name: string; categoryTypes: { id: string; code: string; name: string }[] }[];
   branchPrefixMappings: { prefix: string; businessUnitCodes: string[] }[];
@@ -1264,6 +1265,7 @@ function UploadFileModal({
   const [blastFolders, setBlastFolders] = useState<BlastFolderOption[]>([]);
   const [notifyCriteria, setNotifyCriteria] = useState<BlastEmailCriteriaValue>({ branchIds: [], orgIds: [], positionIds: [], businessUnitCodes: [] });
   const [organizationId, setOrganizationId] = useState("");
+  const uploadOrgLevel = orgLevelFor(reference.categories.find((c) => c.id === categoryId)?.code);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [obsoleteDestinationFolderId, setObsoleteDestinationFolderId] = useState("");
@@ -1455,7 +1457,13 @@ function UploadFileModal({
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className={labelCls}>Category <span className="text-red-500">*</span></label>
-            <select className={inputCls} value={categoryId} onChange={(e) => { setCategoryId(e.target.value); setCategoryTypeId(""); }}>
+            <select className={inputCls} value={categoryId} onChange={(e) => {
+              setCategoryId(e.target.value); setCategoryTypeId("");
+              // Organisasi yang tidak sesuai level kategori baru dikosongkan (2026-11-04).
+              const lvl = orgLevelFor(reference.categories.find((c) => c.id === e.target.value)?.code);
+              const cur = reference.organizations.find((o) => o.id === organizationId);
+              if (cur && !orgMatchesLevel(cur, lvl)) setOrganizationId("");
+            }}>
               <option value="">Pilih category...</option>
               {reference.categories.map((c) => <option key={c.id} value={c.id}>{c.code} — {c.name}</option>)}
             </select>
@@ -1506,11 +1514,15 @@ function UploadFileModal({
         </div>
 
         <div>
-          <label className={labelCls}>Organisasi/Departemen <span className="text-red-500">*</span></label>
+          <label className={labelCls}>
+            Organisasi/Departemen <span className="text-red-500">*</span>
+            {uploadOrgLevel && <span className="ml-1 text-xs font-normal text-slate-400">(Category ini: {orgLevelLabel(uploadOrgLevel)} saja)</span>}
+          </label>
           <select className={inputCls} value={organizationId} onChange={(e) => setOrganizationId(e.target.value)}>
             <option value="">Pilih organisasi/departemen...</option>
-            {/* Hanya organisasi yang sudah punya kode (2026-10-15) — kode dipakai di nomor dokumen. */}
-            {reference.organizations.filter((o) => o.code).map((o) => <option key={o.id} value={o.id}>{o.code} — {o.name}</option>)}
+            {/* Hanya organisasi yang sudah punya kode (2026-10-15) — kode dipakai di nomor dokumen;
+                disaring juga per level kategori (2026-11-04, IM = Departemen, SOP = Sub Departemen). */}
+            {reference.organizations.filter((o) => o.code && orgMatchesLevel(o, uploadOrgLevel)).map((o) => <option key={o.id} value={o.id}>{o.code} — {o.name}</option>)}
           </select>
         </div>
 

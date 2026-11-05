@@ -1291,6 +1291,7 @@ model EDocNumberFormatSegment {
   segmentType    String
   literalValue   String? // used only when segmentType = "LITERAL_TEXT"
   separatorAfter String  @default("/")
+  padLength      Int? // SEQUENCE saja (2026-11-04): jumlah digit minimal dengan nol di depan, mis. 4 → "0001"; null = apa adanya
 
   numberFormat EDocNumberFormat @relation(fields: [numberFormatId], references: [id], onDelete: Cascade)
 

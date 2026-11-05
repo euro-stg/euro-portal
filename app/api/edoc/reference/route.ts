@@ -15,7 +15,7 @@ export async function GET() {
     const [branchUsers, positionUsers, organizations, businessUnits, categories, branchPrefixMappings] = await Promise.all([
       db.user.findMany({ where: { branchId: { not: null } }, select: { branchId: true, branchName: true }, distinct: ["branchId"] }),
       db.user.findMany({ where: { jobPositionId: { not: null } }, select: { jobPositionId: true, jobPositionName: true }, distinct: ["jobPositionId"] }),
-      db.organization.findMany({ where: { deletedAt: null }, select: { id: true, name: true, code: true }, orderBy: { name: "asc" } }),
+      db.organization.findMany({ where: { deletedAt: null }, select: { id: true, name: true, code: true, parentOrganizationId: true }, orderBy: { name: "asc" } }),
       db.eDocBusinessUnit.findMany({ where: { status: "active" }, select: { code: true, name: true }, orderBy: { code: "asc" } }),
       db.eDocCategory.findMany({
         where: { deletedAt: null, status: "active" },

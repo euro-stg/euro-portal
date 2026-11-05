@@ -5,6 +5,7 @@ import db from "@/lib/db/db";
 import { resolveFolderContentAccess, uploadEDocFileToFolder, isSuperadmin, isEDocDocumentApprover } from "@/lib/edoc";
 import { createImProducts, validateReviewedRows, type ReviewedRow } from "@/lib/im-import";
 import { checkValidity, resolveInitiator } from "@/lib/edoc-file-fields";
+import { orgLevelFor, orgLevelLabel, orgMatchesLevel } from "@/lib/edoc-org-level";
 
 export const maxDuration = 60;
 
@@ -189,7 +190,7 @@ export async function POST(request: Request) {
     // Wajib sejak 2026-10-15 — sumber token ORG_DEPT_CODE di nomor dokumen; dulu opsional
     // sehingga segmen organisasi di nomor dokumen bisa kosong diam-diam.
     if (!organizationId) return NextResponse.json({ message: "Organisasi/Departemen wajib dipilih" }, { status: 400 });
-    const org = await db.organization.findFirst({ where: { id: organizationId, deletedAt: null }, select: { code: true } });
+    const org = await db.organization.findFirst({ where: { id: organizationId, deletedAt: null }, select: { code: true, parentOrganizationId: true } });
     if (!org) return NextResponse.json({ message: "Organisasi/Departemen tidak ditemukan" }, { status: 400 });
     if (!org.code?.trim()) {
       return NextResponse.json({ message: "Organisasi/Departemen ini belum punya kode — isi kodenya di Master Organization dulu" }, { status: 400 });
@@ -208,6 +209,11 @@ export async function POST(request: Request) {
 
     const category = await db.eDocCategory.findFirst({ where: { id: categoryId, deletedAt: null } });
     if (!category) return NextResponse.json({ message: "Category tidak ditemukan" }, { status: 404 });
+    // Level organisasi per kategori (2026-11-04): IM = Departemen, SOP = Sub Departemen.
+    const orgLevel = orgLevelFor(category.code);
+    if (!orgMatchesLevel(org, orgLevel)) {
+      return NextResponse.json({ message: `Category ${category.code} hanya boleh memilih ${orgLevelLabel(orgLevel!)}` }, { status: 400 });
+    }
 
     if (categoryTypeId) {
       const categoryType = await db.eDocCategoryType.findFirst({ where: { id: categoryTypeId, categoryId } });

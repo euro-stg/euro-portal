@@ -7,7 +7,7 @@ import { StampPreviewButton } from "./_stamp-preview-button";
 
 type CategoryType = { id: string; code: string; name: string };
 type Category = { id: string; code: string; name: string; categoryTypes: CategoryType[]; samplePdfPath?: string | null };
-type Segment = { segmentType: string; literalValue?: string | null; separatorAfter?: string };
+type Segment = { segmentType: string; literalValue?: string | null; separatorAfter?: string; padLength?: number | null };
 type NumberFormat = {
   sequenceScope: string; segments: Segment[];
   positionXMm: number | null; positionYMm: number | null; fontSize: number | null;
@@ -24,7 +24,7 @@ const SEGMENT_TYPES = [
 // Label + contoh hasil untuk tiap jenis segmen — biar tidak perlu menebak arti nama enum-nya.
 const SEGMENT_INFO: Record<string, { label: string; example: string }> = {
   LITERAL_TEXT: { label: "Teks tetap (Anda isi sendiri)", example: '"Euromedica" atau "MOC"' },
-  SEQUENCE: { label: "Nomor urut (otomatis, +1 tiap approve)", example: "486, 487, 488, ..." },
+  SEQUENCE: { label: "Nomor urut (otomatis, +1 tiap approve)", example: "0486, 0487, 0488, ... (sesuai jumlah digit)" },
   CATEGORY_CODE: { label: "Kode Category", example: "IM" },
   CATEGORY_TYPE_CODE: { label: "Kode Category Type", example: "regular" },
   ORG_DEPT_CODE: { label: "Kode Organisasi/Departemen file", example: "BUS" },
@@ -174,7 +174,7 @@ function NumberFormatEditor({ categoryId, type, title, hasSample, onSampleChange
       const f: NumberFormat = json.data;
       setFormat(f);
       setSequenceScope(f?.sequenceScope ?? "GLOBAL");
-      setSegments(f?.segments.map((s) => ({ segmentType: s.segmentType, literalValue: s.literalValue, separatorAfter: s.separatorAfter ?? "/" })) ?? []);
+      setSegments(f?.segments.map((s) => ({ segmentType: s.segmentType, literalValue: s.literalValue, separatorAfter: s.separatorAfter ?? "/", padLength: s.padLength ?? null })) ?? []);
       setPositionXMm(f?.positionXMm != null ? String(f.positionXMm) : "");
       setPositionYMm(f?.positionYMm != null ? String(f.positionYMm) : "");
       setFontSize(f?.fontSize != null ? String(f.fontSize) : "11");
@@ -208,7 +208,8 @@ function NumberFormatEditor({ categoryId, type, title, hasSample, onSampleChange
   };
 
   const preview = segments.reduce((acc, s, i) => {
-    const value = s.segmentType === "LITERAL_TEXT" ? (s.literalValue || "?") : `{${s.segmentType}}`;
+    const value = s.segmentType === "LITERAL_TEXT" ? (s.literalValue || "?")
+      : s.segmentType === "SEQUENCE" ? "1".padStart(s.padLength ?? 0, "0") : `{${s.segmentType}}`;
     const sep = i < segments.length - 1 ? (s.separatorAfter ?? "/") : "";
     return acc + value + sep;
   }, "");
@@ -241,11 +242,19 @@ function NumberFormatEditor({ categoryId, type, title, hasSample, onSampleChange
           <div key={i}>
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-slate-400 w-4">{i + 1}.</span>
-              <select className={`${inputCls} flex-1`} value={seg.segmentType} onChange={(e) => updateSegment(i, { segmentType: e.target.value })}>
+              <select className={`${inputCls} flex-1`} value={seg.segmentType}
+                onChange={(e) => updateSegment(i, { segmentType: e.target.value, padLength: e.target.value === "SEQUENCE" ? (seg.padLength ?? 4) : null })}>
                 {SEGMENT_TYPES.map((t) => <option key={t} value={t}>{SEGMENT_INFO[t]?.label ?? t}</option>)}
               </select>
               {seg.segmentType === "LITERAL_TEXT" && (
                 <input className={`${inputCls} flex-1`} placeholder="Teks tetap" value={seg.literalValue ?? ""} onChange={(e) => updateSegment(i, { literalValue: e.target.value })} />
+              )}
+              {seg.segmentType === "SEQUENCE" && (
+                <label className="text-xs text-slate-500 flex items-center gap-1 shrink-0" title="Jumlah digit minimal, diisi nol di depan (4 → 0001). Kosong = tanpa nol di depan.">
+                  Digit
+                  <input type="number" min={1} max={10} className={`${inputCls} w-16 text-center`} value={seg.padLength ?? ""} placeholder="-"
+                    onChange={(e) => updateSegment(i, { padLength: e.target.value === "" ? null : Math.min(10, Math.max(1, Math.round(Number(e.target.value)))) })} />
+                </label>
               )}
               <button onClick={() => removeSegment(i)} className="p-1.5 text-slate-400 hover:text-red-500 transition-colors shrink-0"><Trash2 className="w-3.5 h-3.5" /></button>
             </div>
