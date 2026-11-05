@@ -9,8 +9,10 @@ export async function POST() {
     if (!session?.user?.id) return unauthorized();
     if (!(await hasPortalModuleAccess(session.user.id, [PORTAL_MODULE.organization]))) return forbidden();
 
+    // Hanya karyawan yang resign date-nya KOSONG (2026-11-05) — organisasi dari karyawan yang
+    // sudah/akan resign tidak ikut dibuat.
     const users = await db.user.findMany({
-      where: { status: "active", organizationId: { not: null } },
+      where: { status: "active", resignDate: null, organizationId: { not: null } },
       select: { organizationId: true, organizationName: true },
     });
 

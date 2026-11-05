@@ -1188,15 +1188,27 @@ export function BlastEmailCriteriaEditor({
 }: {
   reference: Reference; value: BlastEmailCriteriaValue; onChange: (v: BlastEmailCriteriaValue) => void;
 }) {
-  const orgOptions: MultiSelectOption[] = reference.organizations.map((o) => ({ id: o.id, name: o.code ? `${o.code} — ${o.name}` : o.name }));
+  // Hanya Departemen (organisasi tanpa parent) — 2026-11-05; memilih departemen ikut menjangkau
+  // karyawan di sub-departemennya (lihat matchCriteriaUsers). Pilihan lama yang terlanjur
+  // sub-departemen tetap ditampilkan supaya tidak hilang diam-diam saat diedit.
+  const orgOptions: MultiSelectOption[] = reference.organizations
+    .filter((o) => !o.parentOrganizationId || value.orgIds.includes(o.id))
+    .map((o) => ({ id: o.id, name: o.code ? `${o.code} — ${o.name}` : o.name }));
   const buOptions: MultiSelectOption[] = reference.businessUnits.map((b) => ({ id: b.code, name: b.name }));
 
   return (
     <div className="grid grid-cols-2 gap-2">
       <MultiSelect label="Branch" options={reference.branches} selected={value.branchIds} onChange={(v) => onChange({ ...value, branchIds: v })} />
-      <MultiSelect label="Organisasi" options={orgOptions} selected={value.orgIds} onChange={(v) => onChange({ ...value, orgIds: v })} />
+      <MultiSelect label="Departemen" options={orgOptions} selected={value.orgIds} onChange={(v) => onChange({ ...value, orgIds: v })} />
       <MultiSelect label="Jabatan" options={reference.positions} selected={value.positionIds} onChange={(v) => onChange({ ...value, positionIds: v })} />
       <MultiSelect label="Business Unit" options={buOptions} selected={value.businessUnitCodes} onChange={(v) => onChange({ ...value, businessUnitCodes: v })} />
+      {/* Kriteria bersifat OR (2026-11-05, dipertahankan atas keputusan user) — catatan ini
+          tampil di semua tempat yang memakai editor ini (upload/detail E Document, Euro Update). */}
+      <p className="col-span-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+        <b>Catatan:</b> kriteria bersifat <b>&ldquo;salah satu cocok&rdquo; (OR)</b>, bukan saling mempersempit. Contoh: Departemen IT +
+        Branch Jakarta = email ke <b>semua karyawan IT</b> (branch mana pun) <b>dan semua karyawan Branch Jakarta</b> (departemen
+        apa pun) — bukan hanya karyawan IT di Jakarta. Memilih Departemen juga mencakup sub-departemennya.
+      </p>
     </div>
   );
 }
