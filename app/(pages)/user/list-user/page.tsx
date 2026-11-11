@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Pagination } from "@/components/ui/pagination";
 import Link from "next/link";
 import Image from "next/image";
+import { LoginStatsButton } from "./_login-stats";
 import { RefreshCw, Users, CloudDownload, UserCheck, List, Layers, X, History, CheckCircle, AlertCircle, Clock, UserPlus, Trash2, FileSpreadsheet } from "lucide-react";
 
 type RoleEntry = { name: string; appId: string | null };
@@ -569,6 +570,7 @@ export default function ListUserPage() {
             {showAll ? <Layers className="w-3.5 h-3.5" /> : <List className="w-3.5 h-3.5" />}
             {showAll ? "Per Halaman" : "Tampilkan Semua"}
           </button>
+          <LoginStatsButton />
           {/* Export mengikuti filter tabel saat ini (server: /api/user/export, khusus menu User). */}
           <a href={`/api/user/export?${buildQuery(1, filters, true)}`}>
             <Button variant="outline" size="sm">

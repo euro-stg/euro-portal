@@ -4,6 +4,7 @@ import db from "@/lib/db/db";
 import { calcAge } from "@/lib/user-query";
 import { writeApiLog, getClientIp, getUserAgent } from "@/lib/api-logger";
 import { verifyAppTokenJwt, hasPermission } from "@/lib/sso-jwt";
+import { recordLogin } from "@/lib/login-log";
 
 const ENDPOINT = "/api/sso/login";
 
@@ -105,6 +106,7 @@ export async function POST(request: Request) {
     });
 
     log("SUCCESS", { appTokenId: appRecord.id, appName, userId: user.id, statusCode: 200 });
+    await recordLogin({ request, employeeId, userId: user.id, channel: "SSO", appName, success: true });
 
     const { password: _, ...rest } = user as typeof user & { password?: string };
     return NextResponse.json({ token, expiresAt, user: { ...rest, age: calcAge(rest.birthDate) } });

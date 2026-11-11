@@ -86,8 +86,34 @@ model User {
   edocFileBlastFoldersCreated EDocFileBlastFolder[]   @relation("EDocFileBlastFolderCreatedBy")
   edocFeedbacksCreated        EDocFeedback[]          @relation("EDocFeedbackCreator")
   edocFeedbackResponses       EDocFeedbackResponse[]  @relation("EDocFeedbackResponder")
+  // Statistik login (2026-11-11) — diisi recordLogin() (app/lib/login-log.ts) setiap login portal /
+  // SSO berhasil. lastLoginAt di-backfill saat migrasi dari jejak Session/SSO yang ada; loginCount
+  // dihitung mulai fitur dirilis.
+  lastLoginAt                 DateTime?
+  loginCount                  Int                     @default(0)
+  loginLogs                   LoginLog[]
   createdAt                   DateTime                @default(now())
   updatedAt                   DateTime                @updatedAt
+}
+
+// Riwayat login (2026-11-11) — login portal (berhasil & gagal) dan login SSO aplikasi eksternal
+// yang berhasil (gagal SSO sudah tercatat di ApiLog). userId null = Employee ID tidak dikenal.
+model LoginLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  employeeId String // apa yang diketik user (dipotong 100 karakter)
+  channel    String // "PORTAL" | "SSO"
+  appName    String? // nama aplikasi untuk channel SSO
+  success    Boolean
+  reason     String? // alasan gagal
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([createdAt])
 }
 
 model Account {

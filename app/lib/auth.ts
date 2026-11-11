@@ -7,6 +7,7 @@ import bcrypt from "bcryptjs";
 
 import db from "@/lib/db/db";
 import { signInSchema } from "@/lib/schema";
+import { recordLogin } from "@/lib/login-log";
 
 const adapter = PrismaAdapter(db);
 
@@ -21,10 +22,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         password: { type: "password" },
       },
 
-      authorize: async (credentials) => {
+      authorize: async (credentials, request) => {
         if (!credentials) return null;
 
         const { employeeId, password } = signInSchema.parse(credentials);
+        // Riwayat login (2026-11-11) — setiap hasil (berhasil/gagal) dicatat ke LoginLog.
+        const log = (success: boolean, userId: string | null, reason?: string) =>
+          recordLogin({ request, employeeId, userId, channel: "PORTAL", success, reason });
 
         const user = await db.user.findUnique({
           where: {
@@ -33,11 +37,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         });
 
         if (!user || !user.password) {
+          await log(false, user?.id ?? null, user ? "Password belum diatur" : "Employee ID tidak dikenal");
           return null;
         }
 
         const isValid = await bcrypt.compare(password, user.password);
-        if (!isValid) return null;
+        if (!isValid) {
+          await log(false, user.id, "Password salah");
+          return null;
+        }
 
         // Cek resign date — jika sudah efektif, nonaktifkan dan tolak login
         if (user.resignDate) {
@@ -47,12 +55,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           resignDay.setHours(0, 0, 0, 0);
           if (resignDay <= today) {
             await db.user.update({ where: { id: user.id }, data: { status: "inactive" } });
+            await log(false, user.id, "Akun tidak aktif (resign)");
             return null;
           }
         }
 
         // Tolak user inactive
-        if (user.status === "inactive") return null;
+        if (user.status === "inactive") {
+          await log(false, user.id, "Akun tidak aktif");
+          return null;
+        }
+
+        await log(true, user.id);
 
         return {
           id: user.id,
