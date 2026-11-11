@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { unauthorized } from "@/lib/api-auth";
 import db from "@/lib/db/db";
-import { canViewFile, downloadEDocFile } from "@/lib/edoc";
+import { canViewFile, downloadEDocFile, prepareEDocPdfForServe } from "@/lib/edoc";
 import { EDOC_VIEWER_HEADER } from "@/lib/edoc-viewer";
 
 // Sumber PDF untuk viewer internal (2026-10-07) — terpisah dari /download supaya file yang
@@ -34,7 +34,7 @@ export async function GET(
       return NextResponse.json({ message: "File tidak ditemukan di storage" }, { status: 404 });
     }
 
-    const buffer = await nextcloudRes.arrayBuffer();
+    const buffer = await prepareEDocPdfForServe(await nextcloudRes.arrayBuffer(), file.folderId);
     return new NextResponse(new Uint8Array(buffer), {
       headers: {
         "Content-Type": "application/pdf",
