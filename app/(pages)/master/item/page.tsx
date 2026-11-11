@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
-import { RefreshCw, CloudDownload, History, Package, CheckCircle, AlertCircle, Clock, Search } from "lucide-react";
+import { RefreshCw, CloudDownload, History, Package, CheckCircle, AlertCircle, Clock, Search, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { Alert } from "@/components/ui/alert";
@@ -134,6 +134,10 @@ export default function MasterItemPage() {
             {syncing === "full" ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : null} Sync penuh
           </Button>
           <Button variant="secondary" size="sm" onClick={() => void openLog()}><History className="w-3.5 h-3.5" /> Log Sync</Button>
+          {/* Export mengikuti filter tabel saat ini, semua halaman (server: /api/master-item/export). */}
+          <a href={`/api/master-item/export?${new URLSearchParams(Object.entries(filters).filter(([, v]) => v))}`}>
+            <Button variant="outline" size="sm" disabled={total === 0}><Download className="w-3.5 h-3.5" /> Export CSV</Button>
+          </a>
         </div>
       </div>
 

@@ -2,28 +2,17 @@ import { NextResponse } from "next/server";
 import { requireSession, unauthorized } from "@/lib/api-auth";
 import db from "@/lib/db/db";
 import { getLastMasterItemSync, MASTER_ITEM_GROUPS } from "@/lib/master-item-sync";
+import { buildMasterItemWhere } from "@/lib/master-item-query";
 
 // Daftar Master Item (2026-10-28) — cukup login: dibaca juga oleh E Document (validasi item IM).
-// Query: q (nama/SKU), group, status (ACTIVE | DISCONTINUED), company, business, page, limit (maks 100).
+// Query: filter di buildMasterItemWhere (app/lib/master-item-query.ts) + page, limit (maks 100).
 export async function GET(request: Request) {
   try {
     if (!(await requireSession())) return unauthorized();
     const sp = new URL(request.url).searchParams;
-    const q = sp.get("q")?.trim() ?? "";
-    const group = sp.get("group") ?? "";
-    const status = sp.get("status") ?? "";
-    const company = sp.get("company") ?? "";
-    const business = sp.get("business") ?? "";
     const page = Math.max(1, Number(sp.get("page") ?? 1) || 1);
     const limit = Math.min(100, Math.max(1, Number(sp.get("limit") ?? 20) || 20));
-
-    const where = {
-      ...(q ? { OR: [{ itemName: { contains: q, mode: "insensitive" as const } }, { itemCode: { contains: q, mode: "insensitive" as const } }] } : {}),
-      ...((MASTER_ITEM_GROUPS as readonly string[]).includes(group) ? { itemGroup: group } : {}),
-      ...(status === "ACTIVE" || status === "DISCONTINUED" ? { status } : {}),
-      ...(company ? { company } : {}),
-      ...(business ? { business } : {}),
-    };
+    const where = buildMasterItemWhere(sp);
     const [rows, total, byStatus, lastSync, companies, businesses] = await Promise.all([
       db.masterItem.findMany({ where, orderBy: [{ status: "asc" }, { itemName: "asc" }], skip: (page - 1) * limit, take: limit }),
       db.masterItem.count({ where }),
