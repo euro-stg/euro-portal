@@ -61,6 +61,17 @@ export async function GET(request: Request) {
       ? { deletedAt: null }
       : { deletedAt: null, OR: [{ endDate: null }, { endDate: { gt: edocExpiryCutoff() } }] };
 
+    // Blast ikut folder asal file (2026-11-12): selama folder asalnya normal, file tampil di
+    // folder Blast-nya; begitu folder asalnya Obsolete, file tampil di SUB-FOLDER Obsolete dari
+    // folder Blast itu (semua sub-folder Obsolete-nya), tidak lagi di folder Blast-nya sendiri.
+    // Sama dengan getEffectiveBlastFolderIds yang dipakai cek akses.
+    const parentFolderId = access.folder.type === "OBSOLETE"
+      ? (await db.eDocFolder.findUnique({ where: { id: folderId }, select: { parentFolderId: true } }))?.parentFolderId ?? null
+      : null;
+    const blastWhere = access.folder.type === "OBSOLETE"
+      ? (parentFolderId ? { folderId: parentFolderId, file: { ...visibilityFilter, folder: { type: "OBSOLETE" } } } : null)
+      : { folderId, file: { ...visibilityFilter, folder: { type: { not: "OBSOLETE" } } } };
+
     // Isi listing = file yang folderId-nya PERSIS folder ini, DITAMBAH (halaman pertama
     // saja) file dari folder lain yang "Blast" ke sini (link, bukan copy — lihat
     // EDocFileBlastFolder). Filter visibility (endDate) berlaku sama untuk keduanya, jadi
@@ -75,10 +86,10 @@ export async function GET(request: Request) {
         take: PAGE_SIZE + 1,
         ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       }),
-      cursor
+      cursor || !blastWhere
         ? Promise.resolve([])
         : db.eDocFileBlastFolder.findMany({
-            where: { folderId, file: visibilityFilter },
+            where: blastWhere,
             select: { file: { select: fileSelect } },
           }),
     ]);
@@ -118,10 +129,10 @@ export async function GET(request: Request) {
     if (!cursor) {
       const [allOwnIds, allBlastLinks] = await Promise.all([
         db.eDocFile.findMany({ where: { folderId, ...visibilityFilter }, select: { id: true, status: true, uploadedBy: true } }),
-        db.eDocFileBlastFolder.findMany({
-          where: { folderId, file: visibilityFilter },
+        blastWhere ? db.eDocFileBlastFolder.findMany({
+          where: blastWhere,
           select: { file: { select: { id: true, status: true, uploadedBy: true } } },
-        }),
+        }) : Promise.resolve([]),
       ]);
       const allById = new Map(allOwnIds.map((f) => [f.id, f]));
       for (const l of allBlastLinks) if (!allById.has(l.file.id)) allById.set(l.file.id, l.file);

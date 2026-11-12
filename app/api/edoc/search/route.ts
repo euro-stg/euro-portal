@@ -4,7 +4,7 @@ import { unauthorized } from "@/lib/api-auth";
 import db from "@/lib/db/db";
 import {
   resolveFolderContentAccessBatch, resolveFolderVisibilityBatch, getEDocFolderBreadcrumb,
-  isSuperadmin, isEDocDocumentApprover, edocExpiryCutoff } from "@/lib/edoc";
+  isSuperadmin, isEDocDocumentApprover, edocExpiryCutoff, getEffectiveBlastFolderIds } from "@/lib/edoc";
 
 const RESULT_LIMIT = 50;
 
@@ -105,15 +105,9 @@ export async function GET(request: Request) {
     const draftBypass = superadmin || approver;
     const fileFolderAccess = await resolveFolderContentAccessBatch(userId, candidateFiles.map((f) => f.folderId));
 
-    const blastLinks = await db.eDocFileBlastFolder.findMany({
-      where: { fileId: { in: candidateFiles.map((f) => f.id) } },
-      select: { fileId: true, folderId: true },
-    });
-    const blastFolderIdsByFile = new Map<string, string[]>();
-    for (const link of blastLinks) {
-      blastFolderIdsByFile.set(link.fileId, [...(blastFolderIdsByFile.get(link.fileId) ?? []), link.folderId]);
-    }
-    const blastFolderAccess = await resolveFolderContentAccessBatch(userId, blastLinks.map((l) => l.folderId));
+    // Folder asal Obsolete -> Blast efektif = sub-folder Obsolete tiap folder Blast (2026-11-12).
+    const blastFolderIdsByFile = await getEffectiveBlastFolderIds(candidateFiles);
+    const blastFolderAccess = await resolveFolderContentAccessBatch(userId, [...blastFolderIdsByFile.values()].flat());
 
     const visibleFiles = candidateFiles
       .filter((f) => {
