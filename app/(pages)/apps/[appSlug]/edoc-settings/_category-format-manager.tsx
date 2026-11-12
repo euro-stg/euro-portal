@@ -18,7 +18,16 @@ const inputCls = "w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-s
 
 const SEGMENT_TYPES = [
   "LITERAL_TEXT", "SEQUENCE", "CATEGORY_CODE", "CATEGORY_TYPE_CODE",
-  "ORG_DEPT_CODE", "MONTH_ROMAN", "YEAR", "REF_MAIN_DOCUMENT_NUMBER",
+  "ORG_DEPT_CODE", "BUSINESS_UNIT_CODE", "MONTH_ROMAN", "YEAR", "REF_MAIN_DOCUMENT_NUMBER",
+];
+
+// Sequence Scope = nomor urut dihitung terpisah per apa (PER_SUB_DEPARTMENT & PER_BUSINESS_UNIT
+// 2026-11-12 — lihat incrementEDocCounter di app/lib/edoc.ts).
+const SEQUENCE_SCOPES: { value: string; label: string; hint: string }[] = [
+  { value: "GLOBAL", label: "Global", hint: "Satu urutan untuk semua Category (per jenis nomor)" },
+  { value: "PER_CATEGORY", label: "Per Category", hint: "Satu urutan untuk Category ini" },
+  { value: "PER_SUB_DEPARTMENT", label: "Per Sub Departemen", hint: "Urutan terpisah per Sub Departemen — file wajib memilih Sub Departemen" },
+  { value: "PER_BUSINESS_UNIT", label: "Per Business Unit", hint: "Urutan terpisah per Business Unit — file wajib memilih tepat 1 Business Unit" },
 ];
 
 // Label + contoh hasil untuk tiap jenis segmen — biar tidak perlu menebak arti nama enum-nya.
@@ -28,6 +37,7 @@ const SEGMENT_INFO: Record<string, { label: string; example: string }> = {
   CATEGORY_CODE: { label: "Kode Category", example: "IM" },
   CATEGORY_TYPE_CODE: { label: "Kode Category Type", example: "regular" },
   ORG_DEPT_CODE: { label: "Kode Organisasi/Departemen file", example: "BUS" },
+  BUSINESS_UNIT_CODE: { label: "Kode Business Unit file (file wajib pilih tepat 1 BU)", example: "EMC" },
   MONTH_ROMAN: { label: "Bulan approve (angka romawi)", example: "VII" },
   YEAR: { label: "Tahun approve", example: "2026" },
   REF_MAIN_DOCUMENT_NUMBER: { label: "Rujuk balik ke nomor urut Document Number file ini (khusus MOC)", example: "486 (dari 486/Euromedica/IM/BUS/VII/2026)" },
@@ -330,13 +340,14 @@ function NumberFormatEditor({ categoryId, type, title, hasSample, onSampleChange
       <div className="flex items-center gap-3 mb-3">
         <div>
           <label className="text-xs text-slate-500 block mb-1">Sequence Scope</label>
-          <div className="flex gap-1">
-            {["GLOBAL", "PER_CATEGORY"].map((s) => (
-              <button key={s} onClick={() => setSequenceScope(s)} className={`px-2 py-1 rounded text-xs border transition-colors ${sequenceScope === s ? "bg-amber-50 border-amber-300 text-amber-700" : "border-slate-200 text-slate-500"}`}>
-                {s}
+          <div className="flex gap-1 flex-wrap">
+            {SEQUENCE_SCOPES.map((s) => (
+              <button key={s.value} title={s.hint} onClick={() => setSequenceScope(s.value)} className={`px-2 py-1 rounded text-xs border transition-colors ${sequenceScope === s.value ? "bg-amber-50 border-amber-300 text-amber-700" : "border-slate-200 text-slate-500"}`}>
+                {s.label}
               </button>
             ))}
           </div>
+          <p className="text-xs text-slate-400 mt-1">{SEQUENCE_SCOPES.find((s) => s.value === sequenceScope)?.hint}</p>
         </div>
       </div>
 

@@ -2,10 +2,10 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { unauthorized } from "@/lib/api-auth";
 import db from "@/lib/db/db";
-import { resolveFolderContentAccess, uploadEDocFileToFolder, isSuperadmin, isEDocDocumentApprover, edocExpiryCutoff } from "@/lib/edoc";
+import { resolveFolderContentAccess, uploadEDocFileToFolder, isSuperadmin, isEDocDocumentApprover, edocExpiryCutoff, getCategoryNumbering } from "@/lib/edoc";
 import { createImProducts, validateReviewedRows, type ReviewedRow } from "@/lib/im-import";
 import { checkValidity, resolveInitiator } from "@/lib/edoc-file-fields";
-import { orgLevelFor, orgLevelLabel, orgMatchesLevel } from "@/lib/edoc-org-level";
+import { categoryOrgLevel, orgLevelLabel, orgMatchesLevel, SINGLE_BU_MESSAGE } from "@/lib/edoc-org-level";
 import { createReplacements, parseReplacementInput, validateReplacements, type ReplacementInput } from "@/lib/im-replacement";
 
 export const maxDuration = 60;
@@ -221,10 +221,15 @@ export async function POST(request: Request) {
 
     const category = await db.eDocCategory.findFirst({ where: { id: categoryId, deletedAt: null } });
     if (!category) return NextResponse.json({ message: "Category tidak ditemukan" }, { status: 404 });
-    // Level organisasi per kategori (2026-11-04): IM = Departemen, SOP = Sub Departemen.
-    const orgLevel = orgLevelFor(category.code);
+    // Level organisasi per kategori (2026-11-04): IM = Departemen, SOP = Sub Departemen; plus
+    // aturan dari Number Format (2026-11-12): nomor per Sub Departemen / per Business Unit.
+    const numbering = (await getCategoryNumbering([category.id])).get(category.id);
+    const orgLevel = categoryOrgLevel({ code: category.code, numbering });
     if (!orgMatchesLevel(org, orgLevel)) {
       return NextResponse.json({ message: `Category ${category.code} hanya boleh memilih ${orgLevelLabel(orgLevel!)}` }, { status: 400 });
+    }
+    if (numbering?.singleBusinessUnit && businessUnitCodes.length !== 1) {
+      return NextResponse.json({ message: SINGLE_BU_MESSAGE }, { status: 400 });
     }
 
     if (categoryTypeId) {

@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { unauthorized } from "@/lib/api-auth";
 import db from "@/lib/db/db";
-import { isEDocDocumentApprover, isSuperadmin, deleteEDocFile, canViewFile, canEditFileMetadata } from "@/lib/edoc";
+import { isEDocDocumentApprover, isSuperadmin, deleteEDocFile, canViewFile, canEditFileMetadata, getCategoryNumbering } from "@/lib/edoc";
 import { checkValidity, resolveInitiator } from "@/lib/edoc-file-fields";
-import { orgLevelFor, orgLevelLabel, orgMatchesLevel } from "@/lib/edoc-org-level";
+import { categoryOrgLevel, orgLevelLabel, orgMatchesLevel, SINGLE_BU_MESSAGE } from "@/lib/edoc-org-level";
 
 // DRAFT files are visible only to superadmin, their own uploader, or any Document
 // Approver (flat global pool, bypasses folder ACL — same rule as the pending-approval
@@ -197,16 +197,27 @@ export async function PATCH(
       }
       data.organizationId = org.id;
     }
-    // Level organisasi per kategori (2026-11-04) — hanya dicek kalau organisasi/kategori
-    // DIUBAH, supaya file lama yang belum sesuai tetap bisa diedit field lainnya.
-    if ((data.organizationId && data.organizationId !== file.organizationId) || (data.categoryId && data.categoryId !== file.categoryId)) {
-      const [cat, org] = await Promise.all([
-        db.eDocCategory.findUnique({ where: { id: data.categoryId ?? file.categoryId }, select: { code: true } }),
+    // Level organisasi per kategori (2026-11-04) + aturan Number Format (2026-11-12: Sub
+    // Departemen / tepat 1 Business Unit) — hanya dicek kalau field terkait DIUBAH, supaya file
+    // lama yang belum sesuai tetap bisa diedit field lainnya.
+    const categoryChanged = !!data.categoryId && data.categoryId !== file.categoryId;
+    const orgChanged = !!data.organizationId && data.organizationId !== file.organizationId;
+    const buChanged = !!data.businessUnitCodes && [...data.businessUnitCodes].sort().join() !== [...file.businessUnitCodes].sort().join();
+    if (categoryChanged || orgChanged || buChanged) {
+      const nextCategoryId: string = data.categoryId ?? file.categoryId;
+      const [cat, org, numberingMap] = await Promise.all([
+        db.eDocCategory.findUnique({ where: { id: nextCategoryId }, select: { code: true } }),
         db.organization.findFirst({ where: { id: data.organizationId ?? file.organizationId ?? "" }, select: { parentOrganizationId: true } }),
+        getCategoryNumbering([nextCategoryId]),
       ]);
-      const level = orgLevelFor(cat?.code);
-      if (level && (!org || !orgMatchesLevel(org, level))) {
+      const numbering = numberingMap.get(nextCategoryId);
+      const level = categoryOrgLevel(cat ? { code: cat.code, numbering } : null);
+      if ((categoryChanged || orgChanged) && level && (!org || !orgMatchesLevel(org, level))) {
         return NextResponse.json({ message: `Category ${cat!.code} hanya boleh memilih ${orgLevelLabel(level)} — ganti Organisasi/Departemen-nya` }, { status: 400 });
+      }
+      const nextBu: string[] = data.businessUnitCodes ?? file.businessUnitCodes;
+      if ((categoryChanged || buChanged) && numbering?.singleBusinessUnit && nextBu.length !== 1) {
+        return NextResponse.json({ message: SINGLE_BU_MESSAGE }, { status: 400 });
       }
     }
 

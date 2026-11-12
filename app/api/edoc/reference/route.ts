@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { unauthorized } from "@/lib/api-auth";
 import db from "@/lib/db/db";
+import { getCategoryNumbering } from "@/lib/edoc";
 
 // Data referensi untuk form E Document (ACL editor, create-file, dst). Branch & Position
 // diambil dari nilai distinct di User (branchId/branchName, jobPositionId/jobPositionName)
@@ -28,6 +29,9 @@ export async function GET() {
       db.eDocBranchPrefixMapping.findMany({ select: { prefix: true, businessUnitCodes: true } }),
     ]);
 
+    // Aturan isian dari Number Format (2026-11-12): wajib Sub Departemen / tepat 1 Business Unit.
+    const numbering = await getCategoryNumbering(categories.map((c) => c.id));
+
     return NextResponse.json({
       branches: branchUsers
         .filter((b) => b.branchId)
@@ -39,7 +43,7 @@ export async function GET() {
         .sort((a, b) => a.name!.localeCompare(b.name!)),
       organizations,
       businessUnits,
-      categories,
+      categories: categories.map((c) => ({ ...c, numbering: numbering.get(c.id) })),
       branchPrefixMappings,
     });
   } catch (err) {

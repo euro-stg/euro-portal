@@ -15,7 +15,7 @@ import { BlastFolderPicker, type BlastFolderOption, BlastEmailCriteriaEditor, ty
 import { MoveFileButton } from "./_move-file-modal";
 import { PdfViewerModal } from "./_pdf-viewer";
 import { MultiSelect, type MultiSelectOption } from "../../_edoc-multiselect";
-import { orgLevelFor, orgLevelLabel, orgMatchesLevel } from "@/lib/edoc-org-level";
+import { categoryOrgLevel, orgLevelLabel, orgMatchesLevel, SINGLE_BU_MESSAGE, type CategoryNumbering } from "@/lib/edoc-org-level";
 
 type FileDetail = {
   id: string; folderId: string; title: string; description: string | null; fileUrl: string;
@@ -39,7 +39,7 @@ type FileDetail = {
 type Reference = {
   branches: MultiSelectOption[]; positions: MultiSelectOption[]; businessUnits: { code: string; name: string }[];
   organizations: { id: string; name: string; code: string | null; parentOrganizationId: string | null }[];
-  categories: { id: string; code: string; name: string; categoryTypes: { id: string; code: string; name: string }[] }[];
+  categories: { id: string; code: string; name: string; categoryTypes: { id: string; code: string; name: string }[]; numbering?: CategoryNumbering }[];
   branchPrefixMappings: { prefix: string; businessUnitCodes: string[] }[];
 };
 
@@ -572,7 +572,7 @@ function EditFileModal({
   // kosong supaya user langsung diminta memilih yang valid, bukan error saat simpan.
   const [organizationId, setOrganizationId] = useState(() =>
     reference.organizations.some((o) => o.id === file.organizationId && o.code) ? file.organizationId ?? "" : "");
-  const editOrgLevel = orgLevelFor(reference.categories.find((c) => c.id === categoryId)?.code);
+  const editOrgLevel = categoryOrgLevel(reference.categories.find((c) => c.id === categoryId));
   const [startDate, setStartDate] = useState(file.startDate ? file.startDate.slice(0, 10) : "");
   const [endDate, setEndDate] = useState(file.endDate ? file.endDate.slice(0, 10) : "");
   const [validityType, setValidityType] = useState(file.validityType);
@@ -588,6 +588,16 @@ function EditFileModal({
   const [saving, setSaving] = useState(false);
 
   const selectedCategory = reference.categories.find((c) => c.id === categoryId);
+
+  // Nomor per Business Unit (2026-11-12): BU wajib tepat 1 — memilih BU lain menggantikan yang lama.
+  const singleBu = !!selectedCategory?.numbering?.singleBusinessUnit;
+  const onBuChange = (codes: string[]) => {
+    if (singleBu && codes.length > 1) {
+      const added = codes.filter((c) => !businessUnitCodes.includes(c));
+      codes = added.length > 0 ? added.slice(-1) : codes.slice(0, 1);
+    }
+    handleBusinessUnitCodesChange(codes);
+  };
 
   // Sama persis logic auto-link BU<->Branch di UploadFileModal (_edoc-app.tsx) — lihat
   // komentar di sana untuk penjelasan lengkap trade-off-nya.
@@ -629,6 +639,9 @@ function EditFileModal({
   const submit = async () => {
     if (!title.trim()) { onError("Title tidak boleh kosong"); return; }
     if (!organizationId) { onError("Organisasi/Departemen wajib dipilih"); return; }
+    // Sama dengan server: hanya dicek kalau BU / kategori diubah (file lama tetap bisa diedit).
+    const buChanged = [...businessUnitCodes].sort().join() !== [...file.businessUnitCodes].sort().join();
+    if (singleBu && (buChanged || categoryId !== file.categoryId) && businessUnitCodes.length !== 1) { onError(SINGLE_BU_MESSAGE); return; }
     if (!initiator) { onError("Inisiator wajib dipilih"); return; }
     if (validityType === "TEMPORER" && !endDate) { onError("End Date wajib diisi untuk dokumen Temporer"); return; }
     if (validityType === "TEMPORER" && endDate && !obsoleteDestinationFolderId) { onError("Pilih folder tujuan Obsolete jika mengisi end date"); return; }
@@ -681,7 +694,7 @@ function EditFileModal({
             <select className={inputCls} value={categoryId} onChange={(e) => {
               setCategoryId(e.target.value); setCategoryTypeId("");
               // Organisasi yang tidak sesuai level kategori baru dikosongkan (2026-11-04).
-              const lvl = orgLevelFor(reference.categories.find((c) => c.id === e.target.value)?.code);
+              const lvl = categoryOrgLevel(reference.categories.find((c) => c.id === e.target.value));
               const cur = reference.organizations.find((o) => o.id === organizationId);
               if (cur && !orgMatchesLevel(cur, lvl)) setOrganizationId("");
             }}>
@@ -699,8 +712,8 @@ function EditFileModal({
 
         <div className="grid grid-cols-2 gap-4">
           <MultiSelect
-            label="Business Unit" options={reference.businessUnits.map((b) => ({ id: b.code, name: b.name }))}
-            selected={businessUnitCodes} onChange={handleBusinessUnitCodesChange}
+            label={singleBu ? "Business Unit (pilih 1)" : "Business Unit"} options={reference.businessUnits.map((b) => ({ id: b.code, name: b.name }))}
+            selected={businessUnitCodes} onChange={onBuChange}
           />
           <MultiSelect label="Branch" options={reference.branches} selected={branchIds} onChange={setBranchIds} />
         </div>

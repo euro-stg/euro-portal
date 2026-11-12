@@ -7,8 +7,10 @@ import { isSuperadmin } from "@/lib/edoc";
 const VALID_TYPES = ["DOCUMENT_NUMBER", "MOC_NUMBER"];
 const VALID_SEGMENT_TYPES = [
   "LITERAL_TEXT", "SEQUENCE", "CATEGORY_CODE", "CATEGORY_TYPE_CODE",
-  "ORG_DEPT_CODE", "MONTH_ROMAN", "YEAR", "REF_MAIN_DOCUMENT_NUMBER",
+  "ORG_DEPT_CODE", "BUSINESS_UNIT_CODE", "MONTH_ROMAN", "YEAR", "REF_MAIN_DOCUMENT_NUMBER",
 ];
+// PER_SUB_DEPARTMENT / PER_BUSINESS_UNIT (2026-11-12) — lihat incrementEDocCounter di app/lib/edoc.ts.
+const VALID_SCOPES = ["GLOBAL", "PER_CATEGORY", "PER_SUB_DEPARTMENT", "PER_BUSINESS_UNIT"];
 
 export async function GET(request: Request) {
   try {
@@ -49,7 +51,7 @@ export async function PUT(request: Request) {
     if (!categoryId || !type || !VALID_TYPES.includes(type)) {
       return NextResponse.json({ message: "categoryId dan type (DOCUMENT_NUMBER/MOC_NUMBER) wajib diisi" }, { status: 400 });
     }
-    if (sequenceScope && !["GLOBAL", "PER_CATEGORY"].includes(sequenceScope)) {
+    if (sequenceScope && !VALID_SCOPES.includes(sequenceScope)) {
       return NextResponse.json({ message: "sequenceScope tidak valid" }, { status: 400 });
     }
     if (!Array.isArray(segments) || segments.length === 0) {

@@ -19,3 +19,17 @@ export const orgLevelLabel = (level: OrgLevel) => (level === "DEPARTMENT" ? "Dep
 
 export const orgMatchesLevel = (org: { parentOrganizationId: string | null }, level: OrgLevel | null) =>
   !level || (level === "DEPARTMENT" ? !org.parentOrganizationId : !!org.parentOrganizationId);
+
+// Aturan isian dari Number Format Category (2026-11-12) — dihitung server (getCategoryNumbering
+// di app/lib/edoc.ts) dan dikirim lewat /api/edoc/reference:
+//   subDepartment      = counter nomor per Sub Departemen (sequenceScope PER_SUB_DEPARTMENT)
+//                        -> organisasi wajib Sub Departemen
+//   singleBusinessUnit = counter per Business Unit (PER_BUSINESS_UNIT) atau nomornya memuat
+//                        segmen Kode Business Unit -> Business Unit wajib tepat 1
+export type CategoryNumbering = { subDepartment: boolean; singleBusinessUnit: boolean };
+
+/** Level organisasi efektif: aturan Number Format menang, lalu aturan per kode Category. */
+export const categoryOrgLevel = (cat: { code: string; numbering?: CategoryNumbering } | null | undefined): OrgLevel | null =>
+  cat?.numbering?.subDepartment ? "SUB_DEPARTMENT" : orgLevelFor(cat?.code);
+
+export const SINGLE_BU_MESSAGE = "Category ini memakai nomor per Business Unit — pilih tepat 1 Business Unit";

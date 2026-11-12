@@ -12,7 +12,7 @@ import { Alert } from "@/components/ui/alert";
 import { MultiSelect, type MultiSelectOption } from "./_edoc-multiselect";
 import { buildFolderTree, type FlatFolder, type FolderTreeNode, FolderTreeSingleSelectBody } from "./_edoc-folder-tree-picker";
 import { ImSkuConfirm, confirmedRows, type ConfirmedRowPayload, type ImportPreviewData } from "./_im-sku-confirm";
-import { orgLevelFor, orgLevelLabel, orgMatchesLevel } from "@/lib/edoc-org-level";
+import { categoryOrgLevel, orgLevelLabel, orgMatchesLevel, SINGLE_BU_MESSAGE, type CategoryNumbering } from "@/lib/edoc-org-level";
 import { ReplacementEditor, type ReplacementDraft } from "./_im-replacement";
 
 type Me = { userId: string; isSuperadmin: boolean; isFolderCreator: boolean; isDocumentApprover: boolean; businessUnits: string[] };
@@ -29,7 +29,7 @@ export type Reference = {
   branches: MultiSelectOption[]; positions: MultiSelectOption[];
   organizations: { id: string; name: string; code: string | null; parentOrganizationId: string | null }[];
   businessUnits: { code: string; name: string }[];
-  categories: { id: string; code: string; name: string; categoryTypes: { id: string; code: string; name: string }[] }[];
+  categories: { id: string; code: string; name: string; categoryTypes: { id: string; code: string; name: string }[]; numbering?: CategoryNumbering }[];
   branchPrefixMappings: { prefix: string; businessUnitCodes: string[] }[];
 };
 
@@ -1282,7 +1282,7 @@ function UploadFileModal({
   const [blastFolders, setBlastFolders] = useState<BlastFolderOption[]>([]);
   const [notifyCriteria, setNotifyCriteria] = useState<BlastEmailCriteriaValue>({ branchIds: [], orgIds: [], positionIds: [], businessUnitCodes: [] });
   const [organizationId, setOrganizationId] = useState("");
-  const uploadOrgLevel = orgLevelFor(reference.categories.find((c) => c.id === categoryId)?.code);
+  const uploadOrgLevel = categoryOrgLevel(reference.categories.find((c) => c.id === categoryId));
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [obsoleteDestinationFolderId, setObsoleteDestinationFolderId] = useState("");
@@ -1329,6 +1329,16 @@ function UploadFileModal({
   };
 
   const selectedCategory = reference.categories.find((c) => c.id === categoryId);
+
+  // Nomor per Business Unit (2026-11-12): BU wajib tepat 1 — memilih BU lain menggantikan yang lama.
+  const singleBu = !!selectedCategory?.numbering?.singleBusinessUnit;
+  const onBuChange = (codes: string[]) => {
+    if (singleBu && codes.length > 1) {
+      const added = codes.filter((c) => !businessUnitCodes.includes(c));
+      codes = added.length > 0 ? added.slice(-1) : codes.slice(0, 1);
+    }
+    handleBusinessUnitCodesChange(codes);
+  };
 
   // Business Unit <-> Branch: pilih BU -> branch yang prefix-nya terkait ikut auto-checklist.
   // Lepas centang BU -> branch yang HANYA terkait BU itu ikut auto-uncheck juga — TAPI kalau
@@ -1392,6 +1402,7 @@ function UploadFileModal({
     if (!title.trim()) { onError("Title wajib diisi"); return; }
     if (!categoryId) { onError("Category wajib dipilih"); return; }
     if (!organizationId) { onError("Organisasi/Departemen wajib dipilih"); return; }
+    if (singleBu && businessUnitCodes.length !== 1) { onError(SINGLE_BU_MESSAGE); return; }
     if (!initiator) { onError("Inisiator wajib dipilih"); return; }
     if (!validityType) { onError("Masa berlaku wajib dipilih (Tetap / Temporer)"); return; }
     if (validityType === "TEMPORER" && !endDate) { onError("End Date wajib diisi untuk dokumen Temporer"); return; }
@@ -1482,7 +1493,7 @@ function UploadFileModal({
             <select className={inputCls} value={categoryId} onChange={(e) => {
               setCategoryId(e.target.value); setCategoryTypeId("");
               // Organisasi yang tidak sesuai level kategori baru dikosongkan (2026-11-04).
-              const lvl = orgLevelFor(reference.categories.find((c) => c.id === e.target.value)?.code);
+              const lvl = categoryOrgLevel(reference.categories.find((c) => c.id === e.target.value));
               const cur = reference.organizations.find((o) => o.id === organizationId);
               if (cur && !orgMatchesLevel(cur, lvl)) setOrganizationId("");
             }}>
@@ -1501,8 +1512,8 @@ function UploadFileModal({
 
         <div className="grid grid-cols-2 gap-4">
           <MultiSelect
-            label="Business Unit" options={reference.businessUnits.map((b) => ({ id: b.code, name: b.name }))}
-            selected={businessUnitCodes} onChange={handleBusinessUnitCodesChange}
+            label={singleBu ? "Business Unit (pilih 1)" : "Business Unit"} options={reference.businessUnits.map((b) => ({ id: b.code, name: b.name }))}
+            selected={businessUnitCodes} onChange={onBuChange}
           />
           <MultiSelect label="Branch" options={reference.branches} selected={branchIds} onChange={setBranchIds} />
         </div>
