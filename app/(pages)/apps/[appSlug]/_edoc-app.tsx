@@ -12,7 +12,7 @@ import { Alert } from "@/components/ui/alert";
 import { MultiSelect, type MultiSelectOption } from "./_edoc-multiselect";
 import { buildFolderTree, type FlatFolder, type FolderTreeNode, FolderTreeSingleSelectBody } from "./_edoc-folder-tree-picker";
 import { ImSkuConfirm, confirmedRows, type ConfirmedRowPayload, type ImportPreviewData } from "./_im-sku-confirm";
-import { categoryOrgLevel, orgLevelLabel, orgMatchesLevel, SINGLE_BU_MESSAGE, type CategoryNumbering } from "@/lib/edoc-org-level";
+import { categoryOrgLevel, orgLevelLabel, orgMatchesLevel, SINGLE_BU_MESSAGE, type CategoryNumbering, isSopCategory, todayWibDate, SOP_VALIDITY_NOTE } from "@/lib/edoc-org-level";
 import { ReplacementEditor, type ReplacementDraft } from "./_im-replacement";
 
 type Me = { userId: string; isSuperadmin: boolean; isFolderCreator: boolean; isDocumentApprover: boolean; businessUnits: string[] };
@@ -1332,6 +1332,7 @@ function UploadFileModal({
 
   // Nomor per Business Unit (2026-11-12): BU wajib tepat 1 — memilih BU lain menggantikan yang lama.
   const singleBu = !!selectedCategory?.numbering?.singleBusinessUnit;
+  const isSop = isSopCategory(selectedCategory?.code);
   const onBuChange = (codes: string[]) => {
     if (singleBu && codes.length > 1) {
       const added = codes.filter((c) => !businessUnitCodes.includes(c));
@@ -1496,6 +1497,10 @@ function UploadFileModal({
               const lvl = categoryOrgLevel(reference.categories.find((c) => c.id === e.target.value));
               const cur = reference.organizations.find((o) => o.id === organizationId);
               if (cur && !orgMatchesLevel(cur, lvl)) setOrganizationId("");
+              // Category SOP (2026-11-12): Masa Berlaku Tetap & Start Date hari ini, dikunci.
+              if (isSopCategory(reference.categories.find((c) => c.id === e.target.value)?.code)) {
+                setValidityType("TETAP"); setEndDate(""); setObsoleteDestinationFolderId(""); setStartDate(todayWibDate());
+              }
             }}>
               <option value="">Pilih category...</option>
               {reference.categories.map((c) => <option key={c.id} value={c.id}>{c.code} — {c.name}</option>)}
@@ -1561,7 +1566,7 @@ function UploadFileModal({
 
         <InitiatorPicker value={initiator} onChange={setInitiator} />
 
-        <ValidityTypePicker value={validityType} onChange={(v) => {
+        <ValidityTypePicker value={validityType} lockedNote={isSop ? SOP_VALIDITY_NOTE : undefined} onChange={(v) => {
           setValidityType(v);
           if (v === "TETAP") { setEndDate(""); setObsoleteDestinationFolderId(""); }
         }} />
@@ -1569,7 +1574,7 @@ function UploadFileModal({
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className={labelCls}>Start Date</label>
-            <input type="date" className={inputCls} value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+            <input type="date" className={inputCls} value={startDate} disabled={isSop} onChange={(e) => setStartDate(e.target.value)} />
           </div>
           {validityType === "TEMPORER" && (
             <div>
@@ -2224,14 +2229,15 @@ export function InitiatorPicker({ value, onChange }: { value: InitiatorValue | n
   );
 }
 
-export function ValidityTypePicker({ value, onChange }: { value: string; onChange: (v: "TETAP" | "TEMPORER") => void }) {
+// lockedNote (2026-11-12): pilihan dikunci (mis. Category SOP selalu Tetap) + keterangan alasannya.
+export function ValidityTypePicker({ value, onChange, lockedNote }: { value: string; onChange: (v: "TETAP" | "TEMPORER") => void; lockedNote?: string }) {
   return (
     <div>
-      <label className={labelCls}>Masa Berlaku <span className="text-red-500">*</span></label>
+      <label className={labelCls}>Masa Berlaku <span className="text-red-500">*</span>{lockedNote && <span className="ml-1 text-xs font-normal text-slate-400">({lockedNote})</span>}</label>
       <div className="flex gap-4">
         {([["TETAP", "Tetap", "Tanpa tanggal berakhir"], ["TEMPORER", "Temporer", "Ada tanggal berakhir (End Date)"]] as const).map(([v, l, d]) => (
-          <label key={v} className={`flex-1 flex items-start gap-2 p-2.5 rounded-lg border cursor-pointer ${value === v ? "border-amber-400 bg-amber-50" : "border-slate-200"}`}>
-            <input type="radio" name="validityType" className="mt-0.5" checked={value === v} onChange={() => onChange(v)} />
+          <label key={v} className={`flex-1 flex items-start gap-2 p-2.5 rounded-lg border ${lockedNote ? "cursor-not-allowed opacity-60" : "cursor-pointer"} ${value === v ? "border-amber-400 bg-amber-50" : "border-slate-200"}`}>
+            <input type="radio" name="validityType" className="mt-0.5" checked={value === v} disabled={!!lockedNote} onChange={() => onChange(v)} />
             <span><span className="block text-sm font-medium text-slate-700">{l}</span><span className="block text-xs text-slate-400">{d}</span></span>
           </label>
         ))}

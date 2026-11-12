@@ -4,7 +4,7 @@ import { unauthorized } from "@/lib/api-auth";
 import db from "@/lib/db/db";
 import { isEDocDocumentApprover, isSuperadmin, deleteEDocFile, canViewFile, canEditFileMetadata, getCategoryNumbering } from "@/lib/edoc";
 import { checkValidity, resolveInitiator } from "@/lib/edoc-file-fields";
-import { categoryOrgLevel, orgLevelLabel, orgMatchesLevel, SINGLE_BU_MESSAGE } from "@/lib/edoc-org-level";
+import { categoryOrgLevel, orgLevelLabel, orgMatchesLevel, SINGLE_BU_MESSAGE, isSopCategory } from "@/lib/edoc-org-level";
 
 // DRAFT files are visible only to superadmin, their own uploader, or any Document
 // Approver (flat global pool, bypasses folder ACL — same rule as the pending-approval
@@ -221,7 +221,13 @@ export async function PATCH(
       }
     }
 
-    if ("startDate" in body) data.startDate = body.startDate ? new Date(body.startDate) : null;
+    // Category SOP (2026-11-12): Masa Berlaku wajib Tetap & Start Date tidak bisa diubah lewat Edit.
+    const nextCategory = await db.eDocCategory.findUnique({ where: { id: data.categoryId ?? file.categoryId }, select: { code: true } });
+    const isSop = isSopCategory(nextCategory?.code);
+    if ("startDate" in body && !isSop) data.startDate = body.startDate ? new Date(body.startDate) : null;
+    if (isSop && "validityType" in body && body.validityType !== "TETAP") {
+      return NextResponse.json({ message: "Category SOP: Masa Berlaku harus Tetap" }, { status: 400 });
+    }
 
     // Masa berlaku (2026-10-19): TETAP memaksa End Date & folder Obsolete kosong.
     const nextValidityType: string = "validityType" in body ? String(body.validityType ?? "") : file.validityType;

@@ -5,7 +5,7 @@ import db from "@/lib/db/db";
 import { resolveFolderContentAccess, uploadEDocFileToFolder, isSuperadmin, isEDocDocumentApprover, edocExpiryCutoff, getCategoryNumbering } from "@/lib/edoc";
 import { createImProducts, validateReviewedRows, type ReviewedRow } from "@/lib/im-import";
 import { checkValidity, resolveInitiator } from "@/lib/edoc-file-fields";
-import { categoryOrgLevel, orgLevelLabel, orgMatchesLevel, SINGLE_BU_MESSAGE } from "@/lib/edoc-org-level";
+import { categoryOrgLevel, orgLevelLabel, orgMatchesLevel, SINGLE_BU_MESSAGE, isSopCategory, todayWibDate } from "@/lib/edoc-org-level";
 import { createReplacements, parseReplacementInput, validateReplacements, type ReplacementInput } from "@/lib/im-replacement";
 
 export const maxDuration = 60;
@@ -231,6 +231,11 @@ export async function POST(request: Request) {
     if (numbering?.singleBusinessUnit && businessUnitCodes.length !== 1) {
       return NextResponse.json({ message: SINGLE_BU_MESSAGE }, { status: 400 });
     }
+    // Category SOP (2026-11-12): Masa Berlaku wajib Tetap; Start Date dipaksa = hari upload (WIB).
+    const isSop = isSopCategory(category.code);
+    if (isSop && validityTypeRaw !== "TETAP") {
+      return NextResponse.json({ message: "Category SOP: Masa Berlaku harus Tetap" }, { status: 400 });
+    }
 
     if (categoryTypeId) {
       const categoryType = await db.eDocCategoryType.findFirst({ where: { id: categoryTypeId, categoryId, deletedAt: null } });
@@ -327,7 +332,7 @@ export async function POST(request: Request) {
           notifyOrgIds,
           notifyPositionIds,
           notifyBusinessUnitCodes,
-          startDate: startDateRaw ? new Date(startDateRaw) : null,
+          startDate: isSop ? new Date(todayWibDate()) : startDateRaw ? new Date(startDateRaw) : null,
           endDate,
           obsoleteDestinationFolderId,
           validityType: validity.value,

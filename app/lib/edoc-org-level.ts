@@ -33,3 +33,10 @@ export const categoryOrgLevel = (cat: { code: string; numbering?: CategoryNumber
   cat?.numbering?.subDepartment ? "SUB_DEPARTMENT" : orgLevelFor(cat?.code);
 
 export const SINGLE_BU_MESSAGE = "Category ini memakai nomor per Business Unit — pilih tepat 1 Business Unit";
+
+// Category ber-kode prefix "SOP" (SOP, SOPHO, SOPTR, ...) (2026-11-12): Masa Berlaku selalu
+// Tetap & Start Date = tanggal upload (WIB), dikunci di form upload/edit dan ditegakkan server.
+export const isSopCategory = (code: string | null | undefined) => !!code && code.trim().toUpperCase().startsWith("SOP");
+/** Tanggal hari ini di WIB, format YYYY-MM-DD (konvensi kolom tanggal E Document). */
+export const todayWibDate = () => new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
+export const SOP_VALIDITY_NOTE = "Category SOP: Masa Berlaku selalu Tetap & Start Date = tanggal upload";

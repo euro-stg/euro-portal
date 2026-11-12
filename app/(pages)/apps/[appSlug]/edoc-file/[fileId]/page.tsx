@@ -15,7 +15,7 @@ import { BlastFolderPicker, type BlastFolderOption, BlastEmailCriteriaEditor, ty
 import { MoveFileButton } from "./_move-file-modal";
 import { PdfViewerModal } from "./_pdf-viewer";
 import { MultiSelect, type MultiSelectOption } from "../../_edoc-multiselect";
-import { categoryOrgLevel, orgLevelLabel, orgMatchesLevel, SINGLE_BU_MESSAGE, type CategoryNumbering } from "@/lib/edoc-org-level";
+import { categoryOrgLevel, orgLevelLabel, orgMatchesLevel, SINGLE_BU_MESSAGE, type CategoryNumbering, isSopCategory, SOP_VALIDITY_NOTE } from "@/lib/edoc-org-level";
 
 type FileDetail = {
   id: string; folderId: string; title: string; description: string | null; fileUrl: string;
@@ -575,7 +575,8 @@ function EditFileModal({
   const editOrgLevel = categoryOrgLevel(reference.categories.find((c) => c.id === categoryId));
   const [startDate, setStartDate] = useState(file.startDate ? file.startDate.slice(0, 10) : "");
   const [endDate, setEndDate] = useState(file.endDate ? file.endDate.slice(0, 10) : "");
-  const [validityType, setValidityType] = useState(file.validityType);
+  // Category SOP selalu Tetap (2026-11-12) — file SOP lama yang masih Temporer ikut jadi Tetap saat disimpan.
+  const [validityType, setValidityType] = useState(isSopCategory(file.category?.code) ? "TETAP" : file.validityType);
   const [initiator, setInitiator] = useState<InitiatorValue | null>(file.initiator
     ? { id: file.initiator.id, name: file.initiator.name ?? file.initiator.employeeId, employeeId: file.initiator.employeeId, jobPositionName: file.initiatorJobPositionName ?? "" }
     : null);
@@ -591,6 +592,8 @@ function EditFileModal({
 
   // Nomor per Business Unit (2026-11-12): BU wajib tepat 1 — memilih BU lain menggantikan yang lama.
   const singleBu = !!selectedCategory?.numbering?.singleBusinessUnit;
+  // Category SOP (2026-11-12): Masa Berlaku Tetap, Start Date tidak bisa diubah lewat Edit.
+  const isSop = isSopCategory(selectedCategory?.code);
   const onBuChange = (codes: string[]) => {
     if (singleBu && codes.length > 1) {
       const added = codes.filter((c) => !businessUnitCodes.includes(c));
@@ -697,6 +700,9 @@ function EditFileModal({
               const lvl = categoryOrgLevel(reference.categories.find((c) => c.id === e.target.value));
               const cur = reference.organizations.find((o) => o.id === organizationId);
               if (cur && !orgMatchesLevel(cur, lvl)) setOrganizationId("");
+              if (isSopCategory(reference.categories.find((c) => c.id === e.target.value)?.code)) {
+                setValidityType("TETAP"); setEndDate(""); setObsoleteDestinationFolderId("");
+              }
             }}>
               {reference.categories.map((c) => <option key={c.id} value={c.id}>{c.code} — {c.name}</option>)}
             </select>
@@ -736,7 +742,7 @@ function EditFileModal({
 
         <InitiatorPicker value={initiator} onChange={setInitiator} />
 
-        <ValidityTypePicker value={validityType} onChange={(v) => {
+        <ValidityTypePicker value={validityType} lockedNote={isSop ? SOP_VALIDITY_NOTE : undefined} onChange={(v) => {
           setValidityType(v);
           if (v === "TETAP") { setEndDate(""); setObsoleteDestinationFolderId(""); }
         }} />
@@ -744,7 +750,7 @@ function EditFileModal({
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className={labelCls}>Start Date</label>
-            <input type="date" className={inputCls} value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+            <input type="date" className={inputCls} value={startDate} disabled={isSop} onChange={(e) => setStartDate(e.target.value)} />
           </div>
           {validityType === "TEMPORER" && (
             <div>
