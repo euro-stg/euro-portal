@@ -4,13 +4,13 @@ import { unauthorized } from "@/lib/api-auth";
 import db from "@/lib/db/db";
 import {
   isSuperadmin, isEDocDocumentApprover, generateEDocNumber,
-  downloadEDocFile, stampEDocPdf, uploadEDocFileToFolder, sendBlastEmailNotification,
+  downloadEDocFile, stampEDocPdf, uploadEDocFileToFolder, type EDocStamp, sendBlastEmailNotification,
 } from "@/lib/edoc";
 import { applyReplacements, relocateAfterApply } from "@/lib/im-replacement";
 
 // Approve = generate Document Number (via Number Format Builder milik Category file ini),
 // stempel Document Number + Watermark (kalau Category-nya sudah punya EDocWatermarkConfig)
-// ke halaman 1 PDF sesuai posisi yang dikonfigurasi, lalu set status RELEASE. Versi PDF
+// ke PDF di posisi tetap (kiri atas / kiri bawah, lihat stampEDocPdf), lalu set status RELEASE. Versi PDF
 // sebelum di-stamp dicatat di EDocFileRevisionLog untuk audit (reuse mekanisme revisi yang
 // sudah ada). MOC Number sengaja TIDAK digenerate di sini — itu aksi terpisah, lihat
 // /api/edoc/file/[id]/moc.
@@ -54,11 +54,9 @@ export async function POST(
       return NextResponse.json({ message: e instanceof Error ? e.message : "Gagal generate nomor dokumen" }, { status: 400 });
     }
 
-    // Stempel Document Number + Watermark (kalau ada) ke PDF sesuai posisi per-Category.
-    const [docNumberFormat, watermark] = await Promise.all([
-      db.eDocNumberFormat.findUnique({ where: { categoryId_type: { categoryId: file.categoryId, type: "DOCUMENT_NUMBER" } } }),
-      db.eDocWatermarkConfig.findUnique({ where: { categoryId: file.categoryId } }),
-    ]);
+    // Stempel Document Number (kiri atas halaman 1) + Watermark (kiri bawah semua halaman,
+    // kalau Category punya EDocWatermarkConfig) — posisi tetap, lihat stampEDocPdf.
+    const watermark = await db.eDocWatermarkConfig.findUnique({ where: { categoryId: file.categoryId } });
 
     let newFileUrl = file.fileUrl;
     try {
@@ -66,20 +64,12 @@ export async function POST(
       if (!nextcloudRes.ok) throw new Error(`File tidak ditemukan di storage (${nextcloudRes.status})`);
       const originalBuffer = await nextcloudRes.arrayBuffer();
 
-      const stamps = [];
-      if (docNumberFormat?.positionXMm != null && docNumberFormat?.positionYMm != null) {
-        stamps.push({ text: documentNumber, positionXMm: docNumberFormat.positionXMm, positionYMm: docNumberFormat.positionYMm, fontSize: docNumberFormat.fontSize ?? undefined });
-      }
-      if (watermark) {
-        // Watermark di SEMUA halaman (2026-11-04); Document Number tetap halaman 1.
-        stamps.push({ text: watermark.text, positionXMm: watermark.positionXMm, positionYMm: watermark.positionYMm, fontSize: watermark.fontSize, color: watermark.color, allPages: true });
-      }
+      const stamps: EDocStamp[] = [{ text: documentNumber, corner: "TOP_LEFT" }];
+      if (watermark) stamps.push({ text: watermark.text, corner: "BOTTOM_LEFT", color: watermark.color, allPages: true });
 
-      if (stamps.length > 0) {
-        const stampedBuffer = await stampEDocPdf(originalBuffer, stamps);
-        const filename = `approved-${Date.now()}.pdf`;
-        newFileUrl = await uploadEDocFileToFolder(stampedBuffer, filename, file.folderId);
-      }
+      const stampedBuffer = await stampEDocPdf(originalBuffer, stamps);
+      const filename = `approved-${Date.now()}.pdf`;
+      newFileUrl = await uploadEDocFileToFolder(stampedBuffer, filename, file.folderId);
     } catch (e) {
       console.error("[edoc] gagal stempel PDF saat approve — melanjutkan tanpa stempel", e);
       // Tidak menggagalkan approval hanya karena stamping gagal — nomor tetap wajib jalan,

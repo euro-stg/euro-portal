@@ -11,8 +11,7 @@ import {
 // bisa dijalankan kapan saja setelah Document Number sudah ada, oleh Document Approver.
 // Optional per Category: kalau Category-nya belum punya EDocNumberFormat type MOC_NUMBER,
 // generateEDocNumber akan melempar error yang informatif. MOC Number distempel ke PDF di
-// posisinya sendiri (independen dari posisi Document Number) — versi sebelumnya dicatat
-// di EDocFileRevisionLog.
+// kiri bawah semua halaman — versi sebelumnya dicatat di EDocFileRevisionLog.
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -56,22 +55,22 @@ export async function POST(
       return NextResponse.json({ message: e instanceof Error ? e.message : "Gagal generate MOC Number" }, { status: 400 });
     }
 
-    const mocFormat = await db.eDocNumberFormat.findUnique({ where: { categoryId_type: { categoryId: file.categoryId, type: "MOC_NUMBER" } } });
+    // MOC Number di kiri bawah SEMUA halaman (posisi tetap, lihat stampEDocPdf), tepat di kanan
+    // watermark approve kalau file ini di-approve lewat alur normal & Category punya watermark
+    // (watermark itulah yang sudah tertempel di kiri bawah saat approve).
+    const watermark = file.approvedBy ? await db.eDocWatermarkConfig.findUnique({ where: { categoryId: file.categoryId } }) : null;
 
     let newFileUrl = file.fileUrl;
-    if (mocFormat?.positionXMm != null && mocFormat?.positionYMm != null) {
-      try {
-        const nextcloudRes = await downloadEDocFile(file.fileUrl);
-        if (!nextcloudRes.ok) throw new Error(`File tidak ditemukan di storage (${nextcloudRes.status})`);
-        const originalBuffer = await nextcloudRes.arrayBuffer();
-        const stampedBuffer = await stampEDocPdf(originalBuffer, [
-          // MOC Number di SEMUA halaman (2026-11-04).
-          { text: mocNumber, positionXMm: mocFormat.positionXMm, positionYMm: mocFormat.positionYMm, fontSize: mocFormat.fontSize ?? undefined, allPages: true },
-        ]);
-        newFileUrl = await uploadEDocFileToFolder(stampedBuffer, `moc-${Date.now()}.pdf`, file.folderId);
-      } catch (e) {
-        console.error("[edoc] gagal stempel MOC Number ke PDF — melanjutkan tanpa stempel", e);
-      }
+    try {
+      const nextcloudRes = await downloadEDocFile(file.fileUrl);
+      if (!nextcloudRes.ok) throw new Error(`File tidak ditemukan di storage (${nextcloudRes.status})`);
+      const originalBuffer = await nextcloudRes.arrayBuffer();
+      const stampedBuffer = await stampEDocPdf(originalBuffer, [
+        { text: mocNumber, corner: "BOTTOM_LEFT", allPages: true, after: watermark?.text },
+      ]);
+      newFileUrl = await uploadEDocFileToFolder(stampedBuffer, `moc-${Date.now()}.pdf`, file.folderId);
+    } catch (e) {
+      console.error("[edoc] gagal stempel MOC Number ke PDF — melanjutkan tanpa stempel", e);
     }
 
     const updated = await db.$transaction(async (tx) => {

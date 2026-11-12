@@ -4,8 +4,8 @@ import { unauthorized } from "@/lib/api-auth";
 import db from "@/lib/db/db";
 import { isSuperadmin } from "@/lib/edoc";
 
-// Watermark custom per Category — teks (mis. "APPROVED"), warna, dan posisi (mm dari
-// pojok kiri-atas halaman A4), independen dari posisi Document Number/MOC Number.
+// Watermark custom per Category — teks (mis. "APPROVED") & warna. Posisinya tetap di kiri
+// bawah semua halaman (2026-11-12, lihat stampEDocPdf); kolom posisi/font size tidak dipakai.
 export async function GET(request: Request) {
   try {
     const session = await auth();
@@ -30,23 +30,18 @@ export async function PUT(request: Request) {
     if (!(await isSuperadmin(session.user.id))) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
     const body = await request.json().catch(() => ({}));
-    const { categoryId, text, color, positionXMm, positionYMm, fontSize } = body as {
-      categoryId?: string; text?: string; color?: string; positionXMm?: number; positionYMm?: number; fontSize?: number;
-    };
+    const { categoryId, text, color } = body as { categoryId?: string; text?: string; color?: string };
 
     if (!categoryId) return NextResponse.json({ message: "categoryId wajib diisi" }, { status: 400 });
     if (!text?.trim()) return NextResponse.json({ message: "Teks watermark wajib diisi" }, { status: 400 });
-    if (typeof positionXMm !== "number" || positionXMm < 0 || typeof positionYMm !== "number" || positionYMm < 0) {
-      return NextResponse.json({ message: "Posisi X/Y (mm) wajib diisi, angka >= 0" }, { status: 400 });
-    }
 
     const category = await db.eDocCategory.findFirst({ where: { id: categoryId, deletedAt: null } });
     if (!category) return NextResponse.json({ message: "Category tidak ditemukan" }, { status: 404 });
 
     const config = await db.eDocWatermarkConfig.upsert({
       where: { categoryId },
-      create: { categoryId, text: text.trim(), color: color?.trim() || "green", positionXMm, positionYMm, fontSize: fontSize ?? 24 },
-      update: { text: text.trim(), color: color?.trim() || "green", positionXMm, positionYMm, fontSize: fontSize ?? 24 },
+      create: { categoryId, text: text.trim(), color: color?.trim() || "green", positionXMm: 0, positionYMm: 0 },
+      update: { text: text.trim(), color: color?.trim() || "green" },
     });
 
     return NextResponse.json({ data: config });

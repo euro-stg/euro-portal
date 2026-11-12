@@ -5,9 +5,9 @@ import { Eye, Upload, Loader2, FileText, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 
-export type PreviewStamp = { text: string; positionXMm: number; positionYMm: number; fontSize?: number; color?: string };
+export type PreviewStamp = { text: string; corner: "TOP_LEFT" | "BOTTOM_LEFT"; allPages?: boolean; color?: string; after?: string };
 
-// Preview stempel (posisi X/Y saat ini di form, belum perlu disimpan) di atas contoh PDF
+// Preview stempel (isi form saat ini, belum perlu disimpan; posisi tetap di sudut halaman) di atas contoh PDF
 // milik Category (diupload sekali, disimpan persisten di Nextcloud lewat
 // /api/edoc/category/[id]/sample-pdf supaya tetap kelihatan tiap buka preview tanpa upload
 // ulang), atau halaman A4 kosong berpenanda mm kalau Category belum punya contoh.
@@ -107,7 +107,7 @@ export function StampPreviewButton({
 
       {error && !previewUrl && <p className="text-xs text-red-600 mt-1">{error}</p>}
 
-      <Modal open={!!previewUrl} onClose={close} title="Preview Posisi Stempel" boxClassName="max-w-3xl">
+      <Modal open={!!previewUrl} onClose={close} title="Preview Stempel" boxClassName="max-w-3xl">
         {previewUrl ? (
           <iframe src={previewUrl} className="w-full h-[75vh] border border-slate-200 rounded-lg" title="Preview stempel" />
         ) : null}

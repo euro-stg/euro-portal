@@ -7,7 +7,7 @@ import { isSuperadmin, stampEDocPdf, createBlankA4PdfWithRuler, fetchEDocCategor
 // Preview stempel (Document Number / MOC Number / Watermark) di atas dasar PDF, dengan
 // prioritas: file yang baru diupload di request ini > contoh PDF tersimpan milik Category
 // (categoryId) > halaman A4 kosong berpenanda mm sebagai default terakhir. Dipakai halaman
-// Pengaturan supaya admin bisa lihat posisi X/Y beneran sebelum commit.
+// Pengaturan supaya admin bisa lihat hasil stempel (posisi tetap di sudut halaman).
 export async function POST(request: Request) {
   try {
     const session = await auth();
@@ -29,8 +29,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: "Minimal 1 stempel untuk di-preview" }, { status: 400 });
     }
     for (const s of stamps) {
-      if (typeof s.positionXMm !== "number" || typeof s.positionYMm !== "number") {
-        return NextResponse.json({ message: "Posisi X/Y wajib diisi untuk preview" }, { status: 400 });
+      if (typeof s?.text !== "string" || (s.corner !== "TOP_LEFT" && s.corner !== "BOTTOM_LEFT")) {
+        return NextResponse.json({ message: "Format stamps tidak valid" }, { status: 400 });
       }
     }
 

@@ -160,9 +160,6 @@ function NumberFormatEditor({ categoryId, type, title, hasSample, onSampleChange
   const [format, setFormat] = useState<NumberFormat>(null);
   const [sequenceScope, setSequenceScope] = useState("GLOBAL");
   const [segments, setSegments] = useState<Segment[]>([]);
-  const [positionXMm, setPositionXMm] = useState("");
-  const [positionYMm, setPositionYMm] = useState("");
-  const [fontSize, setFontSize] = useState("11");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -175,9 +172,6 @@ function NumberFormatEditor({ categoryId, type, title, hasSample, onSampleChange
       setFormat(f);
       setSequenceScope(f?.sequenceScope ?? "GLOBAL");
       setSegments(f?.segments.map((s) => ({ segmentType: s.segmentType, literalValue: s.literalValue, separatorAfter: s.separatorAfter ?? "/", padLength: s.padLength ?? null })) ?? []);
-      setPositionXMm(f?.positionXMm != null ? String(f.positionXMm) : "");
-      setPositionYMm(f?.positionYMm != null ? String(f.positionYMm) : "");
-      setFontSize(f?.fontSize != null ? String(f.fontSize) : "11");
     } finally { setLoading(false); }
   }, [categoryId, type]);
 
@@ -193,12 +187,7 @@ function NumberFormatEditor({ categoryId, type, title, hasSample, onSampleChange
     try {
       const res = await fetch("/api/edoc/number-format", {
         method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          categoryId, type, sequenceScope, segments,
-          positionXMm: positionXMm ? Number(positionXMm) : undefined,
-          positionYMm: positionYMm ? Number(positionYMm) : undefined,
-          fontSize: fontSize ? Number(fontSize) : undefined,
-        }),
+        body: JSON.stringify({ categoryId, type, sequenceScope, segments }),
       });
       const json = await res.json();
       if (!res.ok) { onError(json.message || "Gagal menyimpan format"); return; }
@@ -280,31 +269,18 @@ function NumberFormatEditor({ categoryId, type, title, hasSample, onSampleChange
 
       {segments.length > 0 && <p className="text-xs font-mono text-slate-400 mb-3">Preview: {preview}</p>}
 
-      <div className="flex items-end gap-3 mb-3 pt-3 border-t border-slate-100">
-        <div>
-          <label className="text-xs text-slate-500 block mb-1">Posisi X (mm dari kiri, A4)</label>
-          <input type="number" step="0.1" className={`${inputCls} w-28`} placeholder="mis. 100" value={positionXMm} onChange={(e) => setPositionXMm(e.target.value)} />
-        </div>
-        <div>
-          <label className="text-xs text-slate-500 block mb-1">Posisi Y (mm dari atas, A4)</label>
-          <input type="number" step="0.1" className={`${inputCls} w-28`} placeholder="mis. 30" value={positionYMm} onChange={(e) => setPositionYMm(e.target.value)} />
-        </div>
-        <div>
-          <label className="text-xs text-slate-500 block mb-1">Font Size</label>
-          <input type="number" step="0.5" className={`${inputCls} w-20`} value={fontSize} onChange={(e) => setFontSize(e.target.value)} />
-        </div>
-      </div>
-      {(!positionXMm || !positionYMm) && (
-        <p className="text-xs text-amber-600 mb-3">Posisi belum diisi — nomor tidak akan distempel ke PDF sampai posisi X/Y diisi.</p>
-      )}
+      <p className="text-xs text-slate-500 mb-3 pt-3 border-t border-slate-100">
+        Posisi stempel otomatis: {type === "DOCUMENT_NUMBER" ? "kiri atas halaman 1" : "kiri bawah semua halaman, di kanan watermark"} — ukuran menyesuaikan halaman.
+      </p>
 
       <div className="flex items-center gap-2 flex-wrap">
         <Button size="sm" onClick={save} disabled={saving} className="bg-amber-600 hover:bg-amber-700 text-white flex items-center gap-1.5">
           {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />} Simpan
         </Button>
         <StampPreviewButton
-          disabled={!positionXMm || !positionYMm}
-          stamps={[{ text: preview || "(isi minimal 1 segment)", positionXMm: Number(positionXMm), positionYMm: Number(positionYMm), fontSize: Number(fontSize) || 11 }]}
+          stamps={[type === "DOCUMENT_NUMBER"
+            ? { text: preview || "(isi minimal 1 segment)", corner: "TOP_LEFT" }
+            : { text: preview || "(isi minimal 1 segment)", corner: "BOTTOM_LEFT", allPages: true }]}
           categoryId={categoryId}
           hasSample={hasSample}
           onSampleChange={onSampleChange}
@@ -318,9 +294,6 @@ function NumberFormatEditor({ categoryId, type, title, hasSample, onSampleChange
 function WatermarkEditor({ categoryId, hasSample, onSampleChange, onError, onSuccess }: { categoryId: string; hasSample: boolean; onSampleChange: () => void; onError: (m: string) => void; onSuccess: (m: string) => void }) {
   const [text, setText] = useState("");
   const [color, setColor] = useState("green");
-  const [positionXMm, setPositionXMm] = useState("");
-  const [positionYMm, setPositionYMm] = useState("");
-  const [fontSize, setFontSize] = useState("24");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -332,9 +305,6 @@ function WatermarkEditor({ categoryId, hasSample, onSampleChange, onError, onSuc
       const w: WatermarkConfig = json.data;
       setText(w?.text ?? "");
       setColor(w?.color ?? "green");
-      setPositionXMm(w?.positionXMm != null ? String(w.positionXMm) : "");
-      setPositionYMm(w?.positionYMm != null ? String(w.positionYMm) : "");
-      setFontSize(w?.fontSize != null ? String(w.fontSize) : "24");
     } finally { setLoading(false); }
   }, [categoryId]);
 
@@ -342,12 +312,11 @@ function WatermarkEditor({ categoryId, hasSample, onSampleChange, onError, onSuc
 
   const save = async () => {
     if (!text.trim()) { onError("Teks watermark wajib diisi"); return; }
-    if (!positionXMm || !positionYMm) { onError("Posisi X/Y watermark wajib diisi"); return; }
     setSaving(true);
     try {
       const res = await fetch("/api/edoc/watermark", {
         method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ categoryId, text, color, positionXMm: Number(positionXMm), positionYMm: Number(positionYMm), fontSize: Number(fontSize) }),
+        body: JSON.stringify({ categoryId, text, color }),
       });
       const json = await res.json();
       if (!res.ok) { onError(json.message || "Gagal menyimpan watermark"); return; }
@@ -380,27 +349,16 @@ function WatermarkEditor({ categoryId, hasSample, onSampleChange, onError, onSuc
             <option value="black">Black</option>
           </select>
         </div>
-        <div>
-          <label className="text-xs text-slate-500 block mb-1">Posisi X (mm)</label>
-          <input type="number" step="0.1" className={`${inputCls} w-24`} value={positionXMm} onChange={(e) => setPositionXMm(e.target.value)} />
-        </div>
-        <div>
-          <label className="text-xs text-slate-500 block mb-1">Posisi Y (mm)</label>
-          <input type="number" step="0.1" className={`${inputCls} w-24`} value={positionYMm} onChange={(e) => setPositionYMm(e.target.value)} />
-        </div>
-        <div>
-          <label className="text-xs text-slate-500 block mb-1">Font Size</label>
-          <input type="number" step="0.5" className={`${inputCls} w-20`} value={fontSize} onChange={(e) => setFontSize(e.target.value)} />
-        </div>
       </div>
+      <p className="text-xs text-slate-500 mt-2">Posisi stempel otomatis: kiri bawah semua halaman (MOC Number menyusul di kanannya).</p>
 
       <div className="flex items-center gap-2 flex-wrap mt-3">
         <Button size="sm" onClick={save} disabled={saving} className="bg-amber-600 hover:bg-amber-700 text-white flex items-center gap-1.5">
           {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />} Simpan
         </Button>
         <StampPreviewButton
-          disabled={!text.trim() || !positionXMm || !positionYMm}
-          stamps={[{ text: text || "APPROVED", positionXMm: Number(positionXMm), positionYMm: Number(positionYMm), fontSize: Number(fontSize) || 24, color }]}
+          disabled={!text.trim()}
+          stamps={[{ text: text || "APPROVED", corner: "BOTTOM_LEFT", allPages: true, color }]}
           categoryId={categoryId}
           hasSample={hasSample}
           onSampleChange={onSampleChange}
