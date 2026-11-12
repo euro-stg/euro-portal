@@ -14,8 +14,8 @@ const ALLOWED_MIME = ["application/pdf"];
 // sengaja minim input di sini, field lain (dates, BU/branch, Document Number manual, dst)
 // dilengkapi belakangan lewat PATCH /api/edoc/file/[id]. Setiap baris hasil endpoint ini
 // ditandai `bulkImported: true` supaya (a) UI bisa kasih badge "perlu dilengkapi", dan
-// (b) Folder Creator/pemegang write ACL folder manapun — bukan cuma uploader aslinya —
-// boleh bantu melengkapi lewat canEditFileMetadata.
+// (b) edit metadatanya khusus superadmin & Document Approver (2026-11-12, lihat
+// canEditFileMetadata).
 //
 // SATU FILE PER REQUEST (diubah 2026-09-22, sebelumnya nerima banyak `files[]` sekaligus
 // dalam 1 request) — client (BulkUploadModal) sekarang loop manggil endpoint ini sekali
