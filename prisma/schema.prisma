@@ -1300,6 +1300,9 @@ model EDocCategoryType {
   categoryId String
   code       String
   name       String
+  // Soft delete (2026-11-12) — code diberi akhiran "#deleted-<ts>" saat dihapus supaya
+  // @@unique([categoryId, code]) tidak menghalangi membuat type baru dengan code yang sama.
+  deletedAt  DateTime?
 
   category EDocCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   files    EDocFile[]

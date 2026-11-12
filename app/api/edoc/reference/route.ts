@@ -19,7 +19,7 @@ export async function GET() {
       db.eDocBusinessUnit.findMany({ where: { status: "active" }, select: { code: true, name: true }, orderBy: { code: "asc" } }),
       db.eDocCategory.findMany({
         where: { deletedAt: null, status: "active" },
-        select: { id: true, code: true, name: true, categoryTypes: { select: { id: true, code: true, name: true } } },
+        select: { id: true, code: true, name: true, categoryTypes: { where: { deletedAt: null }, select: { id: true, code: true, name: true } } },
         orderBy: { name: "asc" },
       }),
       // Dipakai frontend untuk auto-checklist Branch yang prefix-nya terkait begitu suatu

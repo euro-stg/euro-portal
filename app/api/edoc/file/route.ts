@@ -228,7 +228,7 @@ export async function POST(request: Request) {
     }
 
     if (categoryTypeId) {
-      const categoryType = await db.eDocCategoryType.findFirst({ where: { id: categoryTypeId, categoryId } });
+      const categoryType = await db.eDocCategoryType.findFirst({ where: { id: categoryTypeId, categoryId, deletedAt: null } });
       if (!categoryType) return NextResponse.json({ message: "Category Type tidak sesuai dengan Category" }, { status: 400 });
     }
 

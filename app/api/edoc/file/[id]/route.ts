@@ -140,7 +140,7 @@ export async function DELETE(
 // atau import item promo (tetap lewat /api/edoc/im-product/import, sudah dipakai berulang
 // dari halaman detail). Dibuat terutama untuk melengkapi file hasil Bulk Import (2026-09-21)
 // yang sengaja dibuat minim data saat upload — lihat canEditFileMetadata untuk gerbang akses
-// lengkapnya (superadmin selalu; Folder Creator manapun untuk file bulkImported; uploader
+// lengkapnya (superadmin & Document Approver selalu; file bulkImported HANYA mereka; uploader
 // sendiri selagi requiresNumber=false).
 export async function PATCH(
   request: Request,
@@ -179,7 +179,7 @@ export async function PATCH(
       const categoryTypeId = body.categoryTypeId || null;
       const categoryId = data.categoryId ?? file.categoryId;
       if (categoryTypeId) {
-        const categoryType = await db.eDocCategoryType.findFirst({ where: { id: categoryTypeId, categoryId } });
+        const categoryType = await db.eDocCategoryType.findFirst({ where: { id: categoryTypeId, categoryId, deletedAt: null } });
         if (!categoryType) return NextResponse.json({ message: "Category Type tidak sesuai dengan Category" }, { status: 400 });
       }
       data.categoryTypeId = categoryTypeId;

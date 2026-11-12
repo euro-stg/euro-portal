@@ -1,12 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, Plus, Tag, Hash, Trash2, Save, Stamp, ChevronDown, ChevronRight } from "lucide-react";
+import { Loader2, Plus, Tag, Hash, Trash2, Save, Stamp, ChevronDown, ChevronRight, Pencil, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StampPreviewButton } from "./_stamp-preview-button";
 
-type CategoryType = { id: string; code: string; name: string };
-type Category = { id: string; code: string; name: string; categoryTypes: CategoryType[]; samplePdfPath?: string | null };
+type CategoryType = { id: string; code: string; name: string; _count?: { files: number } };
+type Category = { id: string; code: string; name: string; categoryTypes: CategoryType[]; samplePdfPath?: string | null; _count?: { files: number } };
 type Segment = { segmentType: string; literalValue?: string | null; separatorAfter?: string; padLength?: number | null };
 type NumberFormat = {
   sequenceScope: string; segments: Segment[];
@@ -94,14 +94,7 @@ export function CategoryFormatManager({ onError, onSuccess }: { onError: (m: str
             const isOpen = openIds.has(c.id);
             return (
               <div key={c.id} className="border border-slate-200 rounded-lg overflow-hidden">
-                <button
-                  onClick={() => toggleOpen(c.id)}
-                  className={`w-full flex items-center gap-2 px-3 py-2.5 text-left transition-colors ${isOpen ? "bg-amber-50" : "hover:bg-slate-50"}`}
-                >
-                  {isOpen ? <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />}
-                  <span className={`text-sm ${isOpen ? "text-amber-700 font-medium" : "text-slate-600"}`}>{c.code}</span>
-                  <span className="text-xs text-slate-400">— {c.name}</span>
-                </button>
+                <CategoryHeader category={c} isOpen={isOpen} onToggle={() => toggleOpen(c.id)} onChanged={load} onError={onError} onSuccess={onSuccess} />
 
                 {isOpen && (
                   <div className="p-4 border-t border-slate-200 space-y-4">
@@ -117,6 +110,127 @@ export function CategoryFormatManager({ onError, onSuccess }: { onError: (m: str
         </div>
       )}
     </div>
+  );
+}
+
+// Edit/hapus Category (2026-11-12). Code & hapus dikunci kalau sudah dipakai file (dicek juga
+// di server, PATCH/DELETE /api/edoc/category/[id]).
+function CategoryHeader({ category: c, isOpen, onToggle, onChanged, onError, onSuccess }: { category: Category; isOpen: boolean; onToggle: () => void; onChanged: () => void; onError: (m: string) => void; onSuccess: (m: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [code, setCode] = useState(c.code);
+  const [name, setName] = useState(c.name);
+  const [busy, setBusy] = useState(false);
+  const fileCount = c._count?.files ?? 0;
+
+  const save = async () => {
+    if (!code.trim() || !name.trim()) { onError("Code dan name wajib diisi"); return; }
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/edoc/category/${c.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: code.trim(), name: name.trim() }) });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) { onError(json.message || "Gagal menyimpan Category"); return; }
+      setEditing(false);
+      onSuccess("Category tersimpan");
+      onChanged();
+    } finally { setBusy(false); }
+  };
+
+  const remove = async () => {
+    if (!window.confirm(`Hapus Category "${c.code} — ${c.name}" beserta Category Type, format nomor, dan watermark-nya?`)) return;
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/edoc/category/${c.id}`, { method: "DELETE" });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) { onError(json.message || "Gagal menghapus Category"); return; }
+      onSuccess("Category dihapus");
+      onChanged();
+    } finally { setBusy(false); }
+  };
+
+  if (editing) {
+    return (
+      <div className="flex items-center gap-2 px-3 py-2 bg-amber-50">
+        <input className={`${inputCls} w-32`} value={code} disabled={fileCount > 0} title={fileCount > 0 ? `Code terkunci — sudah dipakai ${fileCount} file` : undefined} onChange={(e) => setCode(e.target.value)} />
+        <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} />
+        <button title="Simpan" disabled={busy} onClick={save} className="p-1.5 text-emerald-600 hover:text-emerald-700 shrink-0">{busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}</button>
+        <button title="Batal" disabled={busy} onClick={() => { setEditing(false); setCode(c.code); setName(c.name); }} className="p-1.5 text-slate-400 hover:text-slate-600 shrink-0"><X className="w-3.5 h-3.5" /></button>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`flex items-center transition-colors ${isOpen ? "bg-amber-50" : "hover:bg-slate-50"}`}>
+      <button onClick={onToggle} className="flex-1 flex items-center gap-2 px-3 py-2.5 text-left min-w-0">
+        {isOpen ? <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />}
+        <span className={`text-sm ${isOpen ? "text-amber-700 font-medium" : "text-slate-600"}`}>{c.code}</span>
+        <span className="text-xs text-slate-400 truncate">— {c.name}</span>
+        {fileCount > 0 && <span className="text-xs text-slate-400 shrink-0">· {fileCount} file</span>}
+      </button>
+      <button title="Edit Category" disabled={busy} onClick={() => { setCode(c.code); setName(c.name); setEditing(true); }} className="p-1.5 text-slate-400 hover:text-amber-600 shrink-0"><Pencil className="w-3.5 h-3.5" /></button>
+      <button
+        title={fileCount > 0 ? `Tidak bisa dihapus — masih dipakai ${fileCount} file` : "Hapus Category"}
+        disabled={busy || fileCount > 0} onClick={remove}
+        className="p-1.5 mr-2 text-slate-400 hover:text-red-500 disabled:opacity-40 disabled:hover:text-slate-400 shrink-0"
+      >{busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}</button>
+    </div>
+  );
+}
+
+// Satu Category Type: tampil sebagai chip, bisa diedit inline / dihapus (2026-11-12).
+function CategoryTypeChip({ categoryId, type: t, onChanged, onError, onSuccess }: { categoryId: string; type: CategoryType; onChanged: () => void; onError: (m: string) => void; onSuccess: (m: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [code, setCode] = useState(t.code);
+  const [name, setName] = useState(t.name);
+  const [busy, setBusy] = useState(false);
+  const fileCount = t._count?.files ?? 0;
+
+  const save = async () => {
+    if (!code.trim() || !name.trim()) { onError("Code dan name Category Type wajib diisi"); return; }
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/edoc/category/${categoryId}/type/${t.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: code.trim(), name: name.trim() }) });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) { onError(json.message || "Gagal menyimpan Category Type"); return; }
+      setEditing(false);
+      onSuccess("Category Type tersimpan");
+      onChanged();
+    } finally { setBusy(false); }
+  };
+
+  const remove = async () => {
+    if (!window.confirm(`Hapus Category Type "${t.code} — ${t.name}"?`)) return;
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/edoc/category/${categoryId}/type/${t.id}`, { method: "DELETE" });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) { onError(json.message || "Gagal menghapus Category Type"); return; }
+      onSuccess("Category Type dihapus");
+      onChanged();
+    } finally { setBusy(false); }
+  };
+
+  if (editing) {
+    return (
+      <span className="inline-flex items-center gap-1 bg-white border border-amber-300 px-1.5 py-1 rounded">
+        <input className={`${inputCls} w-24 !py-0.5 text-xs`} value={code} disabled={fileCount > 0} title={fileCount > 0 ? `Code terkunci — sudah dipakai ${fileCount} file` : undefined} onChange={(e) => setCode(e.target.value)} />
+        <input className={`${inputCls} w-32 !py-0.5 text-xs`} value={name} onChange={(e) => setName(e.target.value)} />
+        <button title="Simpan" disabled={busy} onClick={save} className="p-0.5 text-emerald-600">{busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}</button>
+        <button title="Batal" disabled={busy} onClick={() => { setEditing(false); setCode(t.code); setName(t.name); }} className="p-0.5 text-slate-400"><X className="w-3 h-3" /></button>
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1 text-xs bg-white border border-slate-200 pl-2 pr-1 py-1 rounded">
+      {t.code} — {t.name}
+      {fileCount > 0 && <span className="text-slate-400">· {fileCount} file</span>}
+      <button title="Edit" disabled={busy} onClick={() => { setCode(t.code); setName(t.name); setEditing(true); }} className="p-0.5 text-slate-400 hover:text-amber-600"><Pencil className="w-3 h-3" /></button>
+      <button
+        title={fileCount > 0 ? `Tidak bisa dihapus — masih dipakai ${fileCount} file` : "Hapus"}
+        disabled={busy || fileCount > 0} onClick={remove}
+        className="p-0.5 text-slate-400 hover:text-red-500 disabled:opacity-40 disabled:hover:text-slate-400"
+      >{busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}</button>
+    </span>
   );
 }
 
@@ -143,7 +257,7 @@ function CategoryTypeEditor({ category, onChanged, onError, onSuccess }: { categ
       <p className="text-xs font-medium text-slate-500 mb-2">Category Type untuk {category.code}</p>
       <div className="flex flex-wrap gap-1.5 mb-2">
         {category.categoryTypes.map((t) => (
-          <span key={t.id} className="text-xs bg-white border border-slate-200 px-2 py-1 rounded">{t.code} — {t.name}</span>
+          <CategoryTypeChip key={t.id} categoryId={category.id} type={t} onChanged={onChanged} onError={onError} onSuccess={onSuccess} />
         ))}
         {category.categoryTypes.length === 0 && <span className="text-xs text-slate-400">Belum ada</span>}
       </div>

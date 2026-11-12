@@ -13,7 +13,11 @@ export async function GET() {
 
     const categories = await db.eDocCategory.findMany({
       where: { deletedAt: null },
-      include: { categoryTypes: true },
+      include: {
+        categoryTypes: { where: { deletedAt: null }, include: { _count: { select: { files: { where: { deletedAt: null } } } } }, orderBy: { code: "asc" } },
+        // Jumlah file aktif — dipakai halaman Pengaturan untuk mengunci edit code / hapus.
+        _count: { select: { files: { where: { deletedAt: null } } } },
+      },
       orderBy: { name: "asc" },
     });
     return NextResponse.json({ data: categories });
