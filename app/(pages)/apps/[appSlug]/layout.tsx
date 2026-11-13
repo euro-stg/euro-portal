@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 
 import { auth } from "@/lib/auth";
+import { signInUrl } from "@/lib/callback-url";
 import { AppShell } from "@/components/ui/app-shell";
 import db from "@/lib/db/db";
 import { isSsdApprover } from "@/lib/ssd";
@@ -15,10 +16,10 @@ export default async function AppLayout({
   params: Promise<{ appSlug: string }>;
 }) {
   const session = await auth();
-  if (!session) redirect("/sign-in");
+  if (!session) redirect(signInUrl((await headers()).get("x-url")));
 
   const userId = session.user?.id;
-  if (!userId) redirect("/sign-in");
+  if (!userId) redirect(signInUrl((await headers()).get("x-url")));
 
   const { appSlug } = await params;
   const appPath = `/apps/${appSlug}`;

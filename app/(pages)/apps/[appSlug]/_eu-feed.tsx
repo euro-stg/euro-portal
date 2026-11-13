@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import Image from "next/image";
-import { Search, ChevronLeft, ChevronRight, MessageCircle, Paperclip, ShieldAlert, RefreshCw, Cake, CalendarDays, Megaphone, ThumbsUp, Heart, PartyPopper, Lightbulb, PenSquare, ImagePlus, X, Loader2, Send, Pencil, Trash2 } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight, MessageCircle, Paperclip, ShieldAlert, RefreshCw, Cake, CalendarDays, Megaphone, ThumbsUp, Heart, PartyPopper, Lightbulb, PenSquare, ImagePlus, X, Loader2, Send, Pencil, Trash2, Eye, Share2, Check } from "lucide-react";
 import { Alert } from "@/components/ui/alert";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
@@ -122,6 +122,115 @@ function ReactionBar({ reactions, myReaction, onReact, postId }: {
   );
 }
 
+// ─── Share / View count / Pembaca (2026-11-13) ────────────────────────────────
+
+/** Link artikel: dibuka tanpa login -> /sign-in?callbackUrl=... lalu kembali ke sini. */
+function postShareUrl(postId: string) {
+  return `${window.location.origin}/apps/euro-update?post=${postId}`;
+}
+
+// HP: menu share bawaan (WhatsApp dll). Desktop: salin link ke clipboard.
+function ShareButton({ post }: { post: { id: string; title: string } }) {
+  const [copied, setCopied] = useState(false);
+  const handleShare = async () => {
+    const url = postShareUrl(post.id);
+    if (navigator.share && window.matchMedia("(pointer: coarse)").matches) {
+      try { await navigator.share({ title: post.title, url }); } catch { /* dibatalkan user */ }
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      window.prompt("Salin link artikel:", url);
+      return;
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  return (
+    <button
+      onClick={() => void handleShare()}
+      className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-blue-600 transition-colors"
+      title="Bagikan link artikel"
+    >
+      {copied ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Share2 className="w-3.5 h-3.5" />}
+      <span className={copied ? "text-green-600" : "hidden sm:inline"}>{copied ? "Link disalin" : "Bagikan"}</span>
+    </button>
+  );
+}
+
+// Jumlah pembaca unik terlihat semua orang; daftar pembacanya hanya untuk pembuat post &
+// superadmin (dicek ulang di GET /api/eu/post/[id]/read).
+function ViewCount({ count, onOpenReaders }: { count: number; onOpenReaders?: () => void }) {
+  const content = (
+    <>
+      <Eye className="w-3.5 h-3.5" />
+      <span>{count}</span>
+      <span className="hidden sm:inline">dilihat</span>
+    </>
+  );
+  return onOpenReaders ? (
+    <button onClick={onOpenReaders} className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-blue-600 transition-colors" title="Lihat siapa saja yang membaca">
+      {content}
+    </button>
+  ) : (
+    <span className="inline-flex items-center gap-1 text-xs text-slate-400" title="Jumlah pembaca">{content}</span>
+  );
+}
+
+type Reader = {
+  id: string; readAt: string;
+  user: { id: string; name: string | null; image: string | null; employeeId: string | null; organizationName: string | null; jobPositionName: string | null };
+};
+
+function ReadersModal({ postId, onClose }: { postId: string; onClose: () => void }) {
+  const [readers, setReaders] = useState<Reader[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch(`/api/eu/post/${postId}/read`)
+      .then(async (r) => {
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.message ?? "Gagal memuat");
+        setReaders(j.data ?? []);
+      })
+      .catch((e: Error) => setError(e.message));
+  }, [postId]);
+
+  return (
+    <Modal open title={readers ? `Dilihat oleh ${readers.length} orang` : "Dilihat oleh"} onClose={onClose} boxClassName="max-w-md">
+      <div className="px-6 py-4">
+        {error ? (
+          <p className="text-sm text-red-600 text-center py-6">{error}</p>
+        ) : !readers ? (
+          <div className="flex items-center justify-center py-10 text-slate-400 gap-2 text-sm">
+            <RefreshCw className="w-4 h-4 animate-spin" /> Memuat...
+          </div>
+        ) : readers.length === 0 ? (
+          <p className="text-sm text-slate-400 text-center py-6">Belum ada yang membaca.</p>
+        ) : (
+          <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+            {readers.map((r) => (
+              <div key={r.id} className="flex items-center gap-2.5">
+                <InitialAvatar name={r.user.name} size="sm" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-slate-800 truncate">{r.user.name ?? "—"}</p>
+                  <p className="text-xs text-slate-400 truncate">
+                    {[r.user.jobPositionName, r.user.organizationName].filter(Boolean).join(" · ") || r.user.employeeId}
+                  </p>
+                </div>
+                <p className="text-xs text-slate-400 flex-shrink-0 text-right">
+                  {new Date(r.readAt).toLocaleString("id-ID", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
 // ─── Lightbox ─────────────────────────────────────────────────────────────────
 
 function LightboxModal({ url, alt, onClose }: { url: string; alt: string; onClose: () => void }) {
@@ -157,10 +266,11 @@ const EuRichTextEditor = dynamic(() => import("./_eu-editor").then((m) => m.EuRi
   loading: () => <div className="h-[262px] rounded-md border border-slate-200 bg-slate-50 animate-pulse" />,
 });
 
-function PostCard({ post, onReact, onOpenModal, me, onEdit, onDelete }: {
+function PostCard({ post, onReact, onOpenModal, onOpenReaders, me, onEdit, onDelete }: {
   post: Post;
   onReact: (postId: string, type: string) => void;
   onOpenModal: (id: string) => void;
+  onOpenReaders: (id: string) => void;
   me: Me | null;
   onEdit: (post: Post) => void;
   onDelete: (post: Post) => void;
@@ -178,9 +288,10 @@ function PostCard({ post, onReact, onOpenModal, me, onEdit, onDelete }: {
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
       <div className="p-4">
-        {/* Author row */}
-        <div className="flex items-start justify-between gap-2 mb-3">
-          <div className="flex items-center gap-2.5">
+        {/* Author row — badge di baris sendiri di mobile supaya tidak berebut lebar dengan
+            nama penulis + tombol Edit/Hapus (creator/superadmin) (2026-11-13). */}
+        <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-2 mb-3">
+          <div className="flex items-center gap-2.5 min-w-0 flex-1">
             {post.author.image ? (
               <div className="w-9 h-9 rounded-full overflow-hidden flex-shrink-0 relative">
                 <Image src={post.author.image} alt={post.author.name ?? ""} fill className="object-cover" unoptimized />
@@ -188,12 +299,12 @@ function PostCard({ post, onReact, onOpenModal, me, onEdit, onDelete }: {
             ) : (
               <InitialAvatar name={post.author.name} />
             )}
-            <div>
-              <p className="text-sm font-semibold text-slate-800 leading-tight">{post.author.name ?? "—"}</p>
-              <p className="text-xs text-slate-400">{post.author.jobPositionName ?? ""} · {timeAgo(post.publishedAt)}</p>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-slate-800 leading-tight truncate">{post.author.name ?? "—"}</p>
+              <p className="text-xs text-slate-400 truncate">{post.author.jobPositionName ?? ""} · {timeAgo(post.publishedAt)}</p>
             </div>
           </div>
-          <div className="flex items-center gap-1.5 flex-shrink-0">
+          <div className="flex flex-wrap items-center gap-1.5 order-last w-full sm:order-none sm:w-auto">
             {post.isMandatory && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-50 text-red-600 text-xs font-medium border border-red-200">
                 <ShieldAlert className="w-3 h-3" /> Wajib
@@ -205,6 +316,8 @@ function PostCard({ post, onReact, onOpenModal, me, onEdit, onDelete }: {
             >
               {post.category.icon} {post.category.name}
             </span>
+          </div>
+          <div className="flex items-center gap-1 flex-shrink-0">
             {canManage && (
               <>
                 <button
@@ -293,16 +406,20 @@ function PostCard({ post, onReact, onOpenModal, me, onEdit, onDelete }: {
 
       {lightbox && <LightboxModal url={lightbox.url} alt={lightbox.alt} onClose={() => setLightbox(null)} />}
 
-      <div className="px-4 py-2.5 border-t border-slate-100 flex items-center justify-between gap-3">
+      <div className="px-4 py-2.5 border-t border-slate-100 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
         <ReactionBar reactions={post.reactions} myReaction={post.myReaction ?? null} onReact={onReact} postId={post.id} />
-        <button
-          className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-blue-600 transition-colors"
-          onClick={() => onOpenModal(post.id)}
-        >
-          <MessageCircle className="w-3.5 h-3.5" />
-          {post.commentCount > 0 && <span>{post.commentCount}</span>}
-          <span>Komentar</span>
-        </button>
+        <div className="flex items-center gap-3 ml-auto">
+          <ViewCount count={post._count.readLogs} onOpenReaders={canManage ? () => onOpenReaders(post.id) : undefined} />
+          <button
+            className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-blue-600 transition-colors"
+            onClick={() => onOpenModal(post.id)}
+          >
+            <MessageCircle className="w-3.5 h-3.5" />
+            {post.commentCount > 0 && <span>{post.commentCount}</span>}
+            <span className="hidden sm:inline">Komentar</span>
+          </button>
+          <ShareButton post={post} />
+        </div>
       </div>
     </div>
   );
@@ -1045,13 +1162,15 @@ function PostDetailModal({
   postId,
   onClose,
   onReacted,
-  currentUserId,
+  me,
 }: {
   postId: string;
   onClose: () => void;
   onReacted: (postId: string, type: string) => void;
-  currentUserId?: string;
+  me: Me | null;
 }) {
+  const currentUserId = me?.userId;
+  const [readersOpen, setReadersOpen] = useState(false);
   const [post, setPost]         = useState<DetailPost | null>(null);
   const [loading, setLoading]   = useState(true);
   const [comment, setComment]   = useState("");
@@ -1068,8 +1187,8 @@ function PostDetailModal({
   }, [postId]);
 
   useEffect(() => {
-    fetchPost();
-    fetch(`/api/eu/post/${postId}/read`, { method: "POST" }).catch(() => {});
+    // Catat baca DULU, baru ambil post — supaya jumlah "dilihat" sudah termasuk view ini.
+    fetch(`/api/eu/post/${postId}/read`, { method: "POST" }).catch(() => {}).finally(fetchPost);
   }, [postId, fetchPost]);
 
   const handleReact = async (type: string) => {
@@ -1150,21 +1269,9 @@ function PostDetailModal({
             <div className="flex items-center justify-center py-16 text-slate-400 text-sm">Gagal memuat post.</div>
           ) : (
             <>
-              {/* Content */}
-              <div className="px-5 py-4">
-                <h2 className="text-lg font-bold text-slate-800 mb-2">{post.title}</h2>
-                {post.isMandatory && (
-                  <div className="flex items-center gap-2 mb-3">
-                    {post.isMandatory && <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-50 text-red-600 text-xs font-medium border border-red-200"><ShieldAlert className="w-3 h-3" /> Wajib Dibaca</span>}
-                  </div>
-                )}
-                {/* Konten sudah disanitasi server (GET /api/eu/post/[id]); teks lama di-escape oleh contentToHtml. */}
-                <div className="eu-content text-sm text-slate-600 leading-relaxed" dangerouslySetInnerHTML={{ __html: contentToHtml(post.content) }} />
-              </div>
-
-              {/* Images */}
+              {/* Images — di atas artikel (2026-11-13), seperti thumbnail di kartu feed */}
               {images.length > 0 && (
-                <div className={`px-5 pb-4 grid gap-2 ${images.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
+                <div className={`px-5 pt-4 grid gap-2 ${images.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
                   {images.map((img) => (
                     <button
                       key={img.id}
@@ -1176,6 +1283,18 @@ function PostDetailModal({
                   ))}
                 </div>
               )}
+
+              {/* Content */}
+              <div className="px-5 py-4">
+                <h2 className="text-lg font-bold text-slate-800 mb-2">{post.title}</h2>
+                {post.isMandatory && (
+                  <div className="flex items-center gap-2 mb-3">
+                    {post.isMandatory && <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-50 text-red-600 text-xs font-medium border border-red-200"><ShieldAlert className="w-3 h-3" /> Wajib Dibaca</span>}
+                  </div>
+                )}
+                {/* Konten sudah disanitasi server (GET /api/eu/post/[id]); teks lama di-escape oleh contentToHtml. */}
+                <div className="eu-content text-sm text-slate-600 leading-relaxed" dangerouslySetInnerHTML={{ __html: contentToHtml(post.content) }} />
+              </div>
 
               {/* File attachments */}
               {files.length > 0 && (
@@ -1190,9 +1309,16 @@ function PostDetailModal({
                 </div>
               )}
 
-              {/* Reaction bar */}
-              <div className="px-5 pb-3 border-t border-slate-100 pt-3">
+              {/* Reaction bar + jumlah dilihat + share */}
+              <div className="px-5 pb-3 border-t border-slate-100 pt-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
                 <ReactionBar reactions={post.reactions} myReaction={post.myReaction} onReact={(_, type) => void handleReact(type)} postId={post.id} />
+                <div className="flex items-center gap-3 ml-auto">
+                  <ViewCount
+                    count={post._count.readLogs}
+                    onOpenReaders={me && (me.isSuperadmin || post.author.id === me.userId) ? () => setReadersOpen(true) : undefined}
+                  />
+                  <ShareButton post={post} />
+                </div>
               </div>
 
               {/* Who reacted */}
@@ -1289,6 +1415,11 @@ function PostDetailModal({
       </div>
 
       {lightbox && <LightboxModal url={lightbox.url} alt={lightbox.alt} onClose={() => setLightbox(null)} />}
+      {readersOpen && (
+        <div onClick={(e) => e.stopPropagation()}>
+          <ReadersModal postId={postId} onClose={() => setReadersOpen(false)} />
+        </div>
+      )}
     </div>
   );
 }
@@ -1308,6 +1439,7 @@ export function EuFeedPage() {
   const [searchInput, setSearchInput] = useState("");
   const searchTimer                   = useRef<NodeJS.Timeout | null>(null);
   const [birthdayModal, setBirthdayModal] = useState<BirthdayUser | null>(null);
+  const [readersPostId, setReadersPostId] = useState<string | null>(null);
   const [createOpen, setCreateOpen]       = useState(false);
   const [editPost, setEditPost]           = useState<Post | null>(null);
   const [me, setMe]                       = useState<Me | null>(null);
@@ -1440,6 +1572,7 @@ export function EuFeedPage() {
                   post={post}
                   onReact={(id, type) => void handleReact(id, type)}
                   onOpenModal={handleOpenModal}
+                  onOpenReaders={setReadersPostId}
                   me={me}
                   onEdit={setEditPost}
                   onDelete={(p) => void handleDelete(p)}
@@ -1481,9 +1614,11 @@ export function EuFeedPage() {
           postId={selectedPostId}
           onClose={handleCloseModal}
           onReacted={() => void fetchPosts(page, activeCategory, search)}
-          currentUserId={me?.userId}
+          me={me}
         />
       )}
+
+      {readersPostId && <ReadersModal postId={readersPostId} onClose={() => setReadersPostId(null)} />}
 
       {createOpen && (
         <CreatePostModal

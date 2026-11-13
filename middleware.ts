@@ -15,6 +15,8 @@ export function middleware(req: NextRequest) {
   // Inject pathname ke request headers agar bisa dibaca server components (layout)
   const requestHeaders = new Headers(req.headers);
   requestHeaders.set("x-pathname", pathname);
+  // Path + query lengkap — dipakai layout untuk redirect ke /sign-in?callbackUrl= (app/lib/callback-url.ts)
+  requestHeaders.set("x-url", pathname + req.nextUrl.search);
 
   // REPLICA: blokir semua write non-eksternal
   if ((process.env.ENV_MODE ?? "PRODUCTION") === "REPLICA") {

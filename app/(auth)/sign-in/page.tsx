@@ -9,6 +9,7 @@ import Image from "next/image";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
+import { safeCallbackUrl } from "@/lib/callback-url";
 
 export default function SignInPage() {
   const router = useRouter();
@@ -42,7 +43,9 @@ export default function SignInPage() {
       return;
     }
 
-    showAlert("success", "Login berhasil, mengalihkan...", () => { router.push("/"); });
+    // Kembali ke halaman asal (mis. share link artikel) kalau datang dari redirect layout.
+    const target = safeCallbackUrl(new URLSearchParams(window.location.search).get("callbackUrl"));
+    showAlert("success", "Login berhasil, mengalihkan...", () => { router.push(target); });
   }
 
   return (
