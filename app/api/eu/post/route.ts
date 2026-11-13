@@ -5,7 +5,7 @@ import { requireSession, unauthorized } from "@/lib/api-auth";
 import { getEuPostPermission } from "@/lib/eu-permission";
 import { sendEuPostNotification, parseEuNotifyInput } from "@/lib/eu-notify";
 import { sanitizeEuContent } from "@/lib/eu-sanitize";
-import { contentToText } from "@/lib/eu-content";
+import { contentToText, parseYoutubeInput } from "@/lib/eu-content";
 
 const PAGE_SIZE = 10;
 
@@ -112,6 +112,8 @@ export async function POST(request: Request) {
     if (!categoryId)        return NextResponse.json({ message: "Kategori wajib dipilih" }, { status: 400 });
     const notify = parseEuNotifyInput(body as Record<string, unknown>);
     if (notify.error) return NextResponse.json({ message: notify.error }, { status: 400 });
+    const youtube = parseYoutubeInput((body as Record<string, unknown>).youtubeUrl);
+    if (youtube.error) return NextResponse.json({ message: youtube.error }, { status: 400 });
 
     const post = await db.euPost.create({
       data: {
@@ -124,6 +126,7 @@ export async function POST(request: Request) {
         targetOrgIds:      targetOrgIds ?? [],
         targetPositionIds: targetPositionIds ?? [],
         publishedAt: publishNow ? new Date() : null,
+        youtubeVideoId: youtube.value ?? null,
         ...notify.data,
         attachments: attachments?.length
           ? { create: attachments.map((a, i) => ({ name: a.name, url: a.url, mimeType: a.mimeType, size: a.size, order: a.order ?? i })) }

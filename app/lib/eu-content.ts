@@ -36,3 +36,41 @@ export function contentToHtml(content: string): string {
     .map((para) => `<p>${escapeHtml(para).replace(/\n/g, "<br>")}</p>`)
     .join("");
 }
+
+// ─── Video YouTube (2026-11-13) ──────────────────────────────────────────────
+
+const YOUTUBE_ID = /^[A-Za-z0-9_-]{11}$/;
+
+/** ID video dari link YouTube (watch, youtu.be, shorts, live, embed) — null kalau bukan link
+ * YouTube yang valid. Yang disimpan & dirender hanya ID ini, jadi URL mentah dari user tidak
+ * pernah masuk ke src iframe. */
+export function parseYoutubeId(raw: string): string | null {
+  const s = raw.trim();
+  if (!s) return null;
+  let u: URL;
+  try {
+    u = new URL(/^https?:\/\//i.test(s) ? s : `https://${s}`);
+  } catch {
+    return null;
+  }
+  const host = u.hostname.toLowerCase().replace(/^(www\.|m\.|music\.)/, "");
+  let id: string | null = null;
+  if (host === "youtu.be") id = u.pathname.split("/")[1] ?? null;
+  else if (host === "youtube.com" || host === "youtube-nocookie.com") {
+    if (u.pathname === "/watch") id = u.searchParams.get("v");
+    else id = u.pathname.match(/^\/(?:shorts|live|embed|v)\/([^/]+)/)?.[1] ?? null;
+  }
+  return id && YOUTUBE_ID.test(id) ? id : null;
+}
+
+/** Link tampilan untuk form edit. */
+export const youtubeWatchUrl = (id: string) => `https://www.youtube.com/watch?v=${id}`;
+
+/** Input `youtubeUrl` dari body API: undefined = tidak diubah, "" = hapus video. */
+export function parseYoutubeInput(raw: unknown): { value?: string | null; error?: string } {
+  if (raw === undefined) return {};
+  const s = typeof raw === "string" ? raw.trim() : "";
+  if (!s) return { value: null };
+  const id = parseYoutubeId(s);
+  return id ? { value: id } : { error: "Link YouTube tidak valid" };
+}

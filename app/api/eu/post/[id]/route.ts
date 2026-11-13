@@ -6,7 +6,7 @@ import { getEuPostPermission } from "@/lib/eu-permission";
 import { deleteFromNextcloud } from "@/lib/nextcloud";
 import { sendEuPostNotification, parseEuNotifyInput } from "@/lib/eu-notify";
 import { sanitizeEuContent } from "@/lib/eu-sanitize";
-import { contentToText } from "@/lib/eu-content";
+import { contentToText, parseYoutubeInput } from "@/lib/eu-content";
 
 // Attachment.url disimpan sebagai "/api/eu/file?path=<path-nextcloud-ter-encode>" (lihat
 // _eu-feed.tsx saat upload) — untuk hapus fisiknya perlu diekstrak dulu query param `path`.
@@ -111,6 +111,8 @@ export async function PATCH(
     if (cleanContent !== undefined && !contentToText(cleanContent).trim())
       return NextResponse.json({ message: "Konten wajib diisi" }, { status: 400 });
     const notifyData = post.notifiedAt ? {} : notify.data;
+    const youtube = parseYoutubeInput((body as Record<string, unknown>).youtubeUrl);
+    if (youtube.error) return NextResponse.json({ message: youtube.error }, { status: 400 });
 
     type AttachmentInput = { name: string; url: string; mimeType?: string; size?: number; order?: number };
     const attachmentList = Array.isArray(attachments) ? (attachments as AttachmentInput[]) : null;
@@ -148,6 +150,7 @@ export async function PATCH(
           ...(targetPositionIds !== undefined ? { targetPositionIds: targetPositionIds as string[] } : {}),
           ...(publishNow ? { publishedAt: new Date() } : {}),
           ...(unpublish  ? { publishedAt: null }        : {}),
+          ...(youtube.value !== undefined ? { youtubeVideoId: youtube.value } : {}),
           ...notifyData,
         },
       });

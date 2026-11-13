@@ -7,7 +7,7 @@ import { Alert } from "@/components/ui/alert";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import dynamic from "next/dynamic";
-import { contentToText, contentToHtml } from "@/lib/eu-content";
+import { contentToText, contentToHtml, parseYoutubeId, youtubeWatchUrl } from "@/lib/eu-content";
 import { BlastEmailCriteriaEditor, type BlastEmailCriteriaValue, type Reference as EdocReference } from "./_edoc-app";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -19,6 +19,7 @@ type Attachment = { id: string; name: string; url: string; mimeType: string | nu
 type Post = {
   id: string; title: string; content: string;
   isPinned: boolean; isMandatory: boolean; publishedAt: string;
+  youtubeVideoId?: string | null;
   notifyInApp?: boolean; notifyEmail?: boolean;
   notifyBranchIds?: string[]; notifyOrgIds?: string[]; notifyPositionIds?: string[]; notifyBusinessUnitCodes?: string[];
   notifiedAt?: string | null; notifiedCount?: number | null;
@@ -438,7 +439,7 @@ function CreatePostModal({ categories, onClose, onCreated }: {
 }) {
   const [form, setForm] = useState({
     title: "", content: "", categoryId: "",
-    isMandatory: false, publishNow: true,
+    isMandatory: false, publishNow: true, youtubeUrl: "",
   });
   const [notify, setNotify] = useState<EuNotifyValue>(EMPTY_NOTIFY);
   const [attachments, setAttachments] = useState<UploadItem[]>([]);
@@ -488,6 +489,7 @@ function CreatePostModal({ categories, onClose, onCreated }: {
     if (!form.title.trim()) { setError("Judul wajib diisi"); return; }
     if (!form.content.trim()) { setError("Konten wajib diisi"); return; }
     if (!form.categoryId) { setError("Kategori wajib dipilih"); return; }
+    if (form.youtubeUrl.trim() && !parseYoutubeId(form.youtubeUrl)) { setError("Link YouTube tidak valid"); return; }
     if (hasUploading) { setError("Tunggu upload selesai"); return; }
     setSaving(true); setError(null);
     try {
@@ -540,6 +542,17 @@ function CreatePostModal({ categories, onClose, onCreated }: {
             value={form.content}
             onChange={(html) => setForm((p) => ({ ...p, content: html }))}
           />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Link YouTube</label>
+          <input
+            className={inputCls}
+            placeholder="https://www.youtube.com/watch?v=... (opsional)"
+            value={form.youtubeUrl}
+            onChange={(e) => setForm((p) => ({ ...p, youtubeUrl: e.target.value }))}
+          />
+          <p className="text-xs text-slate-400">Video tampil di bawah artikel saat detail dibuka.</p>
         </div>
 
         {/* Lampiran */}
@@ -644,6 +657,7 @@ function EditPostModal({ post, categories, onClose, onSaved }: {
     content:     post.content,
     categoryId:  post.category.id,
     isMandatory: post.isMandatory,
+    youtubeUrl:  post.youtubeVideoId ? youtubeWatchUrl(post.youtubeVideoId) : "",
   });
   const [notify, setNotify] = useState<EuNotifyValue>(() => ({
     notifyInApp: !!post.notifyInApp, notifyEmail: !!post.notifyEmail,
@@ -705,6 +719,7 @@ function EditPostModal({ post, categories, onClose, onSaved }: {
     if (!form.title.trim())   { setError("Judul wajib diisi"); return; }
     if (!form.content.trim()) { setError("Konten wajib diisi"); return; }
     if (!form.categoryId)     { setError("Kategori wajib dipilih"); return; }
+    if (form.youtubeUrl.trim() && !parseYoutubeId(form.youtubeUrl)) { setError("Link YouTube tidak valid"); return; }
     if (hasUploading)         { setError("Tunggu upload selesai"); return; }
     setSaving(true); setError(null);
     try {
@@ -756,6 +771,17 @@ function EditPostModal({ post, categories, onClose, onSaved }: {
             value={form.content}
             onChange={(html) => setForm((p) => ({ ...p, content: html }))}
           />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Link YouTube</label>
+          <input
+            className={inputCls}
+            placeholder="https://www.youtube.com/watch?v=... (opsional)"
+            value={form.youtubeUrl}
+            onChange={(e) => setForm((p) => ({ ...p, youtubeUrl: e.target.value }))}
+          />
+          <p className="text-xs text-slate-400">Video tampil di bawah artikel saat detail dibuka.</p>
         </div>
 
         {/* Lampiran */}
@@ -1295,6 +1321,23 @@ function PostDetailModal({
                 {/* Konten sudah disanitasi server (GET /api/eu/post/[id]); teks lama di-escape oleh contentToHtml. */}
                 <div className="eu-content text-sm text-slate-600 leading-relaxed" dangerouslySetInnerHTML={{ __html: contentToHtml(post.content) }} />
               </div>
+
+              {/* Video YouTube — hanya di detail, tidak di kartu feed. src dibangun dari ID yang
+                  sudah divalidasi (parseYoutubeId), bukan URL mentah dari user. */}
+              {post.youtubeVideoId && (
+                <div className="px-5 pb-4">
+                  <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-black">
+                    <iframe
+                      src={`https://www.youtube-nocookie.com/embed/${post.youtubeVideoId}?rel=0`}
+                      title={post.title}
+                      className="absolute inset-0 w-full h-full"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
+                      referrerPolicy="strict-origin-when-cross-origin"
+                      allowFullScreen
+                    />
+                  </div>
+                </div>
+              )}
 
               {/* File attachments */}
               {files.length > 0 && (
