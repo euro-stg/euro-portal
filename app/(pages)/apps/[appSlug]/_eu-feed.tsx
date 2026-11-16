@@ -217,11 +217,10 @@ function PostCard({ post, onReact, onOpenModal, onOpenReaders, onShowReactors, m
   onEdit: (post: Post) => void;
   onDelete: (post: Post) => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
   const [lightbox, setLightbox] = useState<{ url: string; alt: string } | null>(null);
   const images = post.attachments.filter((a) => isImage(a.mimeType));
   const files  = post.attachments.filter((a) => !isImage(a.mimeType));
-  // Potongan = teks polos (tanpa format); "Baca selengkapnya" menampilkan konten berformat.
+  // Potongan = teks polos (tanpa format); "Baca selengkapnya" membuka modal detail (2026-11-16).
   const plainContent = contentToText(post.content);
   const isLong = plainContent.length > CONTENT_PREVIEW_LEN;
   // Sama dengan server: hanya pembuat post atau superadmin yang bisa edit/hapus.
@@ -281,15 +280,15 @@ function PostCard({ post, onReact, onOpenModal, onOpenReaders, onShowReactors, m
         <div className="flex flex-col-reverse sm:flex-row gap-3">
           <div className="flex-1 min-w-0">
             <h3 className="text-base font-bold text-slate-800 mb-1 leading-snug">{post.title}</h3>
-            {isLong && !expanded
+            {isLong
               ? <p className="text-sm text-slate-500 leading-relaxed whitespace-pre-line">{plainContent.slice(0, CONTENT_PREVIEW_LEN) + "…"}</p>
               : <div className="eu-content text-sm text-slate-500 leading-relaxed" dangerouslySetInnerHTML={{ __html: contentToHtml(post.content) }} />}
             {isLong && (
               <button
-                onClick={() => setExpanded((v) => !v)}
+                onClick={() => onOpenModal(post.id)}
                 className="mt-1 text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors"
               >
-                {expanded ? "Tutup" : "Baca selengkapnya"}
+                Baca selengkapnya
               </button>
             )}
           </div>
@@ -495,7 +494,10 @@ function CreatePostModal({ categories, onClose, onCreated }: {
         {/* Lampiran */}
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between">
-            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Lampiran</label>
+            <div>
+              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Lampiran</label>
+              <p className="text-[11px] text-slate-400 mt-0.5">Gambar pertama jadi thumbnail slider — disarankan 1280×720 px (16:9)</p>
+            </div>
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
@@ -724,7 +726,10 @@ function EditPostModal({ post, categories, onClose, onSaved }: {
         {/* Lampiran */}
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between">
-            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Lampiran</label>
+            <div>
+              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Lampiran</label>
+              <p className="text-[11px] text-slate-400 mt-0.5">Gambar pertama jadi thumbnail slider — disarankan 1280×720 px (16:9)</p>
+            </div>
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
@@ -975,42 +980,52 @@ function HeroSlider({ posts, onClickPost }: { posts: Post[]; onClickPost: (id: s
   const thumb = post.attachments.find((a) => isImage(a.mimeType));
   const bgColor = post.category.color ?? "#1e40af";
 
+  // 16:9 (ukuran thumbnail standar, sama di semua layar). Gambar tampil UTUH di tengah dengan
+  // latar versi blur-nya sendiri (tidak terpotong, tidak ada pita kosong); judul di strip di
+  // bawah gambar supaya tidak menutupi gambar (2026-11-16).
+  const prev = (e: React.MouseEvent) => { e.stopPropagation(); setCurrent((c) => (c - 1 + posts.length) % posts.length); resetTimer(); };
+  const next = (e: React.MouseEvent) => { e.stopPropagation(); setCurrent((c) => (c + 1) % posts.length); resetTimer(); };
   return (
-    <div className="relative rounded-xl overflow-hidden aspect-[4/3] sm:aspect-[16/6] cursor-pointer mb-4" onClick={() => onClickPost(post.id)}>
-      {thumb ? (
-        <Image src={thumb.url} alt={post.title} fill className="object-cover" unoptimized priority />
-      ) : (
-        <div className="absolute inset-0" style={{ background: `linear-gradient(135deg, ${bgColor}cc, ${bgColor}55)` }} />
-      )}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent" />
-      <div className="absolute inset-0 flex flex-col justify-end p-5">
-        <div className="mb-2">
-          <span
-            className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold text-white/90 border border-white/30 backdrop-blur-sm"
-            style={{ backgroundColor: `${bgColor}80` }}
-          >
-            {post.category.icon} {post.category.name}
-          </span>
-        </div>
-        <h2 className="text-white text-xl font-bold drop-shadow line-clamp-2 leading-snug">{post.title}</h2>
-        <p className="text-white/75 text-sm mt-1 line-clamp-2 leading-relaxed">{contentToText(post.content)}</p>
-        <p className="text-white/50 text-xs mt-2">{post.author.name ?? ""}</p>
+    <div className="rounded-xl overflow-hidden border border-slate-200 bg-white shadow-sm cursor-pointer mb-4" onClick={() => onClickPost(post.id)}>
+      {/* Latar terang: gambar PNG transparan (mis. logo bertulisan gelap) tetap terbaca. */}
+      <div className="relative aspect-video bg-slate-100 overflow-hidden">
+        {thumb ? (
+          <>
+            <Image src={thumb.url} alt="" fill className="object-cover scale-110 blur-2xl opacity-40" unoptimized aria-hidden />
+            <Image src={thumb.url} alt={post.title} fill className="object-contain" unoptimized priority />
+          </>
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center" style={{ background: `linear-gradient(135deg, ${bgColor}, ${bgColor}99)` }}>
+            <span className="text-6xl sm:text-7xl drop-shadow">{post.category.icon ?? "📢"}</span>
+          </div>
+        )}
+        {posts.length > 1 && (
+          <>
+            <button onClick={prev} className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 text-white rounded-full p-1 transition-colors" title="Sebelumnya">
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <button onClick={next} className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 text-white rounded-full p-1 transition-colors" title="Berikutnya">
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          </>
+        )}
       </div>
-      {posts.length > 1 && (
-        <>
-          <button onClick={(e) => { e.stopPropagation(); setCurrent((c) => (c - 1 + posts.length) % posts.length); resetTimer(); }} className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 text-white rounded-full p-1 transition-colors">
-            <ChevronLeft className="w-5 h-5" />
-          </button>
-          <button onClick={(e) => { e.stopPropagation(); setCurrent((c) => (c + 1) % posts.length); resetTimer(); }} className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 text-white rounded-full p-1 transition-colors">
-            <ChevronRight className="w-5 h-5" />
-          </button>
-          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
+      <div className="px-4 py-3 flex items-center gap-3">
+        <span
+          className="hidden sm:inline-block flex-shrink-0 px-2 py-0.5 rounded-full text-xs font-medium border"
+          style={{ backgroundColor: post.category.color ? `${post.category.color}18` : undefined, color: post.category.color ?? undefined, borderColor: post.category.color ? `${post.category.color}40` : undefined }}
+        >
+          {post.category.icon} {post.category.name}
+        </span>
+        <h2 className="flex-1 min-w-0 text-sm sm:text-base font-semibold text-slate-800 truncate">{post.title}</h2>
+        {posts.length > 1 && (
+          <div className="flex gap-1.5 flex-shrink-0">
             {posts.map((_, i) => (
-              <button key={i} onClick={(e) => { e.stopPropagation(); setCurrent(i); resetTimer(); }} className={`w-1.5 h-1.5 rounded-full transition-colors ${i === current ? "bg-white" : "bg-white/40"}`} />
+              <button key={i} onClick={(e) => { e.stopPropagation(); setCurrent(i); resetTimer(); }} className={`w-1.5 h-1.5 rounded-full transition-colors ${i === safeIndex ? "bg-blue-600" : "bg-slate-300"}`} />
             ))}
           </div>
-        </>
-      )}
+        )}
+      </div>
     </div>
   );
 }
