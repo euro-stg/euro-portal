@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, createContext, useContext } from "react";
 import Image from "next/image";
-import { Search, ChevronLeft, ChevronRight, MessageCircle, Paperclip, ShieldAlert, RefreshCw, Cake, CalendarDays, Megaphone, ThumbsUp, Heart, PartyPopper, Lightbulb, PenSquare, ImagePlus, X, Loader2, Send, Pencil, Trash2, Eye, Share2, Check } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight, MessageCircle, Paperclip, ShieldAlert, RefreshCw, Cake, CalendarDays, Megaphone, ThumbsUp, Heart, PartyPopper, Lightbulb, PenSquare, ImagePlus, X, Loader2, Send, Pencil, Trash2, Eye, Share2, Check, Briefcase, Building2, MapPin, CalendarCheck } from "lucide-react";
 import { Alert } from "@/components/ui/alert";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
@@ -132,6 +132,121 @@ function applyReaction(reactions: Record<string, number>, myReaction: string | n
   if (myReaction === type) return { reactions: next, myReaction: null };
   next[type] = (next[type] ?? 0) + 1;
   return { reactions: next, myReaction: type };
+}
+
+// ─── Kartu profil (2026-11-16) ────────────────────────────────────────────────
+// Foto/nama di artikel, komentar, reaction, pembaca, dan ulang tahun bisa diklik untuk
+// melihat siapa orangnya. Data diambil dari GET /api/eu/user/[id] (field terbatas).
+
+const ProfileCtx = createContext<(userId: string) => void>(() => {});
+
+function ProfileLink({ userId, children, className = "" }: { userId: string; children: React.ReactNode; className?: string }) {
+  const open = useContext(ProfileCtx);
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); open(userId); }}
+      className={`text-left hover:opacity-80 transition-opacity ${className}`}
+      title="Lihat profil"
+    >
+      {children}
+    </button>
+  );
+}
+
+function UserAvatar({ user, size = "md" }: { user: { id: string; name: string | null; image?: string | null }; size?: "sm" | "md" }) {
+  const cls = size === "sm" ? "w-7 h-7" : "w-9 h-9";
+  return (
+    <ProfileLink userId={user.id} className="flex-shrink-0 rounded-full">
+      {user.image ? (
+        <div className={`${cls} rounded-full overflow-hidden relative`}>
+          <Image src={user.image} alt={user.name ?? ""} fill className="object-cover" unoptimized />
+        </div>
+      ) : (
+        <InitialAvatar name={user.name} size={size} />
+      )}
+    </ProfileLink>
+  );
+}
+
+type UserProfile = {
+  id: string; name: string | null; image: string | null;
+  jobPositionName: string | null; organizationName: string | null; branchName: string | null; joinDate: string | null;
+};
+
+function ProfileCardModal({ userId, onClose }: { userId: string; onClose: () => void }) {
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    fetch(`/api/eu/user/${userId}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((j) => setProfile(j.data))
+      .catch(() => setError(true));
+  }, [userId]);
+
+  useEffect(() => {
+    // Escape hanya menutup kartu ini, bukan modal di bawahnya (detail artikel / pembaca).
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopImmediatePropagation(); onClose(); } };
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, [onClose]);
+
+  const joined = profile?.joinDate
+    ? new Date(profile.joinDate).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })
+    : null;
+  const rows = profile ? [
+    { icon: Briefcase, label: "Jabatan", value: profile.jobPositionName },
+    { icon: Building2, label: "Departemen", value: profile.organizationName },
+    { icon: MapPin, label: "Cabang", value: profile.branchName },
+    { icon: CalendarCheck, label: "Bergabung sejak", value: joined },
+  ].filter((r) => r.value) : [];
+
+  // Di HP muncul dari bawah (bottom sheet), di layar lebar di tengah.
+  return (
+    <div className="fixed inset-0 z-[90] bg-black/50 flex items-end sm:items-center justify-center sm:p-4" onClick={(e) => { e.stopPropagation(); onClose(); }}>
+      <div className="bg-white w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className="relative h-20 bg-gradient-to-br from-blue-500 to-indigo-600">
+          <button onClick={onClose} className="absolute top-3 right-3 text-white/80 hover:text-white transition-colors" title="Tutup">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        {error ? (
+          <p className="px-6 py-10 text-sm text-slate-400 text-center">Profil tidak dapat dimuat.</p>
+        ) : !profile ? (
+          <div className="flex items-center justify-center py-12 text-slate-400 gap-2 text-sm">
+            <RefreshCw className="w-4 h-4 animate-spin" /> Memuat...
+          </div>
+        ) : (
+          <div className="px-6 pb-6 -mt-12 flex flex-col items-center text-center">
+            <div className="w-24 h-24 rounded-full border-4 border-white shadow-md overflow-hidden relative bg-white">
+              {profile.image ? (
+                <Image src={profile.image} alt={profile.name ?? ""} fill className="object-cover" unoptimized />
+              ) : (
+                <div className="w-full h-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-3xl font-semibold">
+                  {(profile.name ?? "?").split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase()}
+                </div>
+              )}
+            </div>
+            <p className="mt-3 text-lg font-bold text-slate-800">{profile.name ?? "—"}</p>
+            {rows.length > 0 && (
+              <div className="mt-5 w-full space-y-2.5 text-left">
+                {rows.map(({ icon: Icon, label, value }) => (
+                  <div key={label} className="flex items-start gap-3 px-3 py-2.5 rounded-xl bg-slate-50">
+                    <Icon className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">{label}</p>
+                      <p className="text-sm text-slate-700 break-words">{value}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 // ─── Emoji komentar (2026-11-16) ──────────────────────────────────────────────
@@ -283,9 +398,11 @@ function ReadersModal({ postId, onClose }: { postId: string; onClose: () => void
           <div className="space-y-3 max-h-[60vh] overflow-y-auto">
             {readers.map((r) => (
               <div key={r.id} className="flex items-center gap-2.5">
-                <InitialAvatar name={r.user.name} size="sm" />
+                <UserAvatar user={r.user} size="sm" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-slate-800 truncate">{r.user.name ?? "—"}</p>
+                  <ProfileLink userId={r.user.id} className="block max-w-full">
+                    <p className="text-sm font-medium text-slate-800 truncate hover:underline">{r.user.name ?? "—"}</p>
+                  </ProfileLink>
                   <p className="text-xs text-slate-400 truncate">
                     {[r.user.jobPositionName, r.user.organizationName].filter(Boolean).join(" · ") || r.user.employeeId}
                   </p>
@@ -363,15 +480,11 @@ function PostCard({ post, onReact, onOpenModal, onOpenReaders, me, onEdit, onDel
             nama penulis + tombol Edit/Hapus (creator/superadmin) (2026-11-13). */}
         <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-2 mb-3">
           <div className="flex items-center gap-2.5 min-w-0 flex-1">
-            {post.author.image ? (
-              <div className="w-9 h-9 rounded-full overflow-hidden flex-shrink-0 relative">
-                <Image src={post.author.image} alt={post.author.name ?? ""} fill className="object-cover" unoptimized />
-              </div>
-            ) : (
-              <InitialAvatar name={post.author.name} />
-            )}
+            <UserAvatar user={post.author} />
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-slate-800 leading-tight truncate">{post.author.name ?? "—"}</p>
+              <ProfileLink userId={post.author.id} className="block max-w-full">
+                <p className="text-sm font-semibold text-slate-800 leading-tight truncate hover:underline">{post.author.name ?? "—"}</p>
+              </ProfileLink>
               <p className="text-xs text-slate-400 truncate">{post.author.jobPositionName ?? ""} · {timeAgo(post.publishedAt)}</p>
             </div>
           </div>
@@ -963,24 +1076,22 @@ function BirthdayWidget({ onOpen }: { onOpen: (user: BirthdayUser) => void }) {
       </div>
       <div className="divide-y divide-slate-50">
         {birthdays.map((u) => (
-          <button
+          // div (bukan button) karena berisi tombol avatar -> kartu profil; klik baris = modal ucapan.
+          <div
             key={u.id}
+            role="button"
+            tabIndex={0}
             onClick={() => onOpen(u)}
-            className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors text-left"
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(u); } }}
+            className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors text-left cursor-pointer"
           >
-            {u.image ? (
-              <div className="w-8 h-8 rounded-full overflow-hidden relative flex-shrink-0">
-                <Image src={u.image} alt={u.name ?? ""} fill className="object-cover" unoptimized />
-              </div>
-            ) : (
-              <InitialAvatar name={u.name} size="sm" />
-            )}
+            <UserAvatar user={u} size="sm" />
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-slate-800 truncate">{u.name}</p>
               <p className="text-xs text-slate-400 truncate">{u.jobPositionName ?? u.organizationName ?? ""}</p>
             </div>
             <span className="text-lg">🎂</span>
-          </button>
+          </div>
         ))}
       </div>
     </div>
@@ -1192,13 +1303,11 @@ function BirthdayModal({ user, onClose, currentUserId }: { user: BirthdayUser; o
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
         <div className="p-4 border-b border-slate-100 flex items-center gap-3">
-          {user.image ? (
-            <div className="w-10 h-10 rounded-full overflow-hidden relative flex-shrink-0">
-              <Image src={user.image} alt={user.name ?? ""} fill className="object-cover" unoptimized />
-            </div>
-          ) : <InitialAvatar name={user.name} />}
+          <UserAvatar user={user} />
           <div>
-            <p className="font-semibold text-slate-800">🎂 {user.name}</p>
+            <ProfileLink userId={user.id}>
+              <p className="font-semibold text-slate-800 hover:underline">🎂 {user.name}</p>
+            </ProfileLink>
             <p className="text-xs text-slate-400">{user.jobPositionName ?? ""}</p>
           </div>
           <button onClick={onClose} className="ml-auto text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>
@@ -1214,10 +1323,12 @@ function BirthdayModal({ user, onClose, currentUserId }: { user: BirthdayUser; o
           {data?.comments.length === 0 && <p className="text-sm text-slate-400 text-center py-4">Belum ada ucapan. Jadilah yang pertama! 🎉</p>}
           {data?.comments.map((c) => (
             <div key={c.id} className="flex gap-2.5 group/comment">
-              <InitialAvatar name={c.user.name} size="sm" />
+              <UserAvatar user={c.user} size="sm" />
               <div className="flex-1 bg-slate-50 rounded-xl px-3 py-2">
                 <div className="flex items-center gap-2">
-                  <p className="text-xs font-semibold text-slate-700">{c.user.name}</p>
+                  <ProfileLink userId={c.user.id}>
+                    <p className="text-xs font-semibold text-slate-700 hover:underline">{c.user.name}</p>
+                  </ProfileLink>
                   {currentUserId === c.user.id && (
                     <button
                       onClick={() => void handleDeleteComment(c.id)}
@@ -1339,13 +1450,11 @@ function PostDetailModal({
         <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-3 flex-shrink-0">
           {post && (
             <>
-              {post.author.image ? (
-                <div className="w-9 h-9 rounded-full overflow-hidden relative flex-shrink-0">
-                  <Image src={post.author.image} alt={post.author.name ?? ""} fill className="object-cover" unoptimized />
-                </div>
-              ) : <InitialAvatar name={post?.author.name ?? null} />}
+              <UserAvatar user={post.author} />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-slate-800">{post.author.name ?? "—"}</p>
+                <ProfileLink userId={post.author.id}>
+                  <p className="text-sm font-semibold text-slate-800 hover:underline">{post.author.name ?? "—"}</p>
+                </ProfileLink>
                 <p className="text-xs text-slate-400">{post.author.jobPositionName ?? ""} · {timeAgo(post.publishedAt)}</p>
               </div>
               <span
@@ -1465,9 +1574,11 @@ function PostDetailModal({
                   <div className="space-y-2 max-h-36 overflow-y-auto">
                     {displayedReactors.map((u) => (
                       <div key={u.id} className="flex items-center gap-2.5">
-                        <InitialAvatar name={u.name} size="sm" />
+                        <UserAvatar user={u} size="sm" />
                         <div className="min-w-0">
-                          <p className="text-sm font-medium text-slate-800 truncate">{u.name}</p>
+                          <ProfileLink userId={u.id} className="block max-w-full">
+                            <p className="text-sm font-medium text-slate-800 truncate hover:underline">{u.name}</p>
+                          </ProfileLink>
                           {u.jobPositionName && <p className="text-xs text-slate-400 truncate">{u.jobPositionName}</p>}
                         </div>
                       </div>
@@ -1487,10 +1598,12 @@ function PostDetailModal({
                   <div className="space-y-3">
                     {post.comments.map((c) => (
                       <div key={c.id} className="flex gap-2.5 group/comment">
-                        <InitialAvatar name={c.user.name} size="sm" />
+                        <UserAvatar user={c.user} size="sm" />
                         <div className="flex-1 bg-slate-50 rounded-xl px-3 py-2">
                           <div className="flex items-center gap-2">
-                            <p className="text-xs font-semibold text-slate-700">{c.user.name}</p>
+                            <ProfileLink userId={c.user.id}>
+                              <p className="text-xs font-semibold text-slate-700 hover:underline">{c.user.name}</p>
+                            </ProfileLink>
                             {c.user.jobPositionName && <p className="text-xs text-slate-400">{c.user.jobPositionName}</p>}
                             <p className="text-xs text-slate-300 ml-auto">{timeAgo(c.createdAt)}</p>
                             {currentUserId === c.user.id && (
@@ -1560,6 +1673,7 @@ export function EuFeedPage() {
   const searchTimer                   = useRef<NodeJS.Timeout | null>(null);
   const [birthdayModal, setBirthdayModal] = useState<BirthdayUser | null>(null);
   const [readersPostId, setReadersPostId] = useState<string | null>(null);
+  const [profileUserId, setProfileUserId] = useState<string | null>(null);
   const [createOpen, setCreateOpen]       = useState(false);
   const [editPost, setEditPost]           = useState<Post | null>(null);
   const [me, setMe]                       = useState<Me | null>(null);
@@ -1647,7 +1761,7 @@ export function EuFeedPage() {
   };
 
   return (
-    <>
+    <ProfileCtx.Provider value={setProfileUserId}>
       <div className="flex flex-col lg:flex-row gap-6 max-w-6xl mx-auto w-full">
         {/* ── Main Feed ──────────────────────────────────────────── */}
         <div className="flex-1 min-w-0">
@@ -1760,7 +1874,8 @@ export function EuFeedPage() {
           onCreated={() => { void fetchPosts(page, activeCategory, search); refreshSlider(); }}
         />
       )}
-    </>
+      {profileUserId && <ProfileCardModal userId={profileUserId} onClose={() => setProfileUserId(null)} />}
+    </ProfileCtx.Provider>
   );
 }
 
