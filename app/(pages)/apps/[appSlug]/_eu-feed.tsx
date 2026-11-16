@@ -123,6 +123,76 @@ function ReactionBar({ reactions, myReaction, onReact, postId }: {
   );
 }
 
+/** Hasil klik reaction, sama dengan logika server (POST .../react): klik jenis yang sama =
+ * batal, jenis lain = ganti. Dipakai untuk update langsung tanpa memuat ulang feed — memuat
+ * ulang membuat daftar post sempat kosong ("Memuat...") sehingga halaman lompat ke atas. */
+function applyReaction(reactions: Record<string, number>, myReaction: string | null, type: string) {
+  const next = { ...reactions };
+  if (myReaction) next[myReaction] = Math.max(0, (next[myReaction] ?? 0) - 1);
+  if (myReaction === type) return { reactions: next, myReaction: null };
+  next[type] = (next[type] ?? 0) + 1;
+  return { reactions: next, myReaction: type };
+}
+
+// ─── Emoji komentar (2026-11-16) ──────────────────────────────────────────────
+
+const EMOJIS = [
+  "😀", "😁", "😂", "🤣", "😊", "😍", "🥰", "😘", "😎", "🤩",
+  "🥳", "😇", "🙂", "😉", "🤗", "🤔", "😮", "😢", "😭", "🙏",
+  "👍", "👏", "🙌", "💪", "👌", "🤝", "❤️", "💙", "💯", "🔥",
+  "✨", "🎉", "🎊", "🎂", "🎁", "🎈", "🌹", "☕", "✅", "🚀",
+];
+
+// Tombol 😊 + panel emoji; emoji disisipkan di posisi kursor kotak komentar.
+function EmojiButton({ inputRef, value, onChange }: {
+  inputRef: React.RefObject<HTMLInputElement | null>;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const boxRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => { if (!boxRef.current?.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [open]);
+
+  const insert = (emoji: string) => {
+    const el = inputRef.current;
+    const start = el?.selectionStart ?? value.length;
+    const end = el?.selectionEnd ?? value.length;
+    onChange(value.slice(0, start) + emoji + value.slice(end));
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(start + emoji.length, start + emoji.length);
+    });
+  };
+
+  return (
+    <div ref={boxRef} className="relative flex-shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={`h-full px-2.5 rounded-xl border text-lg leading-none transition-colors ${open ? "bg-blue-50 border-blue-200" : "border-slate-200 hover:bg-slate-50"}`}
+        title="Sisipkan emoji"
+      >
+        😊
+      </button>
+      {open && (
+        <div className="absolute bottom-full right-0 mb-2 z-10 w-64 p-2 bg-white border border-slate-200 rounded-xl shadow-lg grid grid-cols-8 gap-0.5">
+          {EMOJIS.map((e) => (
+            <button key={e} type="button" onClick={() => insert(e)} className="h-8 rounded-lg text-lg hover:bg-slate-100 transition-colors">
+              {e}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Share / View count / Pembaca (2026-11-13) ────────────────────────────────
 
 /** Link artikel: dibuka tanpa login -> /sign-in?callbackUrl=... lalu kembali ke sini. */
@@ -1095,6 +1165,8 @@ function BirthdayModal({ user, onClose, currentUserId }: { user: BirthdayUser; o
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  const commentRef = useRef<HTMLInputElement>(null);
+
   const handleReact = async (type: string) => {
     await fetch("/api/eu/birthday/react", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ birthdayUserId: user.id, type }) });
     fetchData();
@@ -1163,12 +1235,14 @@ function BirthdayModal({ user, onClose, currentUserId }: { user: BirthdayUser; o
 
         <div className="p-4 border-t border-slate-100 flex gap-2">
           <input
-            className="flex-1 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+            ref={commentRef}
+            className="flex-1 min-w-0 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
             placeholder="Tulis ucapan..."
             value={comment}
             onChange={(e) => setComment(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void handleComment(); } }}
           />
+          <EmojiButton inputRef={commentRef} value={comment} onChange={setComment} />
           <button
             onClick={() => void handleComment()}
             disabled={posting || !comment.trim()}
@@ -1218,11 +1292,13 @@ function PostDetailModal({
   }, [postId, fetchPost]);
 
   const handleReact = async (type: string) => {
+    // Update langsung di modal & feed di belakangnya, lalu sinkron (daftar "siapa bereaksi").
+    setPost((p) => (p ? { ...p, ...applyReaction(p.reactions, p.myReaction, type) } : p));
+    onReacted(postId, type);
     await fetch(`/api/eu/post/${postId}/react`, {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type }),
-    });
+    }).catch(() => {});
     fetchPost();
-    onReacted(postId, type);
   };
 
   const handleComment = async () => {
@@ -1441,12 +1517,13 @@ function PostDetailModal({
         <div className="px-5 py-3 border-t border-slate-100 flex gap-2 flex-shrink-0">
           <input
             ref={inputRef}
-            className="flex-1 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 bg-white"
+            className="flex-1 min-w-0 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 bg-white"
             placeholder="Tulis komentar..."
             value={comment}
             onChange={(e) => setComment(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void handleComment(); } }}
           />
+          <EmojiButton inputRef={inputRef} value={comment} onChange={setComment} />
           <button
             onClick={() => void handleComment()}
             disabled={posting || !comment.trim()}
@@ -1532,11 +1609,24 @@ export function EuFeedPage() {
     if (postId) setSelectedPostId(postId);
   }, []);
 
+  // Reaction diubah langsung di post terkait (feed & slider) — TIDAK memuat ulang feed,
+  // supaya posisi scroll tidak lompat ke atas (2026-11-16).
+  const setPostReaction = (postId: string, change: (p: Post) => Pick<Post, "reactions" | "myReaction">) => {
+    const upd = (list: Post[]) => list.map((p) => (p.id === postId ? { ...p, ...change(p) } : p));
+    setPosts(upd);
+    setSliderPosts(upd);
+  };
+  const applyReactionLocal = (postId: string, type: string) =>
+    setPostReaction(postId, (p) => applyReaction(p.reactions, p.myReaction, type));
+
   const handleReact = async (postId: string, type: string) => {
-    await fetch(`/api/eu/post/${postId}/react`, {
+    const before = [...posts, ...sliderPosts].find((p) => p.id === postId);
+    applyReactionLocal(postId, type);
+    const ok = await fetch(`/api/eu/post/${postId}/react`, {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type }),
-    });
-    void fetchPosts(page, activeCategory, search);
+    }).then((r) => r.ok).catch(() => false);
+    // Gagal tersimpan: kembalikan persis ke keadaan sebelum klik.
+    if (!ok && before) setPostReaction(postId, () => ({ reactions: before.reactions, myReaction: before.myReaction }));
   };
 
   const handleDelete = async (post: Post) => {
@@ -1656,7 +1746,7 @@ export function EuFeedPage() {
         <PostDetailModal
           postId={selectedPostId}
           onClose={handleCloseModal}
-          onReacted={() => void fetchPosts(page, activeCategory, search)}
+          onReacted={applyReactionLocal}
           me={me}
         />
       )}
