@@ -92,9 +92,10 @@ function InitialAvatar({ name, size = "md" }: { name: string | null; size?: "sm"
   );
 }
 
-function ReactionBar({ reactions, myReaction, onReact, postId }: {
+function ReactionBar({ reactions, myReaction, onReact, postId, onShowReactors }: {
   reactions: Record<string, number>; myReaction: string | null;
   onReact: (postId: string, type: string) => void; postId: string;
+  onShowReactors?: () => void;
 }) {
   const total = Object.values(reactions).reduce((a, b) => a + b, 0);
   return (
@@ -118,7 +119,13 @@ function ReactionBar({ reactions, myReaction, onReact, postId }: {
           </button>
         );
       })}
-      {total > 0 && <span className="text-xs text-slate-400 ml-1">{total} reaction</span>}
+      {total > 0 && (onShowReactors ? (
+        <button type="button" onClick={onShowReactors} className="text-xs text-slate-500 ml-1 hover:text-blue-600 hover:underline transition-colors" title="Lihat siapa saja yang bereaksi">
+          {total} reaction
+        </button>
+      ) : (
+        <span className="text-xs text-slate-400 ml-1">{total} reaction</span>
+      ))}
     </div>
   );
 }
@@ -177,6 +184,7 @@ type UserProfile = {
 function ProfileCardModal({ userId, onClose }: { userId: string; onClose: () => void }) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [error, setError] = useState(false);
+  const [zoom, setZoom] = useState(false);
 
   useEffect(() => {
     fetch(`/api/eu/user/${userId}`)
@@ -187,10 +195,15 @@ function ProfileCardModal({ userId, onClose }: { userId: string; onClose: () => 
 
   useEffect(() => {
     // Escape hanya menutup kartu ini, bukan modal di bawahnya (detail artikel / pembaca).
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopImmediatePropagation(); onClose(); } };
+    // Kalau foto sedang diperbesar, Escape menutup zoom-nya dulu.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopImmediatePropagation();
+      if (zoom) setZoom(false); else onClose();
+    };
     document.addEventListener("keydown", onKey, true);
     return () => document.removeEventListener("keydown", onKey, true);
-  }, [onClose]);
+  }, [onClose, zoom]);
 
   const joined = profile?.joinDate
     ? new Date(profile.joinDate).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })
@@ -221,7 +234,9 @@ function ProfileCardModal({ userId, onClose }: { userId: string; onClose: () => 
           <div className="px-6 pb-6 -mt-12 flex flex-col items-center text-center">
             <div className="w-24 h-24 rounded-full border-4 border-white shadow-md overflow-hidden relative bg-white">
               {profile.image ? (
-                <Image src={profile.image} alt={profile.name ?? ""} fill className="object-cover" unoptimized />
+                <button type="button" onClick={() => setZoom(true)} className="absolute inset-0 cursor-zoom-in" title="Perbesar foto">
+                  <Image src={profile.image} alt={profile.name ?? ""} fill className="object-cover" unoptimized />
+                </button>
               ) : (
                 <div className="w-full h-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-3xl font-semibold">
                   {(profile.name ?? "?").split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase()}
@@ -245,6 +260,22 @@ function ProfileCardModal({ userId, onClose }: { userId: string; onClose: () => 
           </div>
         )}
       </div>
+
+      {/* Foto diperbesar secukupnya (maks. 480px), bukan layar penuh. */}
+      {zoom && profile?.image && (
+        <div className="fixed inset-0 z-[95] bg-black/80 flex items-center justify-center p-4" onClick={(e) => { e.stopPropagation(); setZoom(false); }}>
+          <button onClick={() => setZoom(false)} className="absolute top-4 right-4 text-white/70 hover:text-white transition-colors" title="Tutup">
+            <X className="w-6 h-6" />
+          </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={profile.image}
+            alt={profile.name ?? ""}
+            className="w-[min(480px,90vw)] max-h-[80vh] object-contain rounded-2xl shadow-2xl bg-white"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -305,6 +336,84 @@ function EmojiButton({ inputRef, value, onChange }: {
         </div>
       )}
     </div>
+  );
+}
+
+// ─── Siapa yang bereaksi (2026-11-16) ─────────────────────────────────────────
+// Dipakai di detail artikel (inline) dan popup dari "N reaction" di kartu feed / ulang tahun.
+
+function ReactorList({ reactions, reactors, maxHeight = "max-h-36" }: {
+  reactions: Record<string, number>; reactors: Record<string, Reactor[]>; maxHeight?: string;
+}) {
+  const [tab, setTab] = useState<string>("all");
+  const all = Object.values(reactors).flat();
+  const shown = tab === "all" ? all : (reactors[tab] ?? []);
+  return (
+    <>
+      <div className="flex gap-1.5 flex-wrap mb-3">
+        <button
+          onClick={() => setTab("all")}
+          className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${tab === "all" ? "bg-slate-800 text-white border-slate-800" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"}`}
+        >
+          Semua ({all.length})
+        </button>
+        {REACTIONS.filter((r) => (reactions[r.type] ?? 0) > 0).map(({ type, label, icon: Icon, color }) => (
+          <button
+            key={type}
+            onClick={() => setTab(type)}
+            className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${tab === type ? "bg-slate-800 text-white border-slate-800" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"}`}
+          >
+            <Icon className={`w-3 h-3 ${tab === type ? "text-white" : color}`} />
+            {label} ({reactions[type]})
+          </button>
+        ))}
+      </div>
+      <div className={`space-y-2 ${maxHeight} overflow-y-auto`}>
+        {shown.map((u) => (
+          <div key={u.id} className="flex items-center gap-2.5">
+            <UserAvatar user={u} size="sm" />
+            <div className="min-w-0">
+              <ProfileLink userId={u.id} className="block max-w-full">
+                <p className="text-sm font-medium text-slate-800 truncate hover:underline">{u.name}</p>
+              </ProfileLink>
+              {u.jobPositionName && <p className="text-xs text-slate-400 truncate">{u.jobPositionName}</p>}
+            </div>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+type ReactorData = { reactions: Record<string, number>; reactors: Record<string, Reactor[]> };
+
+/** Popup daftar yang bereaksi — `data` langsung (ulang tahun) atau dimuat dari post `postId`. */
+function ReactorsModal({ postId, data, onClose }: { postId?: string; data?: ReactorData; onClose: () => void }) {
+  const [loaded, setLoaded] = useState<ReactorData | null>(data ?? null);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    if (data || !postId) return;
+    fetch(`/api/eu/post/${postId}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((j) => setLoaded({ reactions: j.data.reactions, reactors: j.data.reactors }))
+      .catch(() => setError(true));
+  }, [postId, data]);
+
+  return (
+    <Modal open title="Yang bereaksi" onClose={onClose} boxClassName="max-w-md">
+      <div className="px-6 py-4">
+        {error ? (
+          <p className="text-sm text-red-600 text-center py-6">Gagal memuat.</p>
+        ) : !loaded ? (
+          <div className="flex items-center justify-center py-10 text-slate-400 gap-2 text-sm">
+            <RefreshCw className="w-4 h-4 animate-spin" /> Memuat...
+          </div>
+        ) : (
+          <ReactorList reactions={loaded.reactions} reactors={loaded.reactors} maxHeight="max-h-[55vh]" />
+        )}
+      </div>
+    </Modal>
   );
 }
 
@@ -454,8 +563,9 @@ const EuRichTextEditor = dynamic(() => import("./_eu-editor").then((m) => m.EuRi
   loading: () => <div className="h-[262px] rounded-md border border-slate-200 bg-slate-50 animate-pulse" />,
 });
 
-function PostCard({ post, onReact, onOpenModal, onOpenReaders, me, onEdit, onDelete }: {
+function PostCard({ post, onReact, onOpenModal, onOpenReaders, onShowReactors, me, onEdit, onDelete }: {
   post: Post;
+  onShowReactors: (id: string) => void;
   onReact: (postId: string, type: string) => void;
   onOpenModal: (id: string) => void;
   onOpenReaders: (id: string) => void;
@@ -591,7 +701,7 @@ function PostCard({ post, onReact, onOpenModal, onOpenReaders, me, onEdit, onDel
       {lightbox && <LightboxModal url={lightbox.url} alt={lightbox.alt} onClose={() => setLightbox(null)} />}
 
       <div className="px-4 py-2.5 border-t border-slate-100 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-        <ReactionBar reactions={post.reactions} myReaction={post.myReaction ?? null} onReact={onReact} postId={post.id} />
+        <ReactionBar reactions={post.reactions} myReaction={post.myReaction ?? null} onReact={onReact} postId={post.id} onShowReactors={() => onShowReactors(post.id)} />
         <div className="flex items-center gap-3 ml-auto">
           <ViewCount count={post._count.readLogs} onOpenReaders={canManage ? () => onOpenReaders(post.id) : undefined} />
           <button
@@ -1262,7 +1372,8 @@ function HeroSlider({ posts, onClickPost }: { posts: Post[]; onClickPost: (id: s
 // ─── Birthday Modal ───────────────────────────────────────────────────────────
 
 function BirthdayModal({ user, onClose, currentUserId }: { user: BirthdayUser; onClose: () => void; currentUserId?: string }) {
-  const [data, setData] = useState<{ reactions: Record<string, number>; myReaction: string | null; comments: BirthdayComment[] } | null>(null);
+  const [data, setData] = useState<{ reactions: Record<string, number>; reactors?: Record<string, Reactor[]>; myReaction: string | null; comments: BirthdayComment[] } | null>(null);
+  const [showReactors, setShowReactors] = useState(false);
   const [comment, setComment] = useState("");
   const [posting, setPosting] = useState(false);
   const year = new Date().getFullYear();
@@ -1315,7 +1426,7 @@ function BirthdayModal({ user, onClose, currentUserId }: { user: BirthdayUser; o
 
         {data && (
           <div className="px-4 py-3 border-b border-slate-100">
-            <ReactionBar reactions={data.reactions} myReaction={data.myReaction} onReact={(_, type) => void handleReact(type)} postId="" />
+            <ReactionBar reactions={data.reactions} myReaction={data.myReaction} onReact={(_, type) => void handleReact(type)} postId="" onShowReactors={() => setShowReactors(true)} />
           </div>
         )}
 
@@ -1363,6 +1474,11 @@ function BirthdayModal({ user, onClose, currentUserId }: { user: BirthdayUser; o
           </button>
         </div>
       </div>
+      {showReactors && data?.reactors && (
+        <div onClick={(e) => e.stopPropagation()}>
+          <ReactorsModal data={{ reactions: data.reactions, reactors: data.reactors }} onClose={() => setShowReactors(false)} />
+        </div>
+      )}
     </div>
   );
 }
@@ -1386,7 +1502,6 @@ function PostDetailModal({
   const [loading, setLoading]   = useState(true);
   const [comment, setComment]   = useState("");
   const [posting, setPosting]   = useState(false);
-  const [reactorTab, setReactorTab] = useState<string>("all");
   const inputRef = useRef<HTMLInputElement>(null);
 
   const fetchPost = useCallback(() => {
@@ -1433,8 +1548,6 @@ function PostDetailModal({
 
   const [lightbox, setLightbox] = useState<{ url: string; alt: string } | null>(null);
 
-  const allReactors: Reactor[] = post ? Object.values(post.reactors).flat() : [];
-  const displayedReactors = reactorTab === "all" ? allReactors : (post?.reactors[reactorTab] ?? []);
   const totalReactions = post ? Object.values(post.reactions).reduce((a, b) => a + b, 0) : 0;
 
   const images = post?.attachments.filter((a) => isImage(a.mimeType)) ?? [];
@@ -1553,37 +1666,7 @@ function PostDetailModal({
               {totalReactions > 0 && (
                 <div className="px-5 pb-4 border-t border-slate-100 pt-3">
                   <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Siapa yang bereaksi</p>
-                  <div className="flex gap-1.5 flex-wrap mb-3">
-                    <button
-                      onClick={() => setReactorTab("all")}
-                      className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${reactorTab === "all" ? "bg-slate-800 text-white border-slate-800" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"}`}
-                    >
-                      Semua ({allReactors.length})
-                    </button>
-                    {REACTIONS.filter((r) => (post.reactions[r.type] ?? 0) > 0).map(({ type, label, icon: Icon, color }) => (
-                      <button
-                        key={type}
-                        onClick={() => setReactorTab(type)}
-                        className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${reactorTab === type ? "bg-slate-800 text-white border-slate-800" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"}`}
-                      >
-                        <Icon className={`w-3 h-3 ${reactorTab === type ? "text-white" : color}`} />
-                        {label} ({post.reactions[type]})
-                      </button>
-                    ))}
-                  </div>
-                  <div className="space-y-2 max-h-36 overflow-y-auto">
-                    {displayedReactors.map((u) => (
-                      <div key={u.id} className="flex items-center gap-2.5">
-                        <UserAvatar user={u} size="sm" />
-                        <div className="min-w-0">
-                          <ProfileLink userId={u.id} className="block max-w-full">
-                            <p className="text-sm font-medium text-slate-800 truncate hover:underline">{u.name}</p>
-                          </ProfileLink>
-                          {u.jobPositionName && <p className="text-xs text-slate-400 truncate">{u.jobPositionName}</p>}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  <ReactorList reactions={post.reactions} reactors={post.reactors} />
                 </div>
               )}
 
@@ -1674,6 +1757,7 @@ export function EuFeedPage() {
   const [birthdayModal, setBirthdayModal] = useState<BirthdayUser | null>(null);
   const [readersPostId, setReadersPostId] = useState<string | null>(null);
   const [profileUserId, setProfileUserId] = useState<string | null>(null);
+  const [reactorsPostId, setReactorsPostId] = useState<string | null>(null);
   const [createOpen, setCreateOpen]       = useState(false);
   const [editPost, setEditPost]           = useState<Post | null>(null);
   const [me, setMe]                       = useState<Me | null>(null);
@@ -1820,6 +1904,7 @@ export function EuFeedPage() {
                   onReact={(id, type) => void handleReact(id, type)}
                   onOpenModal={handleOpenModal}
                   onOpenReaders={setReadersPostId}
+                  onShowReactors={setReactorsPostId}
                   me={me}
                   onEdit={setEditPost}
                   onDelete={(p) => void handleDelete(p)}
@@ -1866,6 +1951,7 @@ export function EuFeedPage() {
       )}
 
       {readersPostId && <ReadersModal postId={readersPostId} onClose={() => setReadersPostId(null)} />}
+      {reactorsPostId && <ReactorsModal postId={reactorsPostId} onClose={() => setReactorsPostId(null)} />}
 
       {createOpen && (
         <CreatePostModal

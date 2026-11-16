@@ -33,7 +33,16 @@ export async function GET(request: Request) {
     const reactionCounts: Record<string, number> = {};
     for (const r of reactions) reactionCounts[r.type] = r._count._all;
 
-    return NextResponse.json({ data: { comments, reactions: reactionCounts, myReaction: myReaction?.type ?? null } });
+    // Siapa yang bereaksi per jenis (2026-11-16) — "N reaction" di modal ucapan bisa diklik.
+    const reactorList = await db.euReaction.findMany({
+      where: { targetType: "birthday", targetId },
+      include: { user: { select: { id: true, name: true, image: true, jobPositionName: true } } },
+      orderBy: { createdAt: "desc" },
+    });
+    const reactors: Record<string, { id: string; name: string | null; image: string | null; jobPositionName: string | null }[]> = {};
+    for (const r of reactorList) (reactors[r.type] ??= []).push(r.user);
+
+    return NextResponse.json({ data: { comments, reactions: reactionCounts, reactors, myReaction: myReaction?.type ?? null } });
   } catch (err) {
     console.error(err);
     return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
