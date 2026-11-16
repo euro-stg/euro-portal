@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import db from "@/lib/db/db";
 import { unauthorized } from "@/lib/api-auth";
+import { isBirthdayThreadOpen, BIRTHDAY_CLOSED_MESSAGE } from "@/lib/eu-birthday";
 
 const VALID_TYPES = ["like", "appreciate", "congrats", "useful"];
 
@@ -16,6 +17,7 @@ export async function POST(request: Request) {
     if (!VALID_TYPES.includes(type)) return NextResponse.json({ message: "Tipe reaction tidak valid" }, { status: 400 });
 
     const year = new Date().getFullYear();
+    if (!(await isBirthdayThreadOpen(birthdayUserId, year))) return NextResponse.json({ message: BIRTHDAY_CLOSED_MESSAGE }, { status: 403 });
     const targetId = `${birthdayUserId}_${year}`;
 
     const existing = await db.euReaction.findUnique({

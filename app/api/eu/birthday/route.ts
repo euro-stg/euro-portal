@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import db from "@/lib/db/db";
 import { unauthorized } from "@/lib/api-auth";
+import { isBirthdayToday } from "@/lib/eu-birthday";
 
 // Ambil karyawan yang berulang tahun hari ini
 export async function GET() {
@@ -10,8 +11,6 @@ export async function GET() {
     if (!session?.user?.id) return unauthorized();
 
     const now = new Date();
-    const month = now.getMonth() + 1;
-    const day   = now.getDate();
 
     // Query berdasarkan bulan dan tanggal lahir (abaikan tahun)
     const users = await db.user.findMany({
@@ -25,11 +24,7 @@ export async function GET() {
       },
     });
 
-    const birthdays = users.filter((u) => {
-      if (!u.birthDate) return false;
-      const d = new Date(u.birthDate);
-      return d.getMonth() + 1 === month && d.getDate() === day;
-    });
+    const birthdays = users.filter((u) => isBirthdayToday(u.birthDate, now));
 
     // Ambil reaction counts untuk hari ini
     const year = now.getFullYear();

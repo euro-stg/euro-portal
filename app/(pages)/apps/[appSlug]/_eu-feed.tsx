@@ -1,13 +1,18 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback, createContext, useContext } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import Image from "next/image";
-import { Search, ChevronLeft, ChevronRight, MessageCircle, Paperclip, ShieldAlert, RefreshCw, Cake, CalendarDays, Megaphone, ThumbsUp, Heart, PartyPopper, Lightbulb, PenSquare, ImagePlus, X, Loader2, Send, Pencil, Trash2, Eye, Share2, Check, Briefcase, Building2, MapPin, CalendarCheck } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight, MessageCircle, Paperclip, ShieldAlert, RefreshCw, Cake, CalendarDays, Megaphone, PenSquare, ImagePlus, X, Loader2, Send, Pencil, Trash2, Eye, Share2, Check } from "lucide-react";
 import { Alert } from "@/components/ui/alert";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import dynamic from "next/dynamic";
+import { useSearchParams } from "next/navigation";
 import { contentToText, contentToHtml, parseYoutubeId, youtubeWatchUrl } from "@/lib/eu-content";
+import {
+  timeAgo, ReactionBar, applyReaction, ProfileLink, UserAvatar, EmojiButton,
+  ReactorList, ReactorsModal, EuSocialProvider, useEuSocial, type Reactor,
+} from "@/components/eu/eu-social";
 import { BlastEmailCriteriaEditor, type BlastEmailCriteriaValue, type Reference as EdocReference } from "./_edoc-app";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -38,13 +43,6 @@ type BirthdayUser = {
   reactions: Record<string, number>; myReaction: string | null; commentCount: number;
 };
 
-type BirthdayComment = {
-  id: string; content: string; createdAt: string;
-  user: { id: string; name: string | null; image: string | null };
-};
-
-type Reactor = { id: string; name: string | null; image: string | null; jobPositionName: string | null };
-
 type PostComment = {
   id: string; content: string; createdAt: string;
   user: { id: string; name: string | null; image: string | null; jobPositionName: string | null };
@@ -59,362 +57,8 @@ type Me = { canPost: boolean; isSuperadmin: boolean; userId: string };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const REACTIONS = [
-  { type: "like",       label: "Like",       icon: ThumbsUp,     color: "text-blue-500"   },
-  { type: "appreciate", label: "Appreciate", icon: Heart,        color: "text-red-500"    },
-  { type: "congrats",   label: "Congrats",   icon: PartyPopper,  color: "text-amber-500"  },
-  { type: "useful",     label: "Useful",     icon: Lightbulb,    color: "text-green-500"  },
-];
-
-function timeAgo(iso: string) {
-  const diff = Date.now() - new Date(iso).getTime();
-  const m = Math.floor(diff / 60000);
-  if (m < 1)  return "Baru saja";
-  if (m < 60) return `${m} menit lalu`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h} jam lalu`;
-  const d = Math.floor(h / 24);
-  if (d < 7)  return `${d} hari lalu`;
-  return new Date(iso).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" });
-}
-
 function isImage(mimeType: string | null) {
   return mimeType?.startsWith("image/") ?? false;
-}
-
-function InitialAvatar({ name, size = "md" }: { name: string | null; size?: "sm" | "md" }) {
-  const initials = (name ?? "?").split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase();
-  const cls = size === "sm" ? "w-7 h-7 text-xs" : "w-9 h-9 text-sm";
-  return (
-    <div className={`${cls} rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-semibold flex-shrink-0`}>
-      {initials}
-    </div>
-  );
-}
-
-function ReactionBar({ reactions, myReaction, onReact, postId, onShowReactors }: {
-  reactions: Record<string, number>; myReaction: string | null;
-  onReact: (postId: string, type: string) => void; postId: string;
-  onShowReactors?: () => void;
-}) {
-  const total = Object.values(reactions).reduce((a, b) => a + b, 0);
-  return (
-    <div className="flex items-center gap-1 flex-wrap">
-      {REACTIONS.map(({ type, label, icon: Icon, color }) => {
-        const count = reactions[type] ?? 0;
-        const active = myReaction === type;
-        return (
-          <button
-            key={type}
-            onClick={() => onReact(postId, type)}
-            className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border transition-colors ${
-              active
-                ? "bg-blue-50 border-blue-200 text-blue-700"
-                : "bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100"
-            }`}
-          >
-            <Icon className={`w-3 h-3 ${active ? "text-blue-500" : color}`} />
-            {count > 0 && <span>{count}</span>}
-            <span className="hidden sm:inline">{label}</span>
-          </button>
-        );
-      })}
-      {total > 0 && (onShowReactors ? (
-        <button type="button" onClick={onShowReactors} className="text-xs text-slate-500 ml-1 hover:text-blue-600 hover:underline transition-colors" title="Lihat siapa saja yang bereaksi">
-          {total} reaction
-        </button>
-      ) : (
-        <span className="text-xs text-slate-400 ml-1">{total} reaction</span>
-      ))}
-    </div>
-  );
-}
-
-/** Hasil klik reaction, sama dengan logika server (POST .../react): klik jenis yang sama =
- * batal, jenis lain = ganti. Dipakai untuk update langsung tanpa memuat ulang feed — memuat
- * ulang membuat daftar post sempat kosong ("Memuat...") sehingga halaman lompat ke atas. */
-function applyReaction(reactions: Record<string, number>, myReaction: string | null, type: string) {
-  const next = { ...reactions };
-  if (myReaction) next[myReaction] = Math.max(0, (next[myReaction] ?? 0) - 1);
-  if (myReaction === type) return { reactions: next, myReaction: null };
-  next[type] = (next[type] ?? 0) + 1;
-  return { reactions: next, myReaction: type };
-}
-
-// ─── Kartu profil (2026-11-16) ────────────────────────────────────────────────
-// Foto/nama di artikel, komentar, reaction, pembaca, dan ulang tahun bisa diklik untuk
-// melihat siapa orangnya. Data diambil dari GET /api/eu/user/[id] (field terbatas).
-
-const ProfileCtx = createContext<(userId: string) => void>(() => {});
-
-function ProfileLink({ userId, children, className = "" }: { userId: string; children: React.ReactNode; className?: string }) {
-  const open = useContext(ProfileCtx);
-  return (
-    <button
-      type="button"
-      onClick={(e) => { e.stopPropagation(); open(userId); }}
-      className={`text-left hover:opacity-80 transition-opacity ${className}`}
-      title="Lihat profil"
-    >
-      {children}
-    </button>
-  );
-}
-
-function UserAvatar({ user, size = "md" }: { user: { id: string; name: string | null; image?: string | null }; size?: "sm" | "md" }) {
-  const cls = size === "sm" ? "w-7 h-7" : "w-9 h-9";
-  return (
-    <ProfileLink userId={user.id} className="flex-shrink-0 rounded-full">
-      {user.image ? (
-        <div className={`${cls} rounded-full overflow-hidden relative`}>
-          <Image src={user.image} alt={user.name ?? ""} fill className="object-cover" unoptimized />
-        </div>
-      ) : (
-        <InitialAvatar name={user.name} size={size} />
-      )}
-    </ProfileLink>
-  );
-}
-
-type UserProfile = {
-  id: string; name: string | null; image: string | null;
-  jobPositionName: string | null; organizationName: string | null; branchName: string | null; joinDate: string | null;
-};
-
-function ProfileCardModal({ userId, onClose }: { userId: string; onClose: () => void }) {
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [error, setError] = useState(false);
-  const [zoom, setZoom] = useState(false);
-
-  useEffect(() => {
-    fetch(`/api/eu/user/${userId}`)
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((j) => setProfile(j.data))
-      .catch(() => setError(true));
-  }, [userId]);
-
-  useEffect(() => {
-    // Escape hanya menutup kartu ini, bukan modal di bawahnya (detail artikel / pembaca).
-    // Kalau foto sedang diperbesar, Escape menutup zoom-nya dulu.
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      e.stopImmediatePropagation();
-      if (zoom) setZoom(false); else onClose();
-    };
-    document.addEventListener("keydown", onKey, true);
-    return () => document.removeEventListener("keydown", onKey, true);
-  }, [onClose, zoom]);
-
-  const joined = profile?.joinDate
-    ? new Date(profile.joinDate).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })
-    : null;
-  const rows = profile ? [
-    { icon: Briefcase, label: "Jabatan", value: profile.jobPositionName },
-    { icon: Building2, label: "Departemen", value: profile.organizationName },
-    { icon: MapPin, label: "Cabang", value: profile.branchName },
-    { icon: CalendarCheck, label: "Bergabung sejak", value: joined },
-  ].filter((r) => r.value) : [];
-
-  // Di HP muncul dari bawah (bottom sheet), di layar lebar di tengah.
-  return (
-    <div className="fixed inset-0 z-[90] bg-black/50 flex items-end sm:items-center justify-center sm:p-4" onClick={(e) => { e.stopPropagation(); onClose(); }}>
-      <div className="bg-white w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
-        <div className="relative h-20 bg-gradient-to-br from-blue-500 to-indigo-600">
-          <button onClick={onClose} className="absolute top-3 right-3 text-white/80 hover:text-white transition-colors" title="Tutup">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        {error ? (
-          <p className="px-6 py-10 text-sm text-slate-400 text-center">Profil tidak dapat dimuat.</p>
-        ) : !profile ? (
-          <div className="flex items-center justify-center py-12 text-slate-400 gap-2 text-sm">
-            <RefreshCw className="w-4 h-4 animate-spin" /> Memuat...
-          </div>
-        ) : (
-          <div className="px-6 pb-6 -mt-12 flex flex-col items-center text-center">
-            <div className="w-24 h-24 rounded-full border-4 border-white shadow-md overflow-hidden relative bg-white">
-              {profile.image ? (
-                <button type="button" onClick={() => setZoom(true)} className="absolute inset-0 cursor-zoom-in" title="Perbesar foto">
-                  <Image src={profile.image} alt={profile.name ?? ""} fill className="object-cover" unoptimized />
-                </button>
-              ) : (
-                <div className="w-full h-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-3xl font-semibold">
-                  {(profile.name ?? "?").split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase()}
-                </div>
-              )}
-            </div>
-            <p className="mt-3 text-lg font-bold text-slate-800">{profile.name ?? "—"}</p>
-            {rows.length > 0 && (
-              <div className="mt-5 w-full space-y-2.5 text-left">
-                {rows.map(({ icon: Icon, label, value }) => (
-                  <div key={label} className="flex items-start gap-3 px-3 py-2.5 rounded-xl bg-slate-50">
-                    <Icon className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" />
-                    <div className="min-w-0">
-                      <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">{label}</p>
-                      <p className="text-sm text-slate-700 break-words">{value}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Foto diperbesar secukupnya (maks. 480px), bukan layar penuh. */}
-      {zoom && profile?.image && (
-        <div className="fixed inset-0 z-[95] bg-black/80 flex items-center justify-center p-4" onClick={(e) => { e.stopPropagation(); setZoom(false); }}>
-          <button onClick={() => setZoom(false)} className="absolute top-4 right-4 text-white/70 hover:text-white transition-colors" title="Tutup">
-            <X className="w-6 h-6" />
-          </button>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={profile.image}
-            alt={profile.name ?? ""}
-            className="w-[min(480px,90vw)] max-h-[80vh] object-contain rounded-2xl shadow-2xl bg-white"
-            onClick={(e) => e.stopPropagation()}
-          />
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Emoji komentar (2026-11-16) ──────────────────────────────────────────────
-
-const EMOJIS = [
-  "😀", "😁", "😂", "🤣", "😊", "😍", "🥰", "😘", "😎", "🤩",
-  "🥳", "😇", "🙂", "😉", "🤗", "🤔", "😮", "😢", "😭", "🙏",
-  "👍", "👏", "🙌", "💪", "👌", "🤝", "❤️", "💙", "💯", "🔥",
-  "✨", "🎉", "🎊", "🎂", "🎁", "🎈", "🌹", "☕", "✅", "🚀",
-];
-
-// Tombol 😊 + panel emoji; emoji disisipkan di posisi kursor kotak komentar.
-function EmojiButton({ inputRef, value, onChange }: {
-  inputRef: React.RefObject<HTMLInputElement | null>;
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const boxRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const close = (e: MouseEvent) => { if (!boxRef.current?.contains(e.target as Node)) setOpen(false); };
-    document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
-  }, [open]);
-
-  const insert = (emoji: string) => {
-    const el = inputRef.current;
-    const start = el?.selectionStart ?? value.length;
-    const end = el?.selectionEnd ?? value.length;
-    onChange(value.slice(0, start) + emoji + value.slice(end));
-    requestAnimationFrame(() => {
-      el?.focus();
-      el?.setSelectionRange(start + emoji.length, start + emoji.length);
-    });
-  };
-
-  return (
-    <div ref={boxRef} className="relative flex-shrink-0">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className={`h-full px-2.5 rounded-xl border text-lg leading-none transition-colors ${open ? "bg-blue-50 border-blue-200" : "border-slate-200 hover:bg-slate-50"}`}
-        title="Sisipkan emoji"
-      >
-        😊
-      </button>
-      {open && (
-        <div className="absolute bottom-full right-0 mb-2 z-10 w-64 p-2 bg-white border border-slate-200 rounded-xl shadow-lg grid grid-cols-8 gap-0.5">
-          {EMOJIS.map((e) => (
-            <button key={e} type="button" onClick={() => insert(e)} className="h-8 rounded-lg text-lg hover:bg-slate-100 transition-colors">
-              {e}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Siapa yang bereaksi (2026-11-16) ─────────────────────────────────────────
-// Dipakai di detail artikel (inline) dan popup dari "N reaction" di kartu feed / ulang tahun.
-
-function ReactorList({ reactions, reactors, maxHeight = "max-h-36" }: {
-  reactions: Record<string, number>; reactors: Record<string, Reactor[]>; maxHeight?: string;
-}) {
-  const [tab, setTab] = useState<string>("all");
-  const all = Object.values(reactors).flat();
-  const shown = tab === "all" ? all : (reactors[tab] ?? []);
-  return (
-    <>
-      <div className="flex gap-1.5 flex-wrap mb-3">
-        <button
-          onClick={() => setTab("all")}
-          className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${tab === "all" ? "bg-slate-800 text-white border-slate-800" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"}`}
-        >
-          Semua ({all.length})
-        </button>
-        {REACTIONS.filter((r) => (reactions[r.type] ?? 0) > 0).map(({ type, label, icon: Icon, color }) => (
-          <button
-            key={type}
-            onClick={() => setTab(type)}
-            className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${tab === type ? "bg-slate-800 text-white border-slate-800" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"}`}
-          >
-            <Icon className={`w-3 h-3 ${tab === type ? "text-white" : color}`} />
-            {label} ({reactions[type]})
-          </button>
-        ))}
-      </div>
-      <div className={`space-y-2 ${maxHeight} overflow-y-auto`}>
-        {shown.map((u) => (
-          <div key={u.id} className="flex items-center gap-2.5">
-            <UserAvatar user={u} size="sm" />
-            <div className="min-w-0">
-              <ProfileLink userId={u.id} className="block max-w-full">
-                <p className="text-sm font-medium text-slate-800 truncate hover:underline">{u.name}</p>
-              </ProfileLink>
-              {u.jobPositionName && <p className="text-xs text-slate-400 truncate">{u.jobPositionName}</p>}
-            </div>
-          </div>
-        ))}
-      </div>
-    </>
-  );
-}
-
-type ReactorData = { reactions: Record<string, number>; reactors: Record<string, Reactor[]> };
-
-/** Popup daftar yang bereaksi — `data` langsung (ulang tahun) atau dimuat dari post `postId`. */
-function ReactorsModal({ postId, data, onClose }: { postId?: string; data?: ReactorData; onClose: () => void }) {
-  const [loaded, setLoaded] = useState<ReactorData | null>(data ?? null);
-  const [error, setError] = useState(false);
-
-  useEffect(() => {
-    if (data || !postId) return;
-    fetch(`/api/eu/post/${postId}`)
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((j) => setLoaded({ reactions: j.data.reactions, reactors: j.data.reactors }))
-      .catch(() => setError(true));
-  }, [postId, data]);
-
-  return (
-    <Modal open title="Yang bereaksi" onClose={onClose} boxClassName="max-w-md">
-      <div className="px-6 py-4">
-        {error ? (
-          <p className="text-sm text-red-600 text-center py-6">Gagal memuat.</p>
-        ) : !loaded ? (
-          <div className="flex items-center justify-center py-10 text-slate-400 gap-2 text-sm">
-            <RefreshCw className="w-4 h-4 animate-spin" /> Memuat...
-          </div>
-        ) : (
-          <ReactorList reactions={loaded.reactions} reactors={loaded.reactors} maxHeight="max-h-[55vh]" />
-        )}
-      </div>
-    </Modal>
-  );
 }
 
 // ─── Share / View count / Pembaca (2026-11-13) ────────────────────────────────
@@ -1162,7 +806,9 @@ function EditPostModal({ post, categories, onClose, onSaved }: {
 
 // ─── Birthday Widget ──────────────────────────────────────────────────────────
 
-function BirthdayWidget({ onOpen }: { onOpen: (user: BirthdayUser) => void }) {
+function BirthdayWidget() {
+  const { openBirthday } = useEuSocial();
+  const onOpen = (u: BirthdayUser) => openBirthday(u);
   const [birthdays, setBirthdays] = useState<BirthdayUser[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -1364,120 +1010,6 @@ function HeroSlider({ posts, onClickPost }: { posts: Post[]; onClickPost: (id: s
             ))}
           </div>
         </>
-      )}
-    </div>
-  );
-}
-
-// ─── Birthday Modal ───────────────────────────────────────────────────────────
-
-function BirthdayModal({ user, onClose, currentUserId }: { user: BirthdayUser; onClose: () => void; currentUserId?: string }) {
-  const [data, setData] = useState<{ reactions: Record<string, number>; reactors?: Record<string, Reactor[]>; myReaction: string | null; comments: BirthdayComment[] } | null>(null);
-  const [showReactors, setShowReactors] = useState(false);
-  const [comment, setComment] = useState("");
-  const [posting, setPosting] = useState(false);
-  const year = new Date().getFullYear();
-
-  const fetchData = useCallback(() => {
-    fetch(`/api/eu/birthday/comment?birthdayUserId=${user.id}&year=${year}`)
-      .then((r) => r.json())
-      .then((j) => setData(j.data ?? null))
-      .catch(() => {});
-  }, [user.id, year]);
-
-  useEffect(() => { fetchData(); }, [fetchData]);
-
-  const commentRef = useRef<HTMLInputElement>(null);
-
-  const handleReact = async (type: string) => {
-    await fetch("/api/eu/birthday/react", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ birthdayUserId: user.id, type }) });
-    fetchData();
-  };
-
-  const handleComment = async () => {
-    if (!comment.trim() || posting) return;
-    setPosting(true);
-    await fetch("/api/eu/birthday/comment", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ birthdayUserId: user.id, content: comment }) });
-    setComment("");
-    setPosting(false);
-    fetchData();
-  };
-
-  const handleDeleteComment = async (commentId: string) => {
-    await fetch("/api/eu/birthday/comment", {
-      method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ commentId }),
-    });
-    fetchData();
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
-        <div className="p-4 border-b border-slate-100 flex items-center gap-3">
-          <UserAvatar user={user} />
-          <div>
-            <ProfileLink userId={user.id}>
-              <p className="font-semibold text-slate-800 hover:underline">🎂 {user.name}</p>
-            </ProfileLink>
-            <p className="text-xs text-slate-400">{user.jobPositionName ?? ""}</p>
-          </div>
-          <button onClick={onClose} className="ml-auto text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>
-        </div>
-
-        {data && (
-          <div className="px-4 py-3 border-b border-slate-100">
-            <ReactionBar reactions={data.reactions} myReaction={data.myReaction} onReact={(_, type) => void handleReact(type)} postId="" onShowReactors={() => setShowReactors(true)} />
-          </div>
-        )}
-
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          {data?.comments.length === 0 && <p className="text-sm text-slate-400 text-center py-4">Belum ada ucapan. Jadilah yang pertama! 🎉</p>}
-          {data?.comments.map((c) => (
-            <div key={c.id} className="flex gap-2.5 group/comment">
-              <UserAvatar user={c.user} size="sm" />
-              <div className="flex-1 bg-slate-50 rounded-xl px-3 py-2">
-                <div className="flex items-center gap-2">
-                  <ProfileLink userId={c.user.id}>
-                    <p className="text-xs font-semibold text-slate-700 hover:underline">{c.user.name}</p>
-                  </ProfileLink>
-                  {currentUserId === c.user.id && (
-                    <button
-                      onClick={() => void handleDeleteComment(c.id)}
-                      className="ml-auto text-red-400 hover:text-red-600 transition-colors"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  )}
-                </div>
-                <p className="text-sm text-slate-600 mt-0.5">{c.content}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="p-4 border-t border-slate-100 flex gap-2">
-          <input
-            ref={commentRef}
-            className="flex-1 min-w-0 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
-            placeholder="Tulis ucapan..."
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void handleComment(); } }}
-          />
-          <EmojiButton inputRef={commentRef} value={comment} onChange={setComment} />
-          <button
-            onClick={() => void handleComment()}
-            disabled={posting || !comment.trim()}
-            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-colors"
-          >
-            Kirim
-          </button>
-        </div>
-      </div>
-      {showReactors && data?.reactors && (
-        <div onClick={(e) => e.stopPropagation()}>
-          <ReactorsModal data={{ reactions: data.reactions, reactors: data.reactors }} onClose={() => setShowReactors(false)} />
-        </div>
       )}
     </div>
   );
@@ -1754,9 +1286,7 @@ export function EuFeedPage() {
   const [search, setSearch]           = useState("");
   const [searchInput, setSearchInput] = useState("");
   const searchTimer                   = useRef<NodeJS.Timeout | null>(null);
-  const [birthdayModal, setBirthdayModal] = useState<BirthdayUser | null>(null);
   const [readersPostId, setReadersPostId] = useState<string | null>(null);
-  const [profileUserId, setProfileUserId] = useState<string | null>(null);
   const [reactorsPostId, setReactorsPostId] = useState<string | null>(null);
   const [createOpen, setCreateOpen]       = useState(false);
   const [editPost, setEditPost]           = useState<Post | null>(null);
@@ -1801,11 +1331,12 @@ export function EuFeedPage() {
     searchTimer.current = setTimeout(() => { setSearch(v); setPage(1); }, 400);
   };
 
-  // Sync ?post= URL param on mount
+  // Sync ?post= — saat dibuka DAN saat URL berubah di halaman yang sama (mis. klik notifikasi
+  // komentar dari lonceng ketika sudah berada di feed).
+  const postParam = useSearchParams().get("post");
   useEffect(() => {
-    const postId = new URLSearchParams(window.location.search).get("post");
-    if (postId) setSelectedPostId(postId);
-  }, []);
+    if (postParam) setSelectedPostId(postParam);
+  }, [postParam]);
 
   // Reaction diubah langsung di post terkait (feed & slider) — TIDAK memuat ulang feed,
   // supaya posisi scroll tidak lompat ke atas (2026-11-16).
@@ -1845,7 +1376,7 @@ export function EuFeedPage() {
   };
 
   return (
-    <ProfileCtx.Provider value={setProfileUserId}>
+    <EuSocialProvider currentUserId={me?.userId}>
       <div className="flex flex-col lg:flex-row gap-6 max-w-6xl mx-auto w-full">
         {/* ── Main Feed ──────────────────────────────────────────── */}
         <div className="flex-1 min-w-0">
@@ -1924,13 +1455,12 @@ export function EuFeedPage() {
 
         {/* ── Sidebar ────────────────────────────────────────────── */}
         <div className="flex flex-col gap-4 lg:w-80 lg:flex-shrink-0">
-          <BirthdayWidget onOpen={setBirthdayModal} />
+          <BirthdayWidget />
           <UpcomingEventsWidget onClick={handleOpenModal} />
           <AnnouncementWidget onClick={handleOpenModal} />
         </div>
       </div>
 
-      {birthdayModal && <BirthdayModal user={birthdayModal} onClose={() => setBirthdayModal(null)} currentUserId={me?.userId} />}
 
       {editPost && (
         <EditPostModal
@@ -1960,8 +1490,7 @@ export function EuFeedPage() {
           onCreated={() => { void fetchPosts(page, activeCategory, search); refreshSlider(); }}
         />
       )}
-      {profileUserId && <ProfileCardModal userId={profileUserId} onClose={() => setProfileUserId(null)} />}
-    </ProfileCtx.Provider>
+    </EuSocialProvider>
   );
 }
 

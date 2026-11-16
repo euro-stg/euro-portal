@@ -9,6 +9,12 @@ const APP_PATH_SUFFIX: Record<string, { modulePathSuffix: string; entityPath: st
   SSD: { modulePathSuffix: "/letter",   entityPath: "letter"   },
 };
 
+// body notifikasi = teks biasa (lonceng merendernya sebagai teks), tapi template email
+// menyisipkan body sebagai HTML — jadi di-escape dulu, isinya bisa berasal dari ketikan user
+// (judul pengajuan, ucapan ulang tahun). Judul di-escape di mailer.ts (2026-11-16).
+const escapeHtml = (s: string) =>
+  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
 async function buildRefUrl(appType: string | undefined, refId: string | undefined): Promise<string | null> {
   if (!appType || !refId) return null;
   const conf = APP_PATH_SUFFIX[appType];
@@ -29,10 +35,12 @@ export async function createNotification(
   type: string,
   refId?: string,
   appType?: string,
+  /** refUrl langsung untuk app yang tidak ada di APP_PATH_SUFFIX (mis. Euro Update). */
+  opts?: { refUrl?: string },
 ) {
   const [config, refUrl] = await Promise.all([
     getNotifConfig(),
-    buildRefUrl(appType, refId),
+    opts?.refUrl ?? buildRefUrl(appType, refId),
   ]);
 
   const [notification, user] = await Promise.all([
@@ -45,7 +53,7 @@ export async function createNotification(
   ]);
 
   if (config.email && user?.email) {
-    sendNotificationEmail(user.email, title, body, appType ?? "portal").catch(() => null);
+    sendNotificationEmail(user.email, title, escapeHtml(body), appType ?? "portal").catch(() => null);
   }
 
   if (notification) sseEmit(userId, { type: "notification" });
@@ -85,7 +93,7 @@ export async function notifyMany(
   if (config.email) {
     for (const user of (users ?? [])) {
       if (user.email) {
-        sendNotificationEmail(user.email, title, body, appType ?? "portal").catch(() => null);
+        sendNotificationEmail(user.email, title, escapeHtml(body), appType ?? "portal").catch(() => null);
       }
     }
   }

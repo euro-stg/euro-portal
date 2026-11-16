@@ -25,6 +25,11 @@ export async function logEmail(to: string, subject: string, source: string, stat
 
 export const notificationSubject = (title: string) => `[EuroPortal] ${title}`;
 
+// Judul selalu teks biasa (juga dipakai sebagai subjek) — escape hanya saat masuk ke HTML.
+// Body TIDAK di-escape di sini: blast E Document/Euro Update sengaja mengirim HTML (link).
+const escapeHtml = (s: string) =>
+  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
 /**
  * Kirim satu email notifikasi TANPA mencatat log & tanpa menelan error — hasilnya
  * dikembalikan supaya pemanggil bisa memutuskan (dipakai worker antrean blast untuk retry,
@@ -43,7 +48,7 @@ export async function deliverNotificationEmail(to: string, title: string, body: 
               ${source}
             </span>
           </div>
-          <h2 style="margin:0 0 12px;color:#1e293b;font-size:18px;">${title}</h2>
+          <h2 style="margin:0 0 12px;color:#1e293b;font-size:18px;">${escapeHtml(title)}</h2>
           <p style="color:#475569;font-size:14px;line-height:1.6;margin:0 0 24px;">${body}</p>
           <hr style="border:none;border-top:1px solid #f1f5f9;margin:24px 0;"/>
           <p style="color:#cbd5e1;font-size:11px;margin:0;">© ${new Date().getFullYear()} Euromedica Group — EuroPortal</p>

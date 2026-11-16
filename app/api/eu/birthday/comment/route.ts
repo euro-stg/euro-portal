@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import db from "@/lib/db/db";
 import { unauthorized } from "@/lib/api-auth";
+import { isBirthdayThreadOpen, BIRTHDAY_CLOSED_MESSAGE } from "@/lib/eu-birthday";
+import { createNotification } from "@/lib/notifications";
 
 export async function GET(request: Request) {
   try {
@@ -42,7 +44,10 @@ export async function GET(request: Request) {
     const reactors: Record<string, { id: string; name: string | null; image: string | null; jobPositionName: string | null }[]> = {};
     for (const r of reactorList) (reactors[r.type] ??= []).push(r.user);
 
-    return NextResponse.json({ data: { comments, reactions: reactionCounts, reactors, myReaction: myReaction?.type ?? null } });
+    // open = masih hari ulang tahunnya (boleh ucapan/reaction baru); false = baca saja.
+    const open = await isBirthdayThreadOpen(birthdayUserId, Number(year));
+
+    return NextResponse.json({ data: { comments, reactions: reactionCounts, reactors, myReaction: myReaction?.type ?? null, open } });
   } catch (err) {
     console.error(err);
     return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
@@ -59,12 +64,29 @@ export async function POST(request: Request) {
     if (!content?.trim()) return NextResponse.json({ message: "Komentar tidak boleh kosong" }, { status: 400 });
 
     const year = new Date().getFullYear();
+    if (!(await isBirthdayThreadOpen(birthdayUserId, year))) return NextResponse.json({ message: BIRTHDAY_CLOSED_MESSAGE }, { status: 403 });
     const targetId = `${birthdayUserId}_${year}`;
 
     const comment = await db.euComment.create({
       data: { targetType: "birthday", targetId, userId: session.user.id, content: content.trim() },
       include: { user: { select: { id: true, name: true, image: true, jobPositionName: true } } },
     });
+
+    // Notifikasi lonceng + email (mengikuti saklar global) ke yang berulang tahun — hanya untuk
+    // ucapan, bukan reaction (2026-11-16). Gagal kirim tidak membatalkan ucapannya.
+    if (birthdayUserId !== session.user.id) {
+      const text = comment.content.length > 140 ? `${comment.content.slice(0, 140)}…` : comment.content;
+      await createNotification(
+        birthdayUserId,
+        `🎂 Ucapan ulang tahun dari ${comment.user.name ?? "rekan kerja"}`,
+        `"${text}"`,
+        "EU_BIRTHDAY",
+        comment.id,
+        "EU",
+        { refUrl: "/profile/ulang-tahun" },
+      ).catch((e) => console.error("[eu] notifikasi ucapan ulang tahun gagal:", e));
+    }
+
     return NextResponse.json({ data: comment }, { status: 201 });
   } catch (err) {
     console.error(err);

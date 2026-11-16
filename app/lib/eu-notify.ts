@@ -73,7 +73,7 @@ export async function sendEuPostNotification(postId: string, origin: string): Pr
       // worker satu per satu dengan jeda dari Pengaturan Email (app/lib/email-queue.ts).
       await enqueueEmails(recipients
         .filter((u): u is typeof u & { email: string } => !!u.email)
-        .map((u) => ({ to: u.email, title: escapeHtml(title), body, source: "Euro Update" })));
+        .map((u) => ({ to: u.email, title, body, source: "Euro Update" }))); // judul di-escape di mailer.ts
     }
   } catch (e) {
     console.error("[eu] gagal mengirim notifikasi post", e);

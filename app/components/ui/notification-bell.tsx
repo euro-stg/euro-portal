@@ -236,7 +236,7 @@ export function NotificationBell() {
               </button>
               {detail.refUrl && (
                 <button
-                  onClick={() => { setDetail(null); setOpen(false); router.push(`${detail.refUrl}?_r=${Date.now()}`); }}
+                  onClick={() => { setDetail(null); setOpen(false); router.push(`${detail.refUrl}${detail.refUrl?.includes("?") ? "&" : "?"}_r=${Date.now()}`); }}
                   className="flex items-center gap-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg transition-colors"
                 >
                   <ExternalLink className="w-3.5 h-3.5" /> Buka Detail
