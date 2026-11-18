@@ -53,32 +53,12 @@ export async function GET(request: Request) {
       fileWhere.AND.push({ OR: [{ endDate: null }, { endDate: { gte: new Date(validFrom) } }] });
     }
     if (q) {
-      // File Category IM juga dicari lewat detail item/promo yang di-attach ke dalamnya —
-      // nama item, kategori, jenis promo, masa berlaku, client, ketentuan (semua teks bebas,
-      // contains case-insensitive), plus Discount % secara numerik kalau query berupa angka
-      // (dengan/tanpa tanda "%", mis. "20%" atau "20" -> cocokkan discountPercent = 20).
-      const percentMatch = q.match(/^(\d+(?:\.\d+)?)\s*%?$/);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const imProductOr: any[] = [
-        { itemName: { contains: q, mode: "insensitive" } },
-        { sku: { contains: q, mode: "insensitive" } },
-        { category: { contains: q, mode: "insensitive" } },
-        { discountClass: { contains: q, mode: "insensitive" } },
-        { promoType: { contains: q, mode: "insensitive" } },
-        { promoDetail: { contains: q, mode: "insensitive" } },
-        { validity: { contains: q, mode: "insensitive" } },
-        { eligibleClient: { contains: q, mode: "insensitive" } },
-        { keyConditions: { contains: q, mode: "insensitive" } },
-      ];
-      if (percentMatch) imProductOr.push({ discountPercent: Number(percentMatch[1]) });
-
       fileWhere.AND.push({
         OR: [
           { title: { contains: q, mode: "insensitive" } },
           { description: { contains: q, mode: "insensitive" } },
           { documentNumber: { contains: q, mode: "insensitive" } },
           { mocNumber: { contains: q, mode: "insensitive" } },
-          { imProducts: { some: { OR: imProductOr } } },
         ],
       });
     }

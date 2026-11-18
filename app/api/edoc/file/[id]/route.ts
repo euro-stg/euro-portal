@@ -136,9 +136,8 @@ export async function DELETE(
 }
 
 // Edit metadata (title/description/category/BU/branch/tanggal/nomor dokumen & MOC/toggle
-// promo) — TIDAK termasuk mengganti file PDF-nya sendiri (itu tetap lewat revision/route.ts)
-// atau import item promo (tetap lewat /api/edoc/im-product/import, sudah dipakai berulang
-// dari halaman detail). Dibuat terutama untuk melengkapi file hasil Bulk Import (2026-09-21)
+// download) — TIDAK termasuk mengganti file PDF-nya sendiri (itu tetap lewat revision/route.ts).
+// Dibuat terutama untuk melengkapi file hasil Bulk Import (2026-09-21)
 // yang sengaja dibuat minim data saat upload — lihat canEditFileMetadata untuk gerbang akses
 // lengkapnya (superadmin & Document Approver selalu; file bulkImported HANYA mereka; uploader
 // sendiri selagi requiresNumber=false).
@@ -281,7 +280,6 @@ export async function PATCH(
     }
     if ("mocNumber" in body) data.mocNumber = typeof body.mocNumber === "string" ? body.mocNumber.trim() || null : null;
 
-    if (typeof body.requiresItemImport === "boolean") data.requiresItemImport = body.requiresItemImport;
     if (typeof body.allowDownload === "boolean") data.allowDownload = body.allowDownload;
 
     const updated = await db.eDocFile.update({ where: { id }, data });

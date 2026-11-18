@@ -1,9 +1,18 @@
 import db from "@/lib/db/db";
 import { ErpError, erpGet, erpListAll, getErpConfig } from "@/lib/erp";
-import { activeImFileWhere } from "@/lib/im-check";
+import { edocExpiryCutoff } from "@/lib/edoc";
 import {
   type ErpPrice, type ErpRule, eligibleOf, loadPriceListAudience, parseErpImKey, parsePortalImKey, promoOf, territoriesOf, today,
 } from "@/lib/im-erp-sync";
+
+/** IM aktif: RELEASE, belum expired, bukan folder Obsolete — cakupan penautan nomor IM ERP ke file edoc. */
+const activeImFileWhere = () => ({
+  deletedAt: null,
+  status: "RELEASE" as const,
+  category: { code: "IM" },
+  folder: { type: { not: "OBSOLETE" as const } },
+  OR: [{ endDate: null }, { endDate: { gt: edocExpiryCutoff() } }],
+});
 
 // Item / Promo Browser LIVE dari ERP (2026-11-17) — pengganti item edoc (EDocImProduct) yang
 // disalin ke portal. Pilih 1 item Master Item → promo aktifnya dibaca langsung dari ERP setiap

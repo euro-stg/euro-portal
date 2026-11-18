@@ -37,13 +37,6 @@ export async function POST(
     if (file.status !== "DRAFT") {
       return NextResponse.json({ message: "File ini sudah tidak berstatus DRAFT" }, { status: 409 });
     }
-    if (file.requiresItemImport) {
-      const productCount = await db.eDocImProduct.count({ where: { fileId: id } });
-      if (productCount === 0) {
-        return NextResponse.json({ message: "File ini ditandai sebagai promo — import minimal 1 item/produk dulu sebelum bisa di-approve" }, { status: 400 });
-      }
-    }
-
     const body = await request.json().catch(() => ({}));
     const note = typeof body?.note === "string" ? body.note.trim() || null : null;
 

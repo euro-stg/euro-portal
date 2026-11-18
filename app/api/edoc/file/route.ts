@@ -3,7 +3,6 @@ import { auth } from "@/lib/auth";
 import { unauthorized } from "@/lib/api-auth";
 import db from "@/lib/db/db";
 import { resolveFolderContentAccess, uploadEDocFileToFolder, isSuperadmin, isEDocDocumentApprover, edocExpiryCutoff, getCategoryNumbering } from "@/lib/edoc";
-import { createImProducts, validateReviewedRows, type ReviewedRow } from "@/lib/im-import";
 import { checkValidity, resolveInitiator } from "@/lib/edoc-file-fields";
 import { categoryOrgLevel, orgLevelLabel, orgMatchesLevel, SINGLE_BU_MESSAGE, isSopCategory, todayWibDate } from "@/lib/edoc-org-level";
 import { createReplacements, parseReplacementInput, validateReplacements, type ReplacementInput } from "@/lib/im-replacement";
@@ -46,7 +45,7 @@ export async function GET(request: Request) {
     const fileSelect = {
       id: true, title: true, description: true, categoryId: true, categoryTypeId: true,
       businessUnitCodes: true, branchIds: true, organizationId: true, startDate: true, endDate: true,
-      fileUrl: true, requiresNumber: true, requiresItemImport: true, documentNumber: true, mocNumber: true, status: true,
+      fileUrl: true, requiresNumber: true, documentNumber: true, mocNumber: true, status: true,
       bulkImported: true, uploadedBy: true, approvedAt: true, createdAt: true, updatedAt: true,
       category: { select: { id: true, code: true, name: true } },
       categoryType: { select: { id: true, code: true, name: true } },
@@ -151,9 +150,6 @@ export async function GET(request: Request) {
 
 const ALLOWED_MIME = ["application/pdf"];
 
-// Kalau requiresItemImport dicentang, item promo WAJIB dikirim di request yang SAMA sebagai
-// `productRows` (hasil review mapping SKU, 2026-10-30) — divalidasi DULU sebelum PDF diupload,
-// lalu file + item dibuat dalam satu transaksi, supaya tidak pernah ada file promo tanpa item.
 export async function POST(request: Request) {
   try {
     const session = await auth();
@@ -189,12 +185,8 @@ export async function POST(request: Request) {
     // client (dihapus dari form upload 2026-09-18), selalu true terlepas dari apa yang
     // dikirim.
     const requiresNumber = true;
-    const requiresItemImport = formData.get("requiresItemImport") === "true";
     // Default TIDAK bisa download (2026-10-07) — cuma true kalau dicentang eksplisit di form.
     const allowDownload = formData.get("allowDownload") === "true";
-    // Item promo hasil review mapping SKU (2026-10-30) — JSON [{ product, skus }] dari layar
-    // review di modal upload (lihat /api/edoc/im-product/preview), bukan Excel mentah.
-    const productRowsRaw = formData.get("productRows") as string | null;
 
     if (!folderId) return NextResponse.json({ message: "folderId wajib diisi" }, { status: 400 });
     if (!title) return NextResponse.json({ message: "Title wajib diisi" }, { status: 400 });
@@ -269,22 +261,6 @@ export async function POST(request: Request) {
       if (blastFolder.type === "OBSOLETE") return NextResponse.json({ message: "Tidak bisa blast ke folder Obsolete" }, { status: 400 });
     }
 
-    // Validasi item promo DULU (belum ada side effect apapun sampai titik ini) — kalau
-    // requiresItemImport dicentang tapi item belum direview / ada baris tanpa SKU, batalkan
-    // di sini, sebelum PDF sempat diupload atau row EDocFile sempat dibuat.
-    let productRows: ReviewedRow[] = [];
-    if (requiresItemImport) {
-      if (category.code !== "IM") return NextResponse.json({ message: "Lampiran item promo hanya untuk Category IM" }, { status: 400 });
-      if (!productRowsRaw) {
-        return NextResponse.json({ message: "File ini ditandai promo — upload Excel item & review mapping SKU-nya dulu" }, { status: 400 });
-      }
-      let parsedJson: unknown;
-      try { parsedJson = JSON.parse(productRowsRaw); } catch { return NextResponse.json({ message: "Data item tidak valid" }, { status: 400 }); }
-      const v = await validateReviewedRows(parsedJson);
-      if ("error" in v) return NextResponse.json({ message: v.error }, { status: 400 });
-      productRows = v.rows;
-    }
-
     // IM yang digantikan (2026-11-05) — divalidasi sebelum PDF diupload.
     let replacements: ReplacementInput[] = [];
     const replacementsRaw = formData.get("replacements") as string | null;
@@ -315,8 +291,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: e instanceof Error ? e.message : "Gagal upload ke Nextcloud" }, { status: 502 });
     }
 
-    // File + blast folder + item promo dalam SATU transaksi (2026-10-30) — sebelumnya item
-    // disimpan terpisah sehingga kegagalan menyisakan file promo tanpa item.
+    // File + blast folder + penggantian IM dalam SATU transaksi.
     const created = await db.$transaction(async (tx) => {
       const file = await tx.eDocFile.create({
         data: {
@@ -340,7 +315,6 @@ export async function POST(request: Request) {
           initiatorJobPositionName: initiator.initiatorJobPositionName,
           fileUrl,
           requiresNumber,
-          requiresItemImport,
           allowDownload,
           status: "DRAFT",
           uploadedBy: userId,
@@ -352,12 +326,11 @@ export async function POST(request: Request) {
           data: uniqueBlastFolderIds.map((bfId) => ({ fileId: file.id, folderId: bfId, createdBy: userId })),
         });
       }
-      if (productRows.length > 0) await createImProducts(tx, file.id, productRows, userId);
       if (replacements.length > 0) await createReplacements(tx, file.id, replacements, userId);
       return file;
     });
 
-    return NextResponse.json({ data: created, importedProducts: productRows.length }, { status: 201 });
+    return NextResponse.json({ data: created }, { status: 201 });
   } catch (err) {
     console.error(err);
     return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });

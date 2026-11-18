@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { Alert } from "@/components/ui/alert";
 import { FeedbackSection } from "./_feedback-section";
-import { ImProductSection } from "./_im-product-section";
 import { ImReplacementSection } from "../../_im-replacement";
 import { BlastFolderPicker, type BlastFolderOption, BlastEmailCriteriaEditor, type BlastEmailCriteriaValue, InitiatorPicker, type InitiatorValue, ValidityTypePicker } from "../../_edoc-app";
 import { MoveFileButton } from "./_move-file-modal";
@@ -19,7 +18,7 @@ import { categoryOrgLevel, orgLevelLabel, orgMatchesLevel, SINGLE_BU_MESSAGE, ty
 
 type FileDetail = {
   id: string; folderId: string; title: string; description: string | null; fileUrl: string;
-  requiresNumber: boolean; requiresItemImport: boolean; allowDownload: boolean; documentNumber: string | null; mocNumber: string | null; status: string;
+  requiresNumber: boolean; allowDownload: boolean; documentNumber: string | null; mocNumber: string | null; status: string;
   bulkImported: boolean;
   approvalNote: string | null; approvedAt: string | null;
   rejectionNote: string | null; rejectedAt: string | null;
@@ -67,16 +66,8 @@ export default function EDocFileDetailPage() {
   // saat itu, apapun jenisnya — primary atau Blast, sama-sama valid lewat breadcrumb
   // endpoint yang generic), fallback ke file.folderId kalau tidak ada (akses langsung/
   // bookmark, yang memang tidak datang dari sesi browsing folder).
-  //
-  // `fromItemBrowser` (2026-10-01, follow-up request sama hari) — Item/Promo Browser bukan
-  // folder sama sekali (daftar lintas folder), jadi tidak bisa dipakaikan mekanisme
-  // `?folderId=` di atas. Kalau file ini dibuka dari sana (ditandai lewat query string ini,
-  // dikirim oleh edoc-items/page.tsx), Back kembali ke halaman Item Browser itu sendiri,
-  // bukan ke folder manapun — prioritas PALING TINGGI, dicek sebelum fromFolderId/file.folderId.
   const fromFolderId = searchParams.get("fromFolderId");
-  const fromItemBrowser = searchParams.get("fromItemBrowser") === "1";
   const backToFolder = (folderId: string) => {
-    if (fromItemBrowser) { router.push(`/apps/${appSlug}/edoc-items`); return; }
     router.push(`/apps/${appSlug}?folderId=${fromFolderId || folderId}`);
   };
 
@@ -523,10 +514,6 @@ export default function EDocFileDetailPage() {
 
       <FeedbackSection fileId={fileId} uploaderId={file.uploader.id} locked={file.status === "REJECTED"} />
 
-      {file.category?.code === "IM" && file.requiresItemImport && (
-        <ImProductSection fileId={fileId} canImport={canEditMetadata} businessUnitCodes={file.businessUnitCodes} />
-      )}
-
       {showViewer && (
         <PdfViewerModal fileId={fileId} title={file.title} canDownload={canDownload} onClose={() => setShowViewer(false)} />
       )}
@@ -584,7 +571,6 @@ function EditFileModal({
   const [obsoleteFolders, setObsoleteFolders] = useState<{ id: string; name: string }[]>([]);
   const [documentNumber, setDocumentNumber] = useState(file.documentNumber ?? "");
   const [mocNumber, setMocNumber] = useState(file.mocNumber ?? "");
-  const [requiresItemImport, setRequiresItemImport] = useState(file.requiresItemImport);
   const [allowDownload, setAllowDownload] = useState(file.allowDownload);
   const [saving, setSaving] = useState(false);
 
@@ -669,7 +655,6 @@ function EditFileModal({
           initiatorJobPositionName: initiator?.jobPositionName ?? "",
           documentNumber: documentNumber.trim(),
           mocNumber: mocNumber.trim(),
-          requiresItemImport,
           allowDownload,
         }),
       });
@@ -786,12 +771,6 @@ function EditFileModal({
           Izinkan download PDF — kalau tidak dicentang, file hanya bisa dilihat lewat viewer
         </label>
 
-        {selectedCategory?.code === "IM" && (
-          <label className="flex items-center gap-2 text-sm text-slate-600">
-            <input type="checkbox" checked={requiresItemImport} onChange={(e) => setRequiresItemImport(e.target.checked)} className="rounded border-slate-300" />
-            File ini promo (butuh lampiran item) — import Excel-nya lewat section &ldquo;Produk/Promo Terkait&rdquo; setelah disimpan
-          </label>
-        )}
 
         <div className="flex items-center gap-3 pt-2">
           <Button onClick={submit} disabled={saving} className="bg-amber-600 hover:bg-amber-700 text-white flex items-center gap-2">
@@ -846,7 +825,6 @@ function ApproverInfoCard({
     ["Folder Tujuan Obsolete", file.obsoleteDestination?.name ?? "-"],
     ["Wajib Document Number", yesNo(file.requiresNumber)],
     ["Izin Download PDF", yesNo(file.allowDownload)],
-    ...(file.category?.code === "IM" ? [["File Promo (butuh lampiran item)", yesNo(file.requiresItemImport)] as [string, React.ReactNode]] : []),
     ["Blast ke Folder", chips(blastFolders.map((f) => f.path || f.name))],
     ["Kriteria Email Blast", criteriaEmpty ? <span className="text-slate-400">Tidak ada (tidak ada yang di-email)</span> : (
       <div className="space-y-1">

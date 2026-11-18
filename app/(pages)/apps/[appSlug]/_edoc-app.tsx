@@ -11,7 +11,6 @@ import { Modal } from "@/components/ui/modal";
 import { Alert } from "@/components/ui/alert";
 import { MultiSelect, type MultiSelectOption } from "./_edoc-multiselect";
 import { buildFolderTree, type FlatFolder, type FolderTreeNode, FolderTreeSingleSelectBody } from "./_edoc-folder-tree-picker";
-import { ImSkuConfirm, confirmedRows, type ConfirmedRowPayload, type ImportPreviewData } from "./_im-sku-confirm";
 import { categoryOrgLevel, orgLevelLabel, orgMatchesLevel, SINGLE_BU_MESSAGE, type CategoryNumbering, isSopCategory, todayWibDate, SOP_VALIDITY_NOTE } from "@/lib/edoc-org-level";
 import { ReplacementEditor, type ReplacementDraft } from "./_im-replacement";
 
@@ -90,7 +89,6 @@ export function EDocApp() {
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [showUploadFile, setShowUploadFile] = useState(false);
   const [showBulkUpload, setShowBulkUpload] = useState(false);
-  const [showBulkItemMatch, setShowBulkItemMatch] = useState(false);
   const [editingFolder, setEditingFolder] = useState<FolderItem | null>(null);
   const [deletingFolder, setDeletingFolder] = useState<FolderItem | null>(null);
 
@@ -386,13 +384,6 @@ export function EDocApp() {
               <Upload className="w-4 h-4" /> Bulk Upload
             </Button>
           )}
-          {/* Bulk Upload & Cocokkan & Import Item khusus superadmin (2026-10-14) — dua-duanya
-              alat migrasi yang melewati alur approval normal. Server juga mengecek ini. */}
-          {me?.isSuperadmin && (
-            <Button onClick={() => setShowBulkItemMatch(true)} variant="outline" className="flex items-center gap-2">
-              <Package className="w-4 h-4" /> Cocokkan & Import Item
-            </Button>
-          )}
           {currentFolderId && canWriteCurrent && (
             <Button onClick={() => setShowUploadFile(true)} className="bg-amber-600 hover:bg-amber-700 text-white flex items-center gap-2">
               <Upload className="w-4 h-4" /> Upload File
@@ -645,14 +636,6 @@ export function EDocApp() {
           reference={reference}
           onClose={() => setShowBulkUpload(false)}
           onDone={(succeeded) => { setShowBulkUpload(false); void load(currentFolderId); showToast("success", `${succeeded} file berhasil di-bulk-upload`); }}
-          onError={(m) => showToast("error", m)}
-        />
-      )}
-
-      {showBulkItemMatch && (
-        <BulkItemMatchModal
-          onClose={() => setShowBulkItemMatch(false)}
-          onDone={() => { void load(currentFolderId); }}
           onError={(m) => showToast("error", m)}
         />
       )}
@@ -1287,7 +1270,6 @@ function UploadFileModal({
   const [endDate, setEndDate] = useState("");
   const [obsoleteDestinationFolderId, setObsoleteDestinationFolderId] = useState("");
   const [obsoleteFolders, setObsoleteFolders] = useState<{ id: string; name: string }[]>([]);
-  const [requiresItemImport, setRequiresItemImport] = useState(false);
   // IM lama yang digantikan IM ini (2026-11-05) — hanya Category IM.
   const [replacements, setReplacements] = useState<ReplacementDraft[]>([]);
   const [allowDownload, setAllowDownload] = useState(false);
@@ -1302,31 +1284,8 @@ function UploadFileModal({
     return () => { cancelled = true; };
   }, []);
   const [file, setFile] = useState<File | null>(null);
-  const [productExcel, setProductExcel] = useState<File | null>(null);
-  // Konfirmasi item promo berbasis SKU (2026-11-02): Excel → pratinjau (dicek ke Master Item)
-  // → user konfirmasi → baris siap kirim bersama upload.
-  const [itemPreview, setItemPreview] = useState<ImportPreviewData | null>(null);
-  const [previewing, setPreviewing] = useState(false);
-  const [reviewedRows, setReviewedRows] = useState<ConfirmedRowPayload[] | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [downloadingTemplate, setDownloadingTemplate] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
-  const productExcelRef = useRef<HTMLInputElement>(null);
-
-  const downloadProductTemplate = async () => {
-    setDownloadingTemplate(true);
-    try {
-      const res = await fetch("/api/edoc/im-product/template");
-      if (!res.ok) { onError("Gagal download template"); return; }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "Template Promo per Item.xlsx";
-      a.click();
-      URL.revokeObjectURL(url);
-    } finally { setDownloadingTemplate(false); }
-  };
 
   const selectedCategory = reference.categories.find((c) => c.id === categoryId);
 
@@ -1385,20 +1344,6 @@ function UploadFileModal({
       .catch(() => {});
   }, [folderId]);
 
-  const clearProductExcel = () => { setProductExcel(null); setReviewedRows(null); setItemPreview(null); };
-
-  const runItemPreview = async (excel: File) => {
-    setPreviewing(true);
-    try {
-      const fd = new FormData();
-      fd.append("file", excel);
-      const res = await fetch("/api/edoc/im-product/preview", { method: "POST", body: fd });
-      const json = await res.json();
-      if (!res.ok) { onError(json.message || "Gagal membaca Excel item"); return; }
-      setItemPreview(json);
-    } finally { setPreviewing(false); }
-  };
-
   const submit = async () => {
     if (!title.trim()) { onError("Title wajib diisi"); return; }
     if (!categoryId) { onError("Category wajib dipilih"); return; }
@@ -1409,8 +1354,6 @@ function UploadFileModal({
     if (validityType === "TEMPORER" && !endDate) { onError("End Date wajib diisi untuk dokumen Temporer"); return; }
     if (!file) { onError("File PDF wajib diupload"); return; }
     if (endDate && !obsoleteDestinationFolderId) { onError("Pilih folder tujuan Obsolete jika mengisi end date"); return; }
-    if (requiresItemImport && !productExcel) { onError("File ini promo — Excel produk/item wajib diupload sekarang"); return; }
-    if (requiresItemImport && !reviewedRows) { onError("Konfirmasi item promo dulu (klik Cek & Konfirmasi Item)"); return; }
 
     setSubmitting(true);
     try {
@@ -1436,9 +1379,7 @@ function UploadFileModal({
       fd.append("initiatorJobPositionName", initiator.jobPositionName);
       if (validityType === "TEMPORER" && endDate) fd.append("endDate", endDate);
       if (validityType === "TEMPORER" && obsoleteDestinationFolderId) fd.append("obsoleteDestinationFolderId", obsoleteDestinationFolderId);
-      fd.append("requiresItemImport", String(requiresItemImport));
       fd.append("allowDownload", String(allowDownload));
-      if (requiresItemImport && reviewedRows) fd.append("productRows", JSON.stringify(reviewedRows));
       if (selectedCategory?.code === "IM" && replacements.length > 0) {
         fd.append("replacements", JSON.stringify(replacements.map((r) => ({ oldFileId: r.candidate.id, obsoleteFolderId: r.obsoleteFolderId || null }))));
       }
@@ -1453,15 +1394,6 @@ function UploadFileModal({
 
   return (
     <Modal open title="Upload File" onClose={onClose} boxClassName="max-w-2xl">
-      <Modal open={!!itemPreview} title="Konfirmasi Item Promo" onClose={() => setItemPreview(null)} boxClassName="w-full max-w-5xl">
-        {itemPreview && (
-          <>
-            <p className="text-xs text-slate-500 mb-3">SKU setiap baris dicek ke Master Item; nama item mengikuti nama resmi Master Item. Item tersimpan saat file diupload.</p>
-            <ImSkuConfirm preview={itemPreview} saving={false} submitLabel="Pakai item ini" onCancel={() => setItemPreview(null)}
-              onSubmit={(rows) => { setReviewedRows(rows); setItemPreview(null); }} />
-          </>
-        )}
-      </Modal>
       <div className="space-y-4">
         <div>
           <label className={labelCls}>File PDF <span className="text-red-500">*</span></label>
@@ -1618,62 +1550,6 @@ function UploadFileModal({
               dan keduanya saling menampilkan link &ldquo;Menggantikan&rdquo; / &ldquo;Digantikan oleh&rdquo;.
             </p>
             <ReplacementEditor value={replacements} onChange={setReplacements} newStartDate={startDate || null} />
-          </div>
-        )}
-
-        {selectedCategory?.code === "IM" && (
-          <div>
-            <label className="flex items-center gap-2 text-sm text-slate-600">
-              <input
-                type="checkbox" checked={requiresItemImport}
-                onChange={(e) => { setRequiresItemImport(e.target.checked); if (!e.target.checked) clearProductExcel(); }}
-                className="rounded border-slate-300"
-              />
-              File ini promo (butuh lampiran item)
-            </label>
-            {requiresItemImport && (
-              <div className="mt-2 pl-6">
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-sm font-medium text-slate-700">Excel Produk/Item <span className="text-red-500">*</span></label>
-                  <button type="button" disabled={downloadingTemplate} onClick={downloadProductTemplate} className="text-xs text-amber-600 hover:text-amber-700 flex items-center gap-1 disabled:opacity-50">
-                    {downloadingTemplate ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />} Download Template
-                  </button>
-                </div>
-                <input
-                  ref={productExcelRef} type="file" accept=".xlsx,.xls" className="hidden"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0] ?? null;
-                    setProductExcel(f); setReviewedRows(null);
-                    if (f) void runItemPreview(f);
-                    e.target.value = "";
-                  }}
-                />
-                {productExcel ? (
-                  <div className="flex items-center gap-2 p-2.5 bg-green-50 border border-green-200 rounded-lg">
-                    <FileText className="w-4 h-4 text-green-600 shrink-0" />
-                    <p className="text-sm font-medium text-green-800 truncate flex-1">{productExcel.name}</p>
-                    <button type="button" onClick={clearProductExcel} className="p-1 text-green-600 hover:text-red-500 transition-colors"><X className="w-4 h-4" /></button>
-                  </div>
-                ) : (
-                  <button type="button" onClick={() => productExcelRef.current?.click()} className="w-full flex items-center justify-center gap-2 p-3 border-2 border-dashed border-slate-200 rounded-lg text-slate-500 hover:border-amber-300 hover:text-amber-600 transition-colors text-sm">
-                    <Upload className="w-4 h-4" /> Klik untuk pilih Excel produk/item (sheet &ldquo;Promo per Item&rdquo;)
-                  </button>
-                )}
-                {productExcel && (
-                  <div className={`mt-2 flex items-center gap-2 text-xs rounded-lg px-3 py-2 border ${reviewedRows ? "bg-emerald-50 border-emerald-100 text-emerald-700" : "bg-amber-50 border-amber-200 text-amber-800"}`}>
-                    {previewing ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Mengecek SKU ke Master Item…</>
-                      : reviewedRows ? <span className="flex-1">✓ {reviewedRows.length} item siap — SKU valid</span>
-                      : <span className="flex-1">Item belum dikonfirmasi.</span>}
-                    {!previewing && (
-                      <button type="button" onClick={() => void runItemPreview(productExcel)} className="font-medium underline">
-                        {reviewedRows ? "Lihat lagi" : "Cek & Konfirmasi Item"}
-                      </button>
-                    )}
-                  </div>
-                )}
-                <p className="text-xs text-slate-400 mt-1">Wajib diisi sekarang — file promo tidak bisa diupload tanpa minimal 1 item. Kolom SKU wajib diisi dan harus ada di Master Item (tidak Discontinued).</p>
-              </div>
-            )}
           </div>
         )}
 
@@ -1898,271 +1774,6 @@ function BulkUploadModal({
             <Button onClick={() => onDone(succeededCount)} className="bg-amber-600 hover:bg-amber-700 text-white">Selesai</Button>
           )}
         </div>
-      </div>
-    </Modal>
-  );
-}
-
-// ===================== Bulk Item Match Modal =====================
-// Cocokkan & Import Item (2026-09-25) — pelengkap fase migrasi: 1 Excel BESAR berisi
-// promo/item dari BANYAK file IM sekaligus, dicocokkan otomatis ke file yang tepat lewat
-// kolom "IM Number" <-> Document Number file (yang untuk file lama sekalipun bisa
-// di-backfill otomatis dari nama file aslinya di langkah yang sama — lihat
-// POST /api/edoc/im-product/bulk-import). Lintas SEMUA folder, tidak terikat folder yang
-// lagi dibuka, makanya tidak butuh folderId sama sekali.
-type BulkItemMatchResult = {
-  itemImportFlagBackfilled: number;
-  backfilled: { fileId: string; title: string; documentNumber: string }[];
-  repaired: { fileId: string; title: string; oldDocumentNumber: string; documentNumber: string }[];
-  matched: { documentNumber: string; fileId: string; title: string; itemsImported: number }[];
-  unmatched: { imNumber: string; rowCount: number }[];
-  skippedNoImNumber: number;
-  warnings: string[];
-};
-// Pratinjau (2026-10-30) — POST /api/edoc/im-product/bulk-import/preview, belum menulis apa pun.
-type BulkPreviewGroup = {
-  fileId: string; title: string; documentNumber: string; businessUnitCodes: string[]; status: string;
-  existingItems: number; existingMapped: number; preview: Omit<ImportPreviewData, "warnings">;
-};
-type BulkPreview = {
-  groups: BulkPreviewGroup[]; unmatched: { imNumber: string; rowCount: number }[]; skippedNoImNumber: number;
-  plannedFixes: { backfilled: number; repaired: number }; warnings: string[];
-};
-
-// Cocokkan & Import Item berbasis SKU (2026-11-02): pilih Excel → pratinjau per IM (SKU dicek
-// ke Master Item) → IM tanpa baris bermasalah "siap"; IM dengan baris bermasalah tidak bisa
-// dipilih (perbaiki Excel). Klik Import = konfirmasi. IM yang itemnya SUDAH punya SKU tidak
-// dicentang secara default (supaya tidak tertimpa).
-function BulkItemMatchModal({
-  onClose, onDone, onError,
-}: {
-  onClose: () => void; onDone: () => void; onError: (m: string) => void;
-}) {
-  const { appSlug } = useParams<{ appSlug: string }>();
-  const router = useRouter();
-  const [file, setFile] = useState<File | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [preview, setPreview] = useState<BulkPreview | null>(null);
-  const [included, setIncluded] = useState<Record<string, boolean>>({});
-  const [openGroup, setOpenGroup] = useState<BulkPreviewGroup | null>(null);
-  const [result, setResult] = useState<BulkItemMatchResult | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
-
-  const runPreview = async () => {
-    if (!file) { onError("Pilih file Excel dulu"); return; }
-    setSubmitting(true);
-    try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await fetch("/api/edoc/im-product/bulk-import/preview", { method: "POST", body: fd });
-      const json: BulkPreview & { message?: string } = await res.json();
-      if (!res.ok) { onError(json.message || "Gagal membaca Excel"); return; }
-      setPreview(json);
-      setIncluded(Object.fromEntries(json.groups.map((g) => [g.fileId, g.existingMapped === 0 && g.preview.summary.invalid === 0])));
-    } catch {
-      onError("Koneksi terputus — coba lagi.");
-    } finally { setSubmitting(false); }
-  };
-
-  const selected = preview?.groups.filter((g) => included[g.fileId] && g.preview.summary.invalid === 0) ?? [];
-  const blocked = preview?.groups.filter((g) => g.preview.summary.invalid > 0).length ?? 0;
-
-  const runImport = async () => {
-    if (!preview || selected.length === 0) return;
-    setSubmitting(true);
-    try {
-      const res = await fetch("/api/edoc/im-product/bulk-import", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ groups: selected.map((g) => ({ fileId: g.fileId, rows: confirmedRows({ ...g.preview, warnings: [] }) })) }),
-      });
-      const json = await res.json();
-      if (!res.ok) { onError(json.message || "Gagal import"); return; }
-      setResult({ ...json, unmatched: preview.unmatched, skippedNoImNumber: preview.skippedNoImNumber, warnings: preview.warnings });
-      onDone();
-    } catch {
-      onError("Koneksi terputus — coba lagi.");
-    } finally { setSubmitting(false); }
-  };
-
-  return (
-    <Modal open title="Cocokkan & Import Item (Migrasi)" onClose={onClose} boxClassName="max-w-3xl">
-      {openGroup && (
-        <Modal open title={`Item — ${openGroup.documentNumber}`} onClose={() => setOpenGroup(null)} boxClassName="w-full max-w-5xl">
-          <ImSkuConfirm preview={{ ...openGroup.preview, warnings: [] }} readOnly onCancel={() => setOpenGroup(null)} />
-        </Modal>
-      )}
-      <div className="space-y-4">
-        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
-          Upload 1 Excel berisi item/promo dari BANYAK file IM sekaligus (kolom &ldquo;IM Number&rdquo; per baris).
-          Tiap baris dicocokkan ke file yang Document Number-nya sama, lalu <b>SKU-nya dicek ke Master Item</b> —
-          tidak ada yang tersimpan sebelum Anda klik Import.
-        </p>
-
-        {result ? (
-          <div className="space-y-4">
-            {result.itemImportFlagBackfilled > 0 && (
-              <p className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg p-3">
-                {result.itemImportFlagBackfilled} file bulk IM lama ditandai &ldquo;wajib item promo&rdquo; (section Produk/Promo Terkait
-                sekarang tampil di halaman detail file-nya).
-              </p>
-            )}
-
-            {result.backfilled.length > 0 && (
-              <div>
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
-                  {result.backfilled.length} Document Number diisi otomatis
-                </p>
-                <div className="space-y-1 max-h-32 overflow-y-auto">
-                  {result.backfilled.map((b) => (
-                    <div key={b.fileId} className="text-xs bg-slate-50 rounded-lg p-2 flex items-center justify-between gap-2">
-                      <span className="truncate">{b.title}</span>
-                      <span className="font-mono text-slate-500 shrink-0">{b.documentNumber}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {result.repaired.length > 0 && (
-              <div>
-                <p className="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-1.5">
-                  {result.repaired.length} Document Number diperbaiki (format lama → slash)
-                </p>
-                <div className="space-y-1 max-h-32 overflow-y-auto">
-                  {result.repaired.map((r) => (
-                    <div key={r.fileId} className="text-xs bg-blue-50 rounded-lg p-2 flex items-center justify-between gap-2">
-                      <span className="truncate">{r.title}</span>
-                      <span className="font-mono text-slate-500 shrink-0">{r.oldDocumentNumber} → {r.documentNumber}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div>
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
-                {result.matched.length} file dapat item ({result.matched.reduce((s, m) => s + m.itemsImported, 0)} item total)
-              </p>
-              {result.matched.length === 0 ? (
-                <p className="text-sm text-slate-400">Tidak ada yang cocok.</p>
-              ) : (
-                <div className="space-y-1 max-h-40 overflow-y-auto">
-                  {result.matched.map((m) => (
-                    <button
-                      key={m.fileId}
-                      onClick={() => router.push(`/apps/${appSlug}/edoc-file/${m.fileId}`)}
-                      className="w-full text-xs bg-green-50 hover:bg-green-100 transition-colors rounded-lg p-2 flex items-center justify-between gap-2 text-left"
-                    >
-                      <span className="truncate">
-                        <span className="font-mono text-slate-500">{m.documentNumber}</span> — {m.title}
-                      </span>
-                      <span className="text-emerald-700 font-medium shrink-0">{m.itemsImported} item</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {result.unmatched.length > 0 && (
-              <div>
-                <p className="text-xs font-semibold text-red-500 uppercase tracking-wide mb-1.5">
-                  {result.unmatched.length} IM Number tidak ketemu file-nya
-                </p>
-                <div className="space-y-1 max-h-32 overflow-y-auto">
-                  {result.unmatched.map((u) => (
-                    <div key={u.imNumber} className="text-xs bg-red-50 text-red-700 rounded-lg p-2 flex items-center justify-between gap-2">
-                      <span className="font-mono truncate">{u.imNumber}</span>
-                      <span className="shrink-0">{u.rowCount} baris</span>
-                    </div>
-                  ))}
-                </div>
-                <p className="text-xs text-slate-400 mt-1">
-                  Cek Document Number file-file ini — kemungkinan belum sesuai, atau file-nya belum diupload.
-                </p>
-              </div>
-            )}
-
-            {result.skippedNoImNumber > 0 && (
-              <p className="text-xs text-slate-400">{result.skippedNoImNumber} baris dilewati (kolom IM Number kosong).</p>
-            )}
-
-            <div className="flex items-center gap-3 pt-2 border-t border-slate-100">
-              <Button onClick={onClose} className="bg-amber-600 hover:bg-amber-700 text-white">Selesai</Button>
-            </div>
-          </div>
-        ) : !preview ? (
-          <>
-            <div>
-              <label className={labelCls}>File Excel <span className="text-red-500">*</span></label>
-              <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={(e) => { setFile(e.target.files?.[0] ?? null); e.target.value = ""; }} />
-              {file ? (
-                <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
-                  <FileText className="w-4 h-4 text-green-600 shrink-0" />
-                  <p className="text-sm font-medium text-green-800 truncate flex-1">{file.name}</p>
-                  <button type="button" onClick={() => setFile(null)} className="p-1 text-green-600 hover:text-red-500 transition-colors"><X className="w-4 h-4" /></button>
-                </div>
-              ) : (
-                <button type="button" onClick={() => fileRef.current?.click()} className="w-full flex items-center justify-center gap-2 p-4 border-2 border-dashed border-slate-200 rounded-lg text-slate-500 hover:border-amber-300 hover:text-amber-600 transition-colors">
-                  <Upload className="w-4 h-4" /> Klik untuk pilih file Excel
-                </button>
-              )}
-            </div>
-            <div className="flex items-center gap-3 pt-2">
-              <Button onClick={() => void runPreview()} disabled={submitting || !file} className="bg-amber-600 hover:bg-amber-700 text-white flex items-center gap-2">
-                {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
-                {submitting ? "Mencocokkan..." : "Cocokkan"}
-              </Button>
-              <Button variant="outline" onClick={onClose}>Batal</Button>
-            </div>
-          </>
-        ) : (
-          <div className="space-y-3">
-            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
-              <span><b>{preview.groups.length}</b> IM cocok</span>
-              {preview.unmatched.length > 0 && <span className="text-red-600"><b>{preview.unmatched.length}</b> No. IM tidak ketemu</span>}
-              {preview.skippedNoImNumber > 0 && <span className="text-slate-400">{preview.skippedNoImNumber} baris tanpa No. IM</span>}
-              {(preview.plannedFixes.backfilled + preview.plannedFixes.repaired) > 0 && (
-                <span className="text-blue-600">{preview.plannedFixes.backfilled + preview.plannedFixes.repaired} Document Number akan dilengkapi/diperbaiki saat Import</span>
-              )}
-            </div>
-            {preview.groups.length === 0 ? (
-              <p className="text-sm text-slate-400">Tidak ada IM yang cocok.</p>
-            ) : (
-              <div className="space-y-1.5 max-h-[45vh] overflow-y-auto pr-1">
-                {preview.groups.map((g) => {
-                  const s = g.preview.summary;
-                  const ready = s.invalid === 0;
-                  return (
-                    <div key={g.fileId} className={`flex items-center gap-3 rounded-lg border p-2.5 text-xs ${ready && included[g.fileId] ? "border-slate-200 bg-white" : "border-slate-100 bg-slate-50 opacity-70"}`}>
-                      <input type="checkbox" className="rounded" disabled={!ready} checked={ready && !!included[g.fileId]} onChange={(e) => setIncluded((x) => ({ ...x, [g.fileId]: e.target.checked }))} />
-                      <div className="flex-1 min-w-0">
-                        <p className="truncate"><span className="font-mono text-slate-500">{g.documentNumber}</span> — {g.title}</p>
-                        <p className="text-slate-400">
-                          {s.total} baris{s.renamed > 0 ? ` · ${s.renamed} nama disesuaikan` : ""}
-                          {g.existingItems > 0 && <> · <span className={g.existingMapped ? "text-red-600" : ""}>mengganti {g.existingItems} item lama{g.existingMapped ? ` (${g.existingMapped} sudah punya SKU)` : ""}</span></>}
-                        </p>
-                      </div>
-                      {ready
-                        ? <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-medium shrink-0">Siap</span>
-                        : <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-700 font-medium shrink-0">{s.invalid} bermasalah</span>}
-                      <button onClick={() => setOpenGroup(g)} className="text-blue-600 hover:underline shrink-0">Lihat</button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-            {preview.unmatched.length > 0 && (
-              <p className="text-xs text-red-600">Tidak ketemu: {preview.unmatched.map((u) => `${u.imNumber} (${u.rowCount})`).join(", ")}</p>
-            )}
-            <div className="flex items-center gap-3 pt-2 border-t border-slate-100">
-              <Button onClick={() => void runImport()} disabled={submitting || selected.length === 0} className="bg-amber-600 hover:bg-amber-700 text-white flex items-center gap-2">
-                {submitting && <Loader2 className="w-4 h-4 animate-spin" />} Import {selected.length} IM
-              </Button>
-              <Button variant="outline" onClick={() => { setPreview(null); setResult(null); }}>Ganti file</Button>
-              {blocked > 0 && <p className="text-xs text-red-700">{blocked} IM punya baris bermasalah (SKU kosong/tidak ada/Discontinued) — perbaiki Excel lalu Ganti file.</p>}
-            </div>
-          </div>
-        )}
       </div>
     </Modal>
   );
