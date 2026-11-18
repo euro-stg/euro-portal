@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/modal";
+import { MultiSelect } from "../_edoc-multiselect";
 import { AlertTriangle, ArrowLeft, ExternalLink, Loader2, MapPin, Package, Info, RefreshCw, Search, Users, Wifi, WifiOff, X } from "lucide-react";
 
 // Item / Promo Browser LIVE dari ERP (2026-11-17) — pilih item dari Master Item, promo aktifnya
@@ -174,6 +175,22 @@ export default function ItemPromoPage() {
   const [error, setError] = useState<string | null>(null);
   const [statusKey, setStatusKey] = useState(0); // naik tiap gagal ambil data → ikon status cek ulang
 
+  // Filter hasil ERP (client-side, atas promo item terpilih): nomor IM, Eligible Client, Territory
+  const [fIm, setFIm] = useState("");
+  const [fClient, setFClient] = useState<string[]>([]);
+  const [fTerr, setFTerr] = useState<string[]>([]);
+  const resetFilters = () => { setFIm(""); setFClient([]); setFTerr([]); };
+  const clientOpts = useMemo(() => [...new Set((result?.promos ?? []).flatMap((p) => p.clientTypes))].sort().map((v) => ({ id: v, name: v })), [result]);
+  const terrOpts = useMemo(() => [...new Set((result?.promos ?? []).flatMap((p) => p.territories))].sort().map((v) => ({ id: v, name: v })), [result]);
+  const filteredPromos = useMemo(() => {
+    const im = fIm.trim().toLowerCase();
+    return (result?.promos ?? []).filter((p) =>
+      (!im || [p.imLabel, p.title, p.file?.documentNumber].some((x) => x?.toLowerCase().includes(im))) &&
+      (!fClient.length || p.clientTypes.some((c) => fClient.includes(c))) &&
+      (!fTerr.length || p.territories.some((t) => fTerr.includes(t))));
+  }, [result, fIm, fClient, fTerr]);
+  const filterActive = !!fIm.trim() || fClient.length > 0 || fTerr.length > 0;
+
   useEffect(() => {
     let cancelled = false;
     const t = setTimeout(async () => {
@@ -190,7 +207,7 @@ export default function ItemPromoPage() {
   }, [q, page]);
 
   const load = async (c: Candidate, refresh = false) => {
-    setItem(c); setError(null); setLoading(true); if (!refresh) setResult(null);
+    setItem(c); setError(null); setLoading(true); if (!refresh) { setResult(null); resetFilters(); }
     try {
       const res = await fetch(`/api/edoc/item-browse?itemCode=${encodeURIComponent(c.itemCode)}${refresh ? "&refresh=1" : ""}`);
       const json = await res.json();
@@ -274,8 +291,25 @@ export default function ItemPromoPage() {
                 </div>
               ) : (
                 <>
-                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">{result.promos.length} promo aktif</p>
-                  {result.promos.map((p) => <PromoCard key={p.key} p={p} onOpenFile={(id) => router.push(`/apps/${appSlug}/edoc-file/${id}`)} />)}
+                  <div className="bg-white rounded-xl border border-slate-200 p-3 grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Nomor IM / judul promo</label>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        <input className={`${inputCls} pl-9`} placeholder="mis. 738" value={fIm} onChange={(e) => setFIm(e.target.value)} />
+                      </div>
+                    </div>
+                    <MultiSelect label="Eligible Client (Client Type)" options={clientOpts} selected={fClient} onChange={setFClient} placeholder="Semua client type" />
+                    <MultiSelect label="Territory" options={terrOpts} selected={fTerr} onChange={setFTerr} placeholder="Semua territory" />
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
+                      {filterActive ? `${filteredPromos.length} dari ${result.promos.length} promo aktif` : `${result.promos.length} promo aktif`}
+                    </p>
+                    {filterActive && <button onClick={resetFilters} className="flex items-center gap-1 text-xs text-red-500 hover:text-red-600"><X className="w-3 h-3" /> Reset filter</button>}
+                  </div>
+                  {filteredPromos.length === 0 && <div className="bg-white rounded-xl border border-dashed border-slate-200 p-10 text-center text-sm text-slate-400">Tidak ada promo yang cocok dengan filter.</div>}
+                  {filteredPromos.map((p) => <PromoCard key={p.key} p={p} onOpenFile={(id) => router.push(`/apps/${appSlug}/edoc-file/${id}`)} />)}
                 </>
               )}
             </div>
