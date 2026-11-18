@@ -5,7 +5,6 @@ import { Loader2, Search, X, UserPlus, Shield, CheckSquare, Info } from "lucide-
 import { Alert } from "@/components/ui/alert";
 import { CategoryFormatManager } from "./_category-format-manager";
 import { CounterManager } from "./_counter-manager";
-import { ImPricelistManager } from "./_im-pricelist-manager";
 import { BusinessUnitManager, BranchPrefixMappingManager } from "./_business-unit-manager";
 import { BlastEmailSetting } from "./_blast-email-setting";
 
@@ -115,11 +114,6 @@ export default function EDocSettingsPage() {
       <div>
         <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">7. Master Number</p>
         <CounterManager onError={(m) => showToast("error", m)} onSuccess={(m) => showToast("success", m)} />
-      </div>
-
-      <div>
-        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">8. Master Pricelist (Category IM)</p>
-        <ImPricelistManager businessUnits={businessUnits} onError={(m) => showToast("error", m)} onSuccess={(m) => showToast("success", m)} />
       </div>
     </div>
   );
