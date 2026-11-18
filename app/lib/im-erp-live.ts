@@ -21,6 +21,10 @@ export type LivePromo = {
   source: "RULE" | "PRICE_LIST";
   imLabel: string | null; // "IM 738_2026" apa adanya dari ERP
   file: { id: string; title: string; documentNumber: string | null } | null;
+  /** Lebih dari satu IM aktif di portal bernomor sama → semuanya dicantumkan (tidak ada yang ditautkan otomatis). */
+  fileCandidates: { id: string; title: string; documentNumber: string | null }[];
+  /** Catatan pencocokan (mis. nomor IM di ERP tanpa tahun) — untuk keterangan di UI. */
+  matchNote: string | null;
   title: string;
   mergedRules: number;
   promoType: string;
@@ -79,10 +83,15 @@ export async function buildLivePromos(itemCode: string, refresh = false): Promis
   const portal = files.map((f) => ({ f, k: parsePortalImKey(f.documentNumber) })).filter((x) => x.k);
   const fileFor = (title: string | null, name: string, priceList: string | null) => {
     const k = parseErpImKey(title) ?? parseErpImKey(name) ?? parseErpImKey(priceList);
-    if (!k) return { label: null, file: null };
+    if (!k) return { label: null, file: null, candidates: [], matchNote: null };
     const cands = portal.filter((p) => p.k!.seq === k.seq && (k.year == null || p.k!.year === k.year));
     const raw = [title, name, priceList].map((x) => x?.match(/\bIM\s*\d+(?:_\d{4})?\b/i)?.[0]).find(Boolean);
-    return { label: raw ? raw.toUpperCase().replace(/\s+/, " ") : `IM ${k.seq}`, file: cands.length === 1 ? cands[0].f : null };
+    return {
+      label: raw ? raw.toUpperCase().replace(/\s+/, " ") : `IM ${k.seq}`,
+      file: cands.length === 1 ? cands[0].f : null,
+      candidates: cands.length > 1 ? cands.map((c) => c.f) : [],
+      matchNote: k.year == null && cands.length === 1 ? "Nomor IM di ERP tanpa tahun — dicocokkan hanya lewat nomor urut, pastikan IM-nya benar" : null,
+    };
   };
 
   // Gabungkan rule yang "sama" (jenis & nilai promo, syarat, territory, price list) — mis. rule mingguan.
@@ -99,7 +108,7 @@ export async function buildLivePromos(itemCode: string, refresh = false): Promis
     const m = fileFor(r.title, r.name, r.for_price_list);
     const open = rs.some((x) => !x.valid_upto);
     promos.push({
-      key: `R:${sig}`, source: "RULE", imLabel: m.label, file: m.file, title: r.title ?? r.name, mergedRules: rs.length,
+      key: `R:${sig}`, source: "RULE", imLabel: m.label, file: m.file, fileCandidates: m.candidates, matchNote: m.matchNote, title: r.title ?? r.name, mergedRules: rs.length,
       ...promoOf(r, baseRate), normalPrice: baseRate,
       validFrom: rs.map((x) => x.valid_from).filter(Boolean).sort()[0] ?? null,
       validUpto: open ? null : rs.map((x) => x.valid_upto).filter(Boolean).sort().at(-1) ?? null,
@@ -115,7 +124,7 @@ export async function buildLivePromos(itemCode: string, refresh = false): Promis
     if (ruleLists.has(pl)) continue;
     const m = fileFor(null, "", pl);
     promos.push({
-      key: `P:${pl}`, source: "PRICE_LIST", imLabel: m.label, file: m.file, title: pl, mergedRules: 0, promoType: "Harga Price List",
+      key: `P:${pl}`, source: "PRICE_LIST", imLabel: m.label, file: m.file, fileCandidates: m.candidates, matchNote: m.matchNote, title: pl, mergedRules: 0, promoType: "Harga Price List",
       discountPercent: null, promoPrice: p.price_list_rate, normalPrice: null, validFrom: p.valid_from, validUpto: p.valid_upto,
       priceList: pl, clientTypes: [], territories: [], audience: null, minQty: null,
     });

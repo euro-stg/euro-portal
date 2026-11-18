@@ -11,6 +11,7 @@ import { AlertTriangle, ArrowLeft, ExternalLink, Loader2, MapPin, Package, Info,
 type Candidate = { itemCode: string; itemName: string; company: string | null; business: string | null; status: string; standardPrice: number | null };
 type Promo = {
   key: string; source: "RULE" | "PRICE_LIST"; imLabel: string | null; file: { id: string; title: string; documentNumber: string | null } | null;
+  fileCandidates: { id: string; title: string; documentNumber: string | null }[]; matchNote: string | null;
   title: string; mergedRules: number; promoType: string; discountPercent: number | null; promoPrice: number | null; normalPrice: number | null;
   validFrom: string | null; validUpto: string | null; priceList: string | null; clientTypes: string[]; territories: string[]; audience: string | null; minQty: number | null;
 };
@@ -99,8 +100,24 @@ function PromoCard({ p, onOpenFile }: { p: Promo; onOpenFile: (fileId: string) =
               <button onClick={() => onOpenFile(p.file!.id)} className="inline-flex items-center gap-1 text-blue-600 hover:underline">
                 <ExternalLink className="w-3 h-3" /> Buka file IM
               </button>
-            ) : p.imLabel ? <span className="text-amber-600">IM tidak ditemukan di portal</span> : null}
+            ) : p.fileCandidates.length > 1 ? <span className="text-amber-600">Ada {p.fileCandidates.length} IM di portal dengan nomor ini</span>
+              : p.imLabel ? <span className="text-amber-600">IM tidak ditemukan di portal</span> : null}
           </p>
+          {p.fileCandidates.length > 1 && (
+            <div className="mt-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              <p className="mb-1">Nomor IM ini dipakai lebih dari satu IM aktif di edoc, jadi tidak ditautkan otomatis. Pilih yang sesuai dengan promo ini:</p>
+              <ul className="space-y-0.5">
+                {p.fileCandidates.map((f) => (
+                  <li key={f.id}>
+                    <button onClick={() => onOpenFile(f.id)} className="inline-flex items-start gap-1 text-left text-blue-700 hover:underline">
+                      <ExternalLink className="w-3 h-3 mt-0.5 shrink-0" /> <span>{f.documentNumber ?? "(tanpa nomor)"} — {f.title}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {p.matchNote && <p className="mt-1 text-[11px] text-amber-600">{p.matchNote}</p>}
         </div>
         <span className="text-xs px-2 py-1 rounded-full bg-amber-50 text-amber-700 font-medium shrink-0">{p.promoType}</span>
       </div>
