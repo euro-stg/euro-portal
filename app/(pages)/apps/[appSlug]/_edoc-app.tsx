@@ -345,9 +345,9 @@ export function EDocApp() {
               <input type="date" className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 text-slate-600 bg-white" value={searchValidTo} onChange={(e) => setSearchValidTo(e.target.value)} />
             </span>
             <button
-              onClick={() => router.push(`/apps/${appSlug}/edoc-items`)}
+              onClick={() => router.push(`/apps/${appSlug}/item-promo`)}
               className="flex items-center gap-1.5 text-xs border border-amber-200 bg-amber-50 text-amber-700 rounded-lg px-2 py-1.5 hover:bg-amber-100 transition-colors"
-              title="Cari promo item lintas semua file IM"
+              title="Cari item dari Master Item — promo, Client Type & Territory langsung dari ERP"
             >
               <Package className="w-3.5 h-3.5" /> Item / Promo Browser
             </button>

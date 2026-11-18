@@ -19,14 +19,14 @@ import type { ImProductInput } from "@/lib/edoc";
 // (nomor urut + tahun). Format lama tanpa tahun ("IM 274") dicocokkan by nomor urut saja,
 // HANYA kalau tepat satu IM aktif portal bernomor itu.
 
-type ErpRule = {
+export type ErpRule = {
   name: string; title: string | null; for_price_list: string | null; rate_or_discount: string | null;
   discount_percentage: number | null; discount_amount: number | null; rate: number | null;
   valid_from: string | null; valid_upto: string | null; applicable_for: string | null;
   territory: string | null; multiple_territories: string | null; customer_group: string | null; customer: string | null;
   min_qty: number | null;
 };
-type ErpPrice = { price_list: string; price_list_rate: number; valid_from: string | null; valid_upto: string | null };
+export type ErpPrice = { price_list: string; price_list_rate: number; valid_from: string | null; valid_upto: string | null };
 
 type ImKey = { seq: number; year: number | null };
 const keyStr = (k: ImKey) => `${k.seq}_${k.year ?? ""}`;
@@ -44,20 +44,58 @@ export function parsePortalImKey(documentNumber: string | null): ImKey | null {
   return { seq: Number(seq), year: year ? Number(year) : null };
 }
 
-const today = () => new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10); // WIB
-const fmtDate = (d: string | null) => (d ? d.split("-").reverse().join("/") : "…");
+export const today = () => new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10); // WIB
+export const fmtDate = (d: string | null) => (d ? d.split("-").reverse().join("/") : "…");
 const rupiah = (n: number) => `Rp${n.toLocaleString("id-ID")}`;
 
-function eligibleOf(r: ErpRule): string | null {
+/** Territory rule (bisa banyak: multiple_territories JSON + territory tunggal), tanpa duplikat. */
+export function territoriesOf(r: ErpRule): string[] {
+  let t: string[] = [];
+  try { t = r.multiple_territories ? JSON.parse(r.multiple_territories) : []; } catch { /* abaikan format aneh */ }
+  if (r.territory) t.push(r.territory);
+  return [...new Set(t.filter(Boolean))].sort();
+}
+/** Pembatasan langsung di rule selain territory (kasus langka: Customer / Customer Group). */
+export function eligibleOf(r: ErpRule): string | null {
   if (r.applicable_for === "Customer" && r.customer) return `Customer: ${r.customer}`;
   if (r.applicable_for === "Customer Group" && r.customer_group) return `Customer Group: ${r.customer_group}`;
-  let terr: string[] = [];
-  try { terr = r.multiple_territories ? JSON.parse(r.multiple_territories) : []; } catch { /* abaikan format aneh */ }
-  if (!terr.length && r.territory) terr = [r.territory];
-  return terr.length ? `Klinik: ${terr.join(", ")}` : null;
+  return null;
 }
 
-function promoOf(r: ErpRule, baseRate: number | null) {
+type ErpPriceListFlags = Record<string, number | string | null> & { name: string };
+
+// Segmen klien di Price List ERP (field custom "Client Type" + for New/Existing Client).
+const PL_CLIENT_TYPES: [string, string][] = [["new_joiner", "New Joiner"], ["trial", "Trial"], ["new", "New"], ["win_back", "Win Back"], ["active", "Active"],
+  ["substatus_winback", "Win Back"], ["substatus_loyal", "Loyal"], ["leavers", "Leavers"], ["trial_leavers", "Trial Leavers"], ["loyal", "Loyal"]];
+
+/**
+ * Eligible Client dari Price List rule (2026-11-17, diriset ke ERP): = Client Type di Price List
+ * (New Joiner, Trial, Leavers, …). Territory TIDAK ada di Price List — ada di Pricing Rule & dipisah
+ * ke kolom Ketentuan. Best effort: akun ERP tak boleh baca → kosong.
+ */
+export async function loadPriceListAudience(lists: string[]): Promise<Map<string, string[]>> {
+  const out = new Map<string, string[]>();
+  const real = lists.filter((l) => l && l !== "Standard Selling");
+  if (!real.length) return out;
+  try {
+    // Dipecah per 15 nama — filter `in` dengan puluhan nama price list membuat URL terlalu panjang.
+    const chunks: string[][] = [];
+    for (let i = 0; i < real.length; i += 15) chunks.push(real.slice(i, i + 15));
+    const results = await Promise.all(chunks.map((c) => erpListAll<ErpPriceListFlags>("Price List", {
+      fields: ["name", ...PL_CLIENT_TYPES.map(([f]) => f)], filters: [["name", "in", c]], pageSize: 500,
+    })));
+    for (const r of results.flat()) out.set(r.name, [...new Set(PL_CLIENT_TYPES.filter(([f]) => r[f]).map(([, l]) => l))]);
+  } catch { /* akses ERP terbatas — abaikan, eligible client tetap dari rule */ }
+  return out;
+}
+
+/** Eligible Client = Client Type dari Price List rule (+ Customer/Group bila rule membatasi itu). */
+function eligibleWithAudience(r: ErpRule, aud: Map<string, string[]>): string | null {
+  const seg = r.for_price_list ? aud.get(r.for_price_list) : null;
+  return [seg?.length ? seg.join(", ") : null, eligibleOf(r)].filter(Boolean).join(" · ") || null;
+}
+
+export function promoOf(r: ErpRule, baseRate: number | null) {
   const pct = r.discount_percentage ?? 0, amt = r.discount_amount ?? 0, rate = r.rate ?? 0;
   if (r.rate_or_discount === "Discount Percentage" && pct > 0)
     return { promoType: `Diskon ${pct}%`, discountPercent: pct, promoPrice: baseRate != null ? Math.round(baseRate * (1 - pct / 100)) : null };
@@ -104,6 +142,7 @@ export async function buildErpProposals(itemCode: string): Promise<{ error: stri
       filters: [["item_code", "=", itemCode], ["price_list", "like", "%IM %"]], orderBy: "valid_from desc", pageSize: 500,
     }),
   ]);
+  const audience = await loadPriceListAudience([...new Set(rules.map((r) => r.for_price_list).filter((l): l is string => !!l))]);
   const activePrices = prices.filter((p) => !p.valid_upto || p.valid_upto >= t);
   const rateByList = new Map<string, number>();
   for (const p of activePrices) if (!rateByList.has(p.price_list)) rateByList.set(p.price_list, p.price_list_rate);
@@ -162,7 +201,7 @@ export async function buildErpProposals(itemCode: string): Promise<{ error: stri
     // Gabungkan rule yang "sama" (jenis & nilai promo + syarat sama) — mis. rule mingguan.
     const bySig = new Map<string, ErpRule[]>();
     for (const r of e.rules) {
-      const sig = [r.rate_or_discount, r.discount_percentage, r.discount_amount, r.rate, eligibleOf(r), r.min_qty, r.for_price_list].join("|");
+      const sig = [r.rate_or_discount, r.discount_percentage, r.discount_amount, r.rate, eligibleWithAudience(r, audience), territoriesOf(r).join(";"), r.min_qty, r.for_price_list].join("|");
       bySig.set(sig, [...(bySig.get(sig) ?? []), r]);
     }
     const proposals: Proposal[] = [];
@@ -173,10 +212,12 @@ export async function buildErpProposals(itemCode: string): Promise<{ error: stri
       const from = rs.map((x) => x.valid_from).filter(Boolean).sort()[0] ?? null;
       const upto = rs.map((x) => x.valid_upto).filter(Boolean).sort().at(-1) ?? null;
       const minQty = rs[0].min_qty && rs[0].min_qty > 1 ? `Minimal qty ${rs[0].min_qty}` : null;
+      const terr = territoriesOf(r);
+      const conditions = [minQty, terr.length ? `Territory (${terr.length}): ${terr.join(", ")}` : null].filter(Boolean).join(" · ") || null;
       proposals.push({
         key: `R:${sig}`, source: "RULE", defaultInclude: true,
         product: {
-          ...base, ...promo, normalPrice: baseRate, validity: `${fmtDate(from)} s/d ${fmtDate(upto)}`, eligibleClient: eligibleOf(r), keyConditions: minQty,
+          ...base, ...promo, normalPrice: baseRate, validity: `${fmtDate(from)} s/d ${fmtDate(upto)}`, eligibleClient: eligibleWithAudience(r, audience), keyConditions: conditions,
           promoDetail: rs.length > 1 ? `${r.title ?? r.name} (+${rs.length - 1} rule periode lain)` : (r.title ?? r.name),
         },
         info: { rules: rs.map((x) => x.title ?? x.name), priceList: r.for_price_list, baseRate },
