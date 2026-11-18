@@ -113,7 +113,9 @@ const Home = async () => {
           include: {
             author:      { select: { name: true, image: true, jobPositionName: true } },
             category:    { select: { name: true, color: true, icon: true } },
-            attachments: { orderBy: { order: "asc" }, take: 1 },
+            // Semua lampiran (bukan hanya yang pertama): thumbnail = gambar pertama di antara lampiran,
+            // sama seperti feed Euro Update — kalau lampiran urutan 0 berupa PDF, gambar di bawahnya tetap tampil.
+            attachments: { orderBy: { order: "asc" } },
           },
           orderBy: [{ publishedAt: "desc" }],
           take: 20,
