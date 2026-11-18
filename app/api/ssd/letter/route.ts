@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import db from "@/lib/db/db";
-import { ssdLetterScopeFilter } from "@/lib/ssd";
+import { isAcceptableDraftPath, ssdLetterScopeFilter } from "@/lib/ssd";
 
 const PAGE_SIZE = 15;
 
@@ -89,6 +89,8 @@ export async function POST(request: Request) {
 
     const category = await db.ssdCategory.findUnique({ where: { id: categoryId } });
     if (!category) return NextResponse.json({ message: "Kategori tidak ditemukan" }, { status: 404 });
+    if (fileDraft && !isAcceptableDraftPath(fileDraft, session.user.id))
+      return NextResponse.json({ message: "File draft tidak valid — unggah ulang file draft" }, { status: 400 });
     if (category.hasDraft && !fileDraft)
       return NextResponse.json({ message: "File draft wajib diupload untuk kategori ini" }, { status: 400 });
 

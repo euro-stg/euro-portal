@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import db from "@/lib/db/db";
 import { uploadToNextcloud } from "@/lib/nextcloud";
+import { SSD_ALLOWED_EXT, SSD_MAX_FILE_BYTES } from "@/lib/ssd";
 
 export const maxDuration = 60;
 
@@ -17,6 +18,8 @@ export async function POST(
     const { id: letterId } = await params;
     const letter = await db.ssdLetter.findUnique({ where: { id: letterId, deletedAt: null } });
     if (!letter) return NextResponse.json({ message: "Tidak ditemukan" }, { status: 404 });
+    if (letter.requestedBy !== userId)
+      return NextResponse.json({ message: "Bukan milik Anda" }, { status: 403 });
     if (letter.status !== "APPROVED")
       return NextResponse.json({ message: "Hanya surat APPROVED yang bisa upload file final" }, { status: 400 });
 
@@ -24,7 +27,10 @@ export async function POST(
     const file = formData.get("file") as File | null;
     if (!file) return NextResponse.json({ message: "File tidak ditemukan" }, { status: 400 });
 
-    const ALLOWED = ["pdf","doc","docx","jpg","jpeg","png","gif","webp"];
+    if (file.size === 0) return NextResponse.json({ message: "File kosong" }, { status: 400 });
+    if (file.size > SSD_MAX_FILE_BYTES) return NextResponse.json({ message: "File maksimal 10MB" }, { status: 413 });
+
+    const ALLOWED = SSD_ALLOWED_EXT;
     const ext = (file.name.split(".").pop() ?? "").toLowerCase();
     if (!ALLOWED.includes(ext))
       return NextResponse.json({ message: `Tipe file tidak didukung. Gunakan: ${ALLOWED.join(", ")}` }, { status: 400 });

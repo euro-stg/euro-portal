@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import db from "@/lib/db/db";
 import { deleteFromNextcloud } from "@/lib/nextcloud";
+import { canAccessSsdLetter, isAcceptableDraftPath } from "@/lib/ssd";
 
 export async function GET(
   _req: Request,
@@ -12,6 +13,8 @@ export async function GET(
     if (!session?.user?.id) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
     const { id } = await params;
+    // 404 (bukan 403) untuk surat di luar cakupan user — tidak membocorkan keberadaan surat.
+    if (!(await canAccessSsdLetter(session.user.id, id))) return NextResponse.json({ message: "Tidak ditemukan" }, { status: 404 });
     const letter = await db.ssdLetter.findUnique({
       where: { id, deletedAt: null },
       include: {
@@ -75,6 +78,8 @@ export async function PATCH(
     const { id } = await params;
     const letter = await db.ssdLetter.findUnique({ where: { id, deletedAt: null } });
     if (!letter) return NextResponse.json({ message: "Tidak ditemukan" }, { status: 404 });
+    if (letter.requestedBy !== session.user.id)
+      return NextResponse.json({ message: "Bukan milik Anda" }, { status: 403 });
     if (letter.status !== "DRAFT")
       return NextResponse.json({ message: "Hanya surat berstatus DRAFT yang bisa diedit" }, { status: 400 });
 
@@ -83,6 +88,9 @@ export async function PATCH(
       title?: string; tujuan?: string; picId?: string;
       categoryId?: string; companyId?: string; fileDraft?: string;
     };
+
+    if (fileDraft && !isAcceptableDraftPath(fileDraft, session.user.id, letter.fileDraft))
+      return NextResponse.json({ message: "File draft tidak valid — unggah ulang file draft" }, { status: 400 });
 
     const data = await db.ssdLetter.update({
       where: { id },
@@ -114,6 +122,8 @@ export async function DELETE(
     const { id } = await params;
     const letter = await db.ssdLetter.findUnique({ where: { id, deletedAt: null } });
     if (!letter) return NextResponse.json({ message: "Tidak ditemukan" }, { status: 404 });
+    if (letter.requestedBy !== session.user.id)
+      return NextResponse.json({ message: "Bukan milik Anda" }, { status: 403 });
     if (letter.status !== "DRAFT")
       return NextResponse.json({ message: "Hanya surat berstatus DRAFT yang bisa dihapus" }, { status: 400 });
 

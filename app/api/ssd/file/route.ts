@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { deleteFromNextcloud, fetchFromNextcloud } from "@/lib/nextcloud";
+import { canDeleteSsdFile, canReadSsdFile } from "@/lib/ssd";
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -8,6 +9,9 @@ export async function GET(req: NextRequest) {
 
   const path = req.nextUrl.searchParams.get("path");
   if (!path) return NextResponse.json({ message: "Path wajib diisi" }, { status: 400 });
+  // Hanya file di folder ssd/ yang tertaut ke surat yang boleh dibuka user ini (atau unggahannya sendiri).
+  // 404 (bukan 403) supaya keberadaan file orang lain tidak bocor.
+  if (!(await canReadSsdFile(session.user.id, path))) return NextResponse.json({ message: "File tidak ditemukan" }, { status: 404 });
 
   // Sebelumnya bangun URL Nextcloud manual di sini — menduplikasi logic yang sudah ada di
   // app/lib/nextcloud.ts DAN sekaligus bypass auto-failover ke NEXTCLOUD_URL_ALTERNATIF
@@ -38,7 +42,8 @@ export async function DELETE(req: NextRequest) {
 
   const path = req.nextUrl.searchParams.get("path");
   if (!path) return NextResponse.json({ message: "Path wajib diisi" }, { status: 400 });
-  console.log("[ssd/file DELETE] path:", path);
+  // File tertaut ke surat: hanya pembuatnya selagi Draft. Belum tertaut: hanya pengunggahnya.
+  if (!(await canDeleteSsdFile(session.user.id, path))) return NextResponse.json({ message: "Tidak diizinkan menghapus file ini" }, { status: 403 });
 
   try {
     await deleteFromNextcloud(path);
