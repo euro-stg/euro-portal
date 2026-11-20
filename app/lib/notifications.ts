@@ -48,7 +48,8 @@ export async function createNotification(
       ? db.notification.create({ data: { userId, title, body, type, refId: refId ?? null, appType: appType ?? null, refUrl } })
       : Promise.resolve(null),
     config.email
-      ? db.user.findUnique({ where: { id: userId }, select: { email: true } })
+      // Hanya karyawan aktif (belum lewat resign date) yang diemail — lihat app/lib/employee.ts.
+      ? db.user.findFirst({ where: { id: userId, ...activeEmployeeWhere() }, select: { email: true } })
       : Promise.resolve(null),
   ]);
 
@@ -84,7 +85,7 @@ export async function notifyMany(
         })
       : Promise.resolve(null),
     config.email
-      ? db.user.findMany({ where: { id: { in: unique }, email: { not: null } }, select: { email: true } })
+      ? db.user.findMany({ where: { id: { in: unique }, email: { not: null }, ...activeEmployeeWhere() }, select: { email: true } })
       : Promise.resolve([]),
   ]);
 
