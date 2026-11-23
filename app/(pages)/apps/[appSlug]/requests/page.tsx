@@ -9,7 +9,6 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
-import { Pagination } from "@/components/ui/pagination";
 
 type Request = {
   id: string; requestNo: string; type: string; title: string; status: string;
@@ -49,11 +48,15 @@ export default function SdRequestListPage() {
   const [data, setData] = useState<Request[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Infinite scroll: 10 data per muat, halaman berikutnya dimuat saat sentinel di bawah daftar terlihat.
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const sentinelRef = useRef<HTMLDivElement>(null);
   const [total, setTotal] = useState(0);
   const [mine, setMine] = useState(false);
-  const [filters, setFilters] = useState({ search: "", status: "", type: "" });
+  const [filters, setFilters] = useState({ search: "", status: "", type: "", picId: "" });
+  const [pics, setPics] = useState<{ id: string; name: string | null }[]>([]);
   const [toast, setToast] = useState<{ variant: "success" | "error"; message: string } | null>(null);
   const toastRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -63,8 +66,8 @@ export default function SdRequestListPage() {
     toastRef.current = setTimeout(() => setToast(null), 3000);
   };
 
-  const load = async (p = page) => {
-    setLoading(true);
+  const load = async (p = 1) => {
+    if (p === 1) setLoading(true); else setLoadingMore(true);
     setError(null);
     try {
       const q = new URLSearchParams({ page: String(p) });
@@ -72,22 +75,43 @@ export default function SdRequestListPage() {
       if (filters.search) q.set("search", filters.search);
       if (filters.status) q.set("status", filters.status);
       if (filters.type)   q.set("type", filters.type);
+      if (filters.picId)  q.set("picId", filters.picId);
+      if (pics.length === 0) q.set("withPics", "1");
 
       const res = await fetch(`/api/sd/request?${q}`);
       const json = await res.json();
       if (!res.ok) throw new Error(json.message ?? "Gagal memuat data");
-      setData(json.data);
+      // Halaman > 1 ditambahkan ke bawah (dedupe by id, jaga-jaga data bergeser saat scroll).
+      setData((cur) => {
+        if (p === 1) return json.data;
+        const seen = new Set(cur.map((x: Request) => x.id));
+        return [...cur, ...json.data.filter((x: Request) => !seen.has(x.id))];
+      });
+      if (json.pics) setPics(json.pics);
+      setPage(p);
       setTotalPages(json.meta.totalPages);
       setTotal(json.meta.total);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Gagal memuat data");
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   };
 
-  useEffect(() => { load(1); setPage(1); }, [filters, mine]);
-  useEffect(() => { load(page); }, [page]);
+  // Filter / toggle berubah → mulai lagi dari halaman 1.
+  useEffect(() => { load(1); }, [filters, mine]);
+
+  const hasMore = page < totalPages;
+  const loadMoreRef = useRef<() => void>(() => {});
+  loadMoreRef.current = () => { if (!loading && !loadingMore && hasMore) void load(page + 1); };
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver((entries) => { if (entries[0].isIntersecting) loadMoreRef.current(); }, { rootMargin: "200px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [data.length, loading]);
 
   const isOverdue = (r: Request) => {
     if (!r.estimatedCompletedAt) return false;
@@ -165,8 +189,17 @@ export default function SdRequestListPage() {
             <option key={k} value={k}>{v}</option>
           ))}
         </select>
+        <select
+          className={inputCls}
+          value={filters.picId}
+          onChange={(e) => setFilters((f) => ({ ...f, picId: e.target.value }))}
+        >
+          <option value="">Semua PIC</option>
+          <option value="none">Belum ada PIC</option>
+          {pics.map((p) => <option key={p.id} value={p.id}>{p.name ?? "-"}</option>)}
+        </select>
         <button
-          onClick={() => load(page)}
+          onClick={() => load(1)}
           className="p-2 rounded-md border border-slate-200 text-slate-500 hover:bg-slate-50 transition-colors"
         >
           <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
@@ -205,7 +238,7 @@ export default function SdRequestListPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-mono text-slate-400">{r.requestNo}</span>
+                    <span className="text-sm font-mono font-bold text-slate-800 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md">{r.requestNo}</span>
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLOR[r.status] ?? "bg-slate-100 text-slate-600"}`}>
                       {STATUS_LABEL[r.status] ?? r.status}
                     </span>
@@ -220,6 +253,10 @@ export default function SdRequestListPage() {
                   </div>
                   <p className="font-semibold text-slate-800 mt-1 truncate">{r.title}</p>
                   <div className="flex items-center gap-4 mt-1.5 text-xs text-slate-400 flex-wrap">
+                    <span className="flex items-center gap-1 text-slate-500">
+                      <Clock className="w-3 h-3" />
+                      Dibuat: {new Date(r.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}
+                    </span>
                     <span>Oleh: {r.requester.name ?? "-"}</span>
                     {r.pic && <span>PIC: {r.pic.name}</span>}
                     {r.refApp && <span>App: {r.refApp.name}</span>}
@@ -238,10 +275,15 @@ export default function SdRequestListPage() {
         </div>
       )}
 
-      {totalPages > 1 && (
-        <div className="mt-4">
-          <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
+      {/* Sentinel infinite scroll */}
+      <div ref={sentinelRef} className="h-px" />
+      {loadingMore && (
+        <div className="flex items-center justify-center py-4 text-slate-400 text-sm">
+          <Loader2 className="w-4 h-4 animate-spin mr-2" /> Memuat lebih banyak...
         </div>
+      )}
+      {!loading && !loadingMore && data.length > 0 && !hasMore && (
+        <p className="text-center text-xs text-slate-400 py-4">Semua {total} pengajuan sudah ditampilkan</p>
       )}
     </div>
   );

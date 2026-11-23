@@ -16,24 +16,13 @@ export async function GET() {
     // userId tetap dipakai untuk validasi auth, tapi hitungan adalah global
     void userId;
 
-    const [total, done, inProgress, recent] = await Promise.all([
+    const [total, done, inProgress] = await Promise.all([
       db.sdRequest.count({ where: { deletedAt: null } }),
       db.sdRequest.count({ where: { deletedAt: null, status: "DONE" } }),
       db.sdRequest.count({ where: { deletedAt: null, status: { in: ACTIVE_STATUSES } } }),
-      db.sdRequest.findMany({
-        where: { deletedAt: null },
-        select: {
-          id: true, requestNo: true, title: true, status: true,
-          estimatedCompletedAt: true, createdAt: true,
-          pic: { select: { id: true, name: true } },
-          requester: { select: { id: true, name: true } },
-        },
-        orderBy: { createdAt: "desc" },
-        take: 5,
-      }),
     ]);
 
-    return NextResponse.json({ total, done, inProgress, recent });
+    return NextResponse.json({ total, done, inProgress });
   } catch (err) {
     console.error(err);
     return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });

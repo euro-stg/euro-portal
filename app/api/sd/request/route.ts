@@ -15,6 +15,8 @@ export async function GET(request: Request) {
     const status = searchParams.get("status")?.trim();
     const type   = searchParams.get("type")?.trim();
     const mine   = searchParams.get("mine") === "true";
+    const picId  = searchParams.get("picId")?.trim();
+    const withPics = searchParams.get("withPics") === "1";
 
     const where = {
       deletedAt: null,
@@ -25,9 +27,11 @@ export async function GET(request: Request) {
       ]} : {}),
       ...(status ? { status } : {}),
       ...(type   ? { type }   : {}),
+      // "none" = pengajuan yang belum punya PIC
+      ...(picId  ? { picId: picId === "none" ? null : picId } : {}),
     };
 
-    const [rows, total] = await Promise.all([
+    const [rows, total, picRows] = await Promise.all([
       db.sdRequest.findMany({
         where,
         select: {
@@ -42,10 +46,22 @@ export async function GET(request: Request) {
         take: PAGE_SIZE,
       }),
       db.sdRequest.count({ where }),
+      // Opsi dropdown filter PIC = semua PIC yang pernah ditunjuk (hanya diambil saat diminta)
+      withPics
+        ? db.sdRequest.findMany({
+            where: { deletedAt: null, picId: { not: null } },
+            distinct: ["picId"],
+            select: { pic: { select: { id: true, name: true } } },
+          })
+        : Promise.resolve([]),
     ]);
+    const pics = picRows
+      .map((r) => r.pic).filter((p): p is { id: string; name: string | null } => !!p)
+      .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
 
     return NextResponse.json({
       data: rows,
+      ...(withPics ? { pics } : {}),
       meta: { total, page, pageSize: PAGE_SIZE, totalPages: Math.ceil(total / PAGE_SIZE) },
     });
   } catch (err) {

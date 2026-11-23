@@ -626,7 +626,7 @@ export default function RequestDetailPage() {
           </div>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs font-mono text-slate-400">{data.requestNo}</span>
+              <span className="text-sm font-mono font-bold text-slate-800 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md">{data.requestNo}</span>
               <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${STATUS_COLOR[data.status] ?? "bg-slate-100 text-slate-600"}`}>
                 {STATUS_LABEL[data.status] ?? data.status}
               </span>

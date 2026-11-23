@@ -2,38 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { FileText, CheckCircle2, Clock, Loader2, ChevronRight, AlertCircle, FileSignature, Send, XCircle, BadgeCheck } from "lucide-react";
+import { FileText, CheckCircle2, Clock, Loader2, FileSignature, Send, XCircle, BadgeCheck } from "lucide-react";
 import { EuFeedPage } from "./_eu-feed";
 import { EDocApp } from "./_edoc-app";
 
-const STATUS_LABEL: Record<string, string> = {
-  DRAFT: "Draft", SUBMITTED: "Diajukan", IT_REVIEW: "Review IT",
-  APPROVED_IT: "Menunggu Persetujuan", APPROVED_USER: "Disetujui",
-  IN_PROGRESS: "Dalam Pengembangan", UAT: "UAT", UAT_REVISION: "Revisi UAT",
-  DONE: "Selesai", REJECTED: "Ditolak", CANCELLED: "Dibatalkan",
-};
-const STATUS_COLOR: Record<string, string> = {
-  DRAFT: "bg-slate-100 text-slate-600",
-  SUBMITTED: "bg-blue-50 text-blue-700",
-  IT_REVIEW: "bg-amber-50 text-amber-700",
-  APPROVED_IT: "bg-orange-50 text-orange-700",
-  APPROVED_USER: "bg-teal-50 text-teal-700",
-  IN_PROGRESS: "bg-indigo-50 text-indigo-700",
-  UAT: "bg-purple-50 text-purple-700",
-  UAT_REVISION: "bg-pink-50 text-pink-700",
-  DONE: "bg-emerald-50 text-emerald-700",
-  REJECTED: "bg-red-50 text-red-700",
-  CANCELLED: "bg-slate-100 text-slate-500",
-};
-
-type RecentItem = {
-  id: string; requestNo: string; title: string; status: string;
-  estimatedCompletedAt: string | null; createdAt: string;
-  pic: { id: string; name: string | null } | null;
-  requester: { id: string; name: string | null };
-};
-
-type Stats = { total: number; done: number; inProgress: number; recent: RecentItem[] };
+type Stats = { total: number; done: number; inProgress: number };
 type SsdStats = { total: number; draft: number; submitted: number; approved: number; rejected: number; done: number; mine: number };
 
 export default function AppDashboardPage() {
@@ -122,12 +95,6 @@ export default function AppDashboardPage() {
     );
   }
 
-  const isOverdue = (r: RecentItem) => {
-    if (!r.estimatedCompletedAt) return false;
-    if (["DONE", "CANCELLED", "REJECTED"].includes(r.status)) return false;
-    return new Date(r.estimatedCompletedAt) < new Date();
-  };
-
   return (
     <>
     <div>
@@ -166,62 +133,6 @@ export default function AppDashboardPage() {
                 <p className="text-xs text-slate-400 mt-0.5">Selesai</p>
               </div>
             </div>
-          </div>
-
-          {/* Recent requests — full width */}
-          <div className="bg-white rounded-xl border border-slate-200">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-              <h2 className="text-sm font-semibold text-slate-700">Pengajuan Terbaru</h2>
-              <button
-                onClick={() => router.push(`/apps/${appSlug}/requests`)}
-                className="text-xs text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
-              >
-                Lihat semua <ChevronRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            {!stats?.recent?.length ? (
-              <div className="p-12 text-center">
-                <FileText className="w-8 h-8 text-slate-300 mx-auto mb-3" />
-                <p className="text-sm text-slate-500">Belum ada pengajuan</p>
-              </div>
-            ) : (
-              <div className="divide-y divide-slate-50">
-                {stats.recent.map((r) => (
-                  <button
-                    key={r.id}
-                    onClick={() => router.push(`/apps/${appSlug}/requests/${r.id}`)}
-                    className="w-full flex items-center gap-4 px-5 py-3.5 hover:bg-slate-50 transition-colors text-left group"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap mb-0.5">
-                        <span className="text-xs font-mono text-slate-400">{r.requestNo}</span>
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLOR[r.status] ?? "bg-slate-100 text-slate-600"}`}>
-                          {STATUS_LABEL[r.status] ?? r.status}
-                        </span>
-                        {isOverdue(r) && (
-                          <span className="text-xs flex items-center gap-0.5 text-red-500 font-medium">
-                            <AlertCircle className="w-3 h-3" /> Terlambat
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-sm font-medium text-slate-700 truncate">{r.title}</p>
-                      <div className="flex items-center gap-3 mt-0.5 text-xs text-slate-400">
-                        <span>Oleh: {r.requester.name ?? "-"}</span>
-                        {r.pic && <span>PIC: {r.pic.name}</span>}
-                        <span>{new Date(r.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}</span>
-                        {r.estimatedCompletedAt && (
-                          <span className={isOverdue(r) ? "text-red-400" : ""}>
-                            Target: {new Date(r.estimatedCompletedAt).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-blue-400 shrink-0 transition-colors" />
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
         </>
       )}
