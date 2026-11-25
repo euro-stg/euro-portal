@@ -109,22 +109,24 @@ export function ReactionBurst({ types }: { types: string[] }) {
       left: 2 + h(1) * 94,                 // % dari kiri: menyebar di SELURUH lebar kartu
       size: 16 + Math.round(h(2) * 16),
       dx: Math.round((h(3) - 0.5) * 120),  // goyang kiri-kanan saat naik
-      dy: -Math.round(260 + h(4) * 520),   // naik melewati seluruh tinggi kartu (di-clip kartu)
+      dy: -Math.round(240 + h(4) * 400),   // naik cukup jauh (di-clip batas kartu)
       rot: Math.round((h(5) - 0.5) * 180),
-      delay: Math.round(h(6) * 2000),           // jeda 0–2 dtk
-      dur: Math.round(7000 + h(7) * 1000),      // gerak 7–8 dtk → total maks. 10 dtk
+      // Sebagian besar langsung muncul (jeda condong ke kecil), sisanya menyusul sampai 4 dtk → total maks. 10 dtk.
+      delay: Math.round(h(6) * h(6) * 4000),
+      dur: Math.round(5500 + h(7) * 500),       // gerak 5,5–6 dtk (lebih cepat dari sebelumnya)
+      bottom: Math.round(h(8) * 75),            // titik awal acak di tinggi kartu → langsung terlihat di mana-mana
     };
   }));
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none z-10" aria-hidden>
-      {parts.map(({ key, Icon, color, left, size, dx, dy, rot, delay, dur }) => (
+      {parts.map(({ key, Icon, color, left, size, dx, dy, rot, delay, dur, bottom }) => (
         <Icon
           key={key}
-          className={`absolute -bottom-6 fill-current ${color}`}
+          className={`absolute fill-current ${color}`}
           style={{
-            left: `${left}%`, width: size, height: size, opacity: 0,
+            left: `${left}%`, bottom: `${bottom}%`, width: size, height: size, opacity: 0,
             ["--dx" as string]: `${dx}px`, ["--dy" as string]: `${dy}px`, ["--rot" as string]: `${rot}deg`,
-            animation: `eu-burst ${dur}ms ease-in-out ${delay}ms forwards`,
+            animation: `eu-burst ${dur}ms ease-out ${delay}ms forwards`,
           }}
         />
       ))}
