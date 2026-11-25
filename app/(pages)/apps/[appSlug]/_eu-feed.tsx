@@ -1371,7 +1371,7 @@ export function EuFeedPage() {
   const fireBurst = useCallback((postId: string, types: string[]) => {
     setBursts((b) => ({ ...b, [postId]: { types, key: Date.now() } }));
     clearTimeout(burstTimers.current[postId]);
-    burstTimers.current[postId] = setTimeout(() => setBursts((b) => { const n = { ...b }; delete n[postId]; return n; }), 3200); // sedikit di atas durasi animasi (3 dtk)
+    burstTimers.current[postId] = setTimeout(() => setBursts((b) => { const n = { ...b }; delete n[postId]; return n; }), 10500); // sedikit di atas durasi animasi (10 dtk)
   }, []);
   const livePosts = useRef<{ posts: Post[]; slider: Post[] }>({ posts: [], slider: [] });
   useEffect(() => { livePosts.current = { posts, slider: sliderPosts }; }, [posts, sliderPosts]);

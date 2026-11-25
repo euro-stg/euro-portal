@@ -99,20 +99,20 @@ export function applyReaction(reactions: Record<string, number>, myReaction: str
 /** Taburan ikon reaction di dalam kartu (2026-11-25). Pemanggil memberi `key` baru tiap letupan
  * supaya animasi mulai lagi. Posisi/arah dihitung deterministik dari indeks (tanpa Math.random). */
 export function ReactionBurst({ types }: { types: string[] }) {
-  const PER_TYPE = 9;
+  const PER_TYPE = 22; // lebih banyak supaya merata di seluruh lebar kartu
   const parts = types.flatMap((type, ti) => Array.from({ length: PER_TYPE }, (_, i) => {
     const n = ti * PER_TYPE + i;
     const h = (k: number) => { const x = Math.sin((n + 1) * 12.9898 + k * 78.233) * 43758.5453; return x - Math.floor(x); };
     const r = REACTIONS.find((x) => x.type === type) ?? REACTIONS[0];
     return {
       key: n, Icon: r.icon, color: r.color,
-      left: 4 + h(1) * 62,                 // % dari kiri kartu (sekitar bar reaction)
-      size: 14 + Math.round(h(2) * 14),
-      dx: Math.round((h(3) - 0.5) * 160),
-      dy: -Math.round(110 + h(4) * 190),
-      rot: Math.round((h(5) - 0.5) * 120),
-      delay: Math.round(h(6) * 500),            // jeda 0–0,5 dtk
-      dur: Math.round(1800 + h(7) * 700),       // gerak 1,8–2,5 dtk → total maks. 3 dtk
+      left: 2 + h(1) * 94,                 // % dari kiri: menyebar di SELURUH lebar kartu
+      size: 16 + Math.round(h(2) * 16),
+      dx: Math.round((h(3) - 0.5) * 120),  // goyang kiri-kanan saat naik
+      dy: -Math.round(260 + h(4) * 520),   // naik melewati seluruh tinggi kartu (di-clip kartu)
+      rot: Math.round((h(5) - 0.5) * 180),
+      delay: Math.round(h(6) * 2000),           // jeda 0–2 dtk
+      dur: Math.round(7000 + h(7) * 1000),      // gerak 7–8 dtk → total maks. 10 dtk
     };
   }));
   return (
@@ -120,11 +120,11 @@ export function ReactionBurst({ types }: { types: string[] }) {
       {parts.map(({ key, Icon, color, left, size, dx, dy, rot, delay, dur }) => (
         <Icon
           key={key}
-          className={`absolute bottom-2 fill-current ${color}`}
+          className={`absolute -bottom-6 fill-current ${color}`}
           style={{
             left: `${left}%`, width: size, height: size, opacity: 0,
             ["--dx" as string]: `${dx}px`, ["--dy" as string]: `${dy}px`, ["--rot" as string]: `${rot}deg`,
-            animation: `eu-burst ${dur}ms ease-out ${delay}ms forwards`,
+            animation: `eu-burst ${dur}ms ease-in-out ${delay}ms forwards`,
           }}
         />
       ))}
