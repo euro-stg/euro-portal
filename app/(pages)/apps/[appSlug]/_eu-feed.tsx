@@ -10,7 +10,7 @@ import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
 import { contentToText, contentToHtml, parseYoutubeId, youtubeWatchUrl } from "@/lib/eu-content";
 import {
-  timeAgo, ReactionBar, applyReaction, ProfileLink, UserAvatar, EmojiButton,
+  timeAgo, ReactionBar, ReactionBurst, applyReaction, ProfileLink, UserAvatar, EmojiButton,
   ReactorList, ReactorsModal, EuSocialProvider, useEuSocial, type Reactor,
 } from "@/components/eu/eu-social";
 import { BlastEmailCriteriaEditor, type BlastEmailCriteriaValue, type Reference as EdocReference } from "./_edoc-app";
@@ -207,8 +207,9 @@ const EuRichTextEditor = dynamic(() => import("./_eu-editor").then((m) => m.EuRi
   loading: () => <div className="h-[262px] rounded-md border border-slate-200 bg-slate-50 animate-pulse" />,
 });
 
-function PostCard({ post, onReact, onOpenModal, onOpenReaders, onShowReactors, me, onEdit, onDelete }: {
+function PostCard({ post, burst, onReact, onOpenModal, onOpenReaders, onShowReactors, me, onEdit, onDelete }: {
   post: Post;
+  burst?: { types: string[]; key: number };
   onShowReactors: (id: string) => void;
   onReact: (postId: string, type: string) => void;
   onOpenModal: (id: string) => void;
@@ -227,7 +228,8 @@ function PostCard({ post, onReact, onOpenModal, onOpenReaders, onShowReactors, m
   const canManage = !!me && (me.isSuperadmin || post.author.id === me.userId);
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+    <div className="relative bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      {burst && <ReactionBurst key={burst.key} types={burst.types} />}
       <div className="p-4">
         {/* Author row — badge di baris sendiri di mobile supaya tidak berebut lebar dengan
             nama penulis + tombol Edit/Hapus (creator/superadmin) (2026-11-13). */}
@@ -1064,6 +1066,12 @@ function PostDetailModal({
     fetch(`/api/eu/post/${postId}/read`, { method: "POST" }).catch(() => {}).finally(fetchPost);
   }, [postId, fetchPost]);
 
+  // Modal terbuka juga ikut auto-refresh (reaction, komentar, dilihat) tiap 30 dtk saat tab terlihat.
+  useEffect(() => {
+    const t = setInterval(() => { if (!document.hidden) fetchPost(); }, 30000);
+    return () => clearInterval(t);
+  }, [fetchPost]);
+
   const handleReact = async (type: string) => {
     // Update langsung di modal & feed di belakangnya, lalu sinkron (daftar "siapa bereaksi").
     setPost((p) => (p ? { ...p, ...applyReaction(p.reactions, p.myReaction, type) } : p));
@@ -1353,6 +1361,52 @@ export function EuFeedPage() {
     if (postParam) setSelectedPostId(postParam);
   }, [postParam]);
 
+  // ── Auto-refresh counter (2026-11-25) ───────────────────────────────────────────────────
+  // Polling ringan tiap 30 dtk (hanya saat tab terlihat) ke /api/eu/post/stats: reaction, jumlah
+  // komentar & dibaca ikut berjalan tanpa refresh. Tidak memuat ulang feed (scroll tidak lompat).
+  // Reaction yang naik karena orang lain memicu taburan di kartu post itu; reaction kita sendiri
+  // memicu taburan langsung di klik.
+  const [bursts, setBursts] = useState<Record<string, { types: string[]; key: number }>>({});
+  const burstTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const fireBurst = useCallback((postId: string, types: string[]) => {
+    setBursts((b) => ({ ...b, [postId]: { types, key: Date.now() } }));
+    clearTimeout(burstTimers.current[postId]);
+    burstTimers.current[postId] = setTimeout(() => setBursts((b) => { const n = { ...b }; delete n[postId]; return n; }), 3200); // sedikit di atas durasi animasi (3 dtk)
+  }, []);
+  const livePosts = useRef<{ posts: Post[]; slider: Post[] }>({ posts: [], slider: [] });
+  useEffect(() => { livePosts.current = { posts, slider: sliderPosts }; }, [posts, sliderPosts]);
+  const reactingNow = useRef<Set<string>>(new Set()); // post yang reaction-nya sedang disimpan — jangan ditimpa polling
+
+  useEffect(() => {
+    const POLL_MS = 30000;
+    const tick = async () => {
+      if (document.hidden) return;
+      const { posts: cur, slider } = livePosts.current;
+      const all = new Map([...cur, ...slider].map((p) => [p.id, p]));
+      if (all.size === 0) return;
+      const json = await fetch(`/api/eu/post/stats?ids=${[...all.keys()].join(",")}`)
+        .then((r) => (r.ok ? r.json() : null)).catch(() => null);
+      const stats: Record<string, { reactions: Record<string, number>; commentCount: number; readCount: number }> | undefined = json?.data;
+      if (!stats) return;
+      for (const [id, s] of Object.entries(stats)) {
+        const old = all.get(id);
+        if (!old || reactingNow.current.has(id)) { delete stats[id]; continue; }
+        const up = Object.keys(s.reactions).filter((t) => (s.reactions[t] ?? 0) > (old.reactions[t] ?? 0));
+        if (up.length) fireBurst(id, up);
+      }
+      const merge = (list: Post[]) => list.map((p) => {
+        const s = stats[p.id];
+        return s ? { ...p, reactions: s.reactions, commentCount: s.commentCount, _count: { ...p._count, readLogs: s.readCount } } : p;
+      });
+      setPosts(merge);
+      setSliderPosts(merge);
+    };
+    const t = setInterval(() => void tick(), POLL_MS);
+    const onVisible = () => { if (!document.hidden) void tick(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { clearInterval(t); document.removeEventListener("visibilitychange", onVisible); };
+  }, [fireBurst]);
+
   // Reaction diubah langsung di post terkait (feed & slider) — TIDAK memuat ulang feed,
   // supaya posisi scroll tidak lompat ke atas (2026-11-16).
   const setPostReaction = (postId: string, change: (p: Post) => Pick<Post, "reactions" | "myReaction">) => {
@@ -1360,15 +1414,20 @@ export function EuFeedPage() {
     setPosts(upd);
     setSliderPosts(upd);
   };
-  const applyReactionLocal = (postId: string, type: string) =>
+  const applyReactionLocal = (postId: string, type: string) => {
+    const cur = [...livePosts.current.posts, ...livePosts.current.slider].find((p) => p.id === postId);
+    if (cur && cur.myReaction !== type) fireBurst(postId, [type]); // memberi/ganti reaction (bukan mencabut)
     setPostReaction(postId, (p) => applyReaction(p.reactions, p.myReaction, type));
+  };
 
   const handleReact = async (postId: string, type: string) => {
     const before = [...posts, ...sliderPosts].find((p) => p.id === postId);
+    reactingNow.current.add(postId);
     applyReactionLocal(postId, type);
     const ok = await fetch(`/api/eu/post/${postId}/react`, {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type }),
     }).then((r) => r.ok).catch(() => false);
+    reactingNow.current.delete(postId);
     // Gagal tersimpan: kembalikan persis ke keadaan sebelum klik.
     if (!ok && before) setPostReaction(postId, () => ({ reactions: before.reactions, myReaction: before.myReaction }));
   };
@@ -1447,6 +1506,7 @@ export function EuFeedPage() {
                 <PostCard
                   key={post.id}
                   post={post}
+                  burst={bursts[post.id]}
                   onReact={(id, type) => void handleReact(id, type)}
                   onOpenModal={handleOpenModal}
                   onOpenReaders={setReadersPostId}

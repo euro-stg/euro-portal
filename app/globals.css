@@ -32,3 +32,11 @@ body {
 .eu-content[data-placeholder]:has(> p:only-child > br.ProseMirror-trailingBreak:only-child)::before {
   content: attr(data-placeholder); position: absolute; color: #94a3b8; pointer-events: none;
 }
+
+/* Taburan reaction di kartu post Euro Update (2026-11-25) — partikel naik dari dasar kartu,
+   melebar ke samping (--dx), berputar (--rot), lalu memudar. Lihat ReactionBurst (eu-social). */
+@keyframes eu-burst {
+  0%   { opacity: 0; transform: translate(0, 0) scale(0.4) rotate(0deg); }
+  15%  { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(1.15) rotate(var(--rot)); }
+}

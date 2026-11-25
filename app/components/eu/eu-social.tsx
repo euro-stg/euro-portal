@@ -96,6 +96,42 @@ export function applyReaction(reactions: Record<string, number>, myReaction: str
   return { reactions: next, myReaction: type };
 }
 
+/** Taburan ikon reaction di dalam kartu (2026-11-25). Pemanggil memberi `key` baru tiap letupan
+ * supaya animasi mulai lagi. Posisi/arah dihitung deterministik dari indeks (tanpa Math.random). */
+export function ReactionBurst({ types }: { types: string[] }) {
+  const PER_TYPE = 9;
+  const parts = types.flatMap((type, ti) => Array.from({ length: PER_TYPE }, (_, i) => {
+    const n = ti * PER_TYPE + i;
+    const h = (k: number) => { const x = Math.sin((n + 1) * 12.9898 + k * 78.233) * 43758.5453; return x - Math.floor(x); };
+    const r = REACTIONS.find((x) => x.type === type) ?? REACTIONS[0];
+    return {
+      key: n, Icon: r.icon, color: r.color,
+      left: 4 + h(1) * 62,                 // % dari kiri kartu (sekitar bar reaction)
+      size: 14 + Math.round(h(2) * 14),
+      dx: Math.round((h(3) - 0.5) * 160),
+      dy: -Math.round(110 + h(4) * 190),
+      rot: Math.round((h(5) - 0.5) * 120),
+      delay: Math.round(h(6) * 500),            // jeda 0–0,5 dtk
+      dur: Math.round(1800 + h(7) * 700),       // gerak 1,8–2,5 dtk → total maks. 3 dtk
+    };
+  }));
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none z-10" aria-hidden>
+      {parts.map(({ key, Icon, color, left, size, dx, dy, rot, delay, dur }) => (
+        <Icon
+          key={key}
+          className={`absolute bottom-2 fill-current ${color}`}
+          style={{
+            left: `${left}%`, width: size, height: size, opacity: 0,
+            ["--dx" as string]: `${dx}px`, ["--dy" as string]: `${dy}px`, ["--rot" as string]: `${rot}deg`,
+            animation: `eu-burst ${dur}ms ease-out ${delay}ms forwards`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 // ─── Kartu profil (2026-11-16) ────────────────────────────────────────────────
 // Foto/nama di artikel, komentar, reaction, pembaca, dan ulang tahun bisa diklik untuk
 // melihat siapa orangnya. Data diambil dari GET /api/eu/user/[id] (field terbatas).
