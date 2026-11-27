@@ -92,8 +92,21 @@ model User {
   lastLoginAt                 DateTime?
   loginCount                  Int                     @default(0)
   loginLogs                   LoginLog[]
+  presence                    UserPresence?
   createdAt                   DateTime                @default(now())
   updatedAt                   DateTime                @updatedAt
+}
+
+// Status online (2026-11-27) — 1 baris per user, di-upsert heartbeat browser (POST /api/presence, tiap
+// ~60 dtk saat tab terlihat). Online = lastSeenAt < 2 menit lalu. Tabel terpisah dari User agar update
+// sering tidak membuat tabel User bloat.
+model UserPresence {
+  userId     String   @id
+  lastSeenAt DateTime
+  path       String?
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([lastSeenAt])
 }
 
 // Riwayat login (2026-11-11) — login portal (berhasil & gagal) dan login SSO aplikasi eksternal

@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import { signInUrl } from "@/lib/callback-url";
 import { AppShell } from "@/components/ui/app-shell";
+import { PresenceHeartbeat } from "@/components/presence-heartbeat";
 import db from "@/lib/db/db";
 import type { SidebarModule } from "@/types/sidebar";
 
@@ -86,6 +87,7 @@ export default async function ProtectedLayout({
 
   return (
     <>
+      <PresenceHeartbeat />
       <AppShell user={{ name: dbUser.name, image: dbUser.image, role: portalRole }} modules={modules} envMode={envMode}>
         {children}
       </AppShell>

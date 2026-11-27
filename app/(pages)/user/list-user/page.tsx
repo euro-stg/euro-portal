@@ -10,6 +10,7 @@ import { Pagination } from "@/components/ui/pagination";
 import Link from "next/link";
 import Image from "next/image";
 import { LoginStatsButton } from "./_login-stats";
+import { OnlineUsersButton } from "./_online-users";
 import { RefreshCw, Users, CloudDownload, UserCheck, List, Layers, X, History, CheckCircle, AlertCircle, Clock, UserPlus, Trash2, FileSpreadsheet } from "lucide-react";
 
 type RoleEntry = { name: string; appId: string | null };
@@ -160,6 +161,7 @@ function FormField({ label, children }: { label: string; children: React.ReactNo
 
 export default function ListUserPage() {
   const [data, setData] = useState<UserRow[]>([]);
+  const [onlineIds, setOnlineIds] = useState<Set<string>>(new Set()); // superadmin: dot hijau user online
   const [loading, setLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -570,6 +572,7 @@ export default function ListUserPage() {
             {showAll ? <Layers className="w-3.5 h-3.5" /> : <List className="w-3.5 h-3.5" />}
             {showAll ? "Per Halaman" : "Tampilkan Semua"}
           </button>
+          <OnlineUsersButton onChange={setOnlineIds} />
           <LoginStatsButton />
           {/* Export mengikuti filter tabel saat ini (server: /api/user/export, khusus menu User). */}
           <a href={`/api/user/export?${buildQuery(1, filters, true)}`}>
@@ -707,7 +710,7 @@ export default function ListUserPage() {
                     </td>
                     <td className="px-3 py-3 text-xs text-slate-400 w-10">{(currentPage - 1) * 10 + index + 1}</td>
                     <td className="px-3 py-3 font-mono text-xs text-slate-600">{item.employeeId ?? "—"}</td>
-                    <td className="px-3 py-3 text-sm font-medium text-slate-800">{item.name ?? "—"}</td>
+                    <td className="px-3 py-3 text-sm font-medium text-slate-800">{onlineIds.has(item.id) && <span title="Online" className="inline-block w-2 h-2 mr-1.5 rounded-full bg-emerald-500 align-middle" />}{item.name ?? "—"}</td>
                     <td className="px-3 py-3 text-xs text-slate-500 whitespace-nowrap">{formatDate(item.joinDate)}</td>
                     <td className="px-3 py-3 text-xs text-slate-500 whitespace-nowrap">{formatDate(item.resignDate)}</td>
                     <td className="px-3 py-3 text-xs text-slate-600">{item.organizationName ?? "—"}</td>
