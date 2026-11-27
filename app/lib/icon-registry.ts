@@ -8,6 +8,7 @@ import {
   FileSignature, Send, CheckSquare, PenLine, ListChecks,
   Mail,
   Stethoscope, Terminal, ScrollText, Star, Newspaper, History,
+  Activity, HeartPulse, Monitor, MonitorPlay, GraduationCap, ClipboardCheck, Gauge, Headset, UserSearch, MailCheck, Presentation, Radar, Microscope, Award, Rocket, Stamp, FileCheck, Siren, ScanLine, LifeBuoy, Calculator, Wallet, Smartphone, Zap,
   type LucideIcon,
 } from "lucide-react";
 
@@ -21,6 +22,7 @@ export const iconRegistry: Record<string, LucideIcon> = {
   FileSignature, Send, CheckSquare, PenLine, ListChecks,
   Mail,
   Stethoscope, Terminal, ScrollText, Star, Newspaper, History,
+  Activity, HeartPulse, Monitor, MonitorPlay, GraduationCap, ClipboardCheck, Gauge, Headset, UserSearch, MailCheck, Presentation, Radar, Microscope, Award, Rocket, Stamp, FileCheck, Siren, ScanLine, LifeBuoy, Calculator, Wallet, Smartphone, Zap,
 };
 
 export const iconColorRegistry: Record<string, string> = {
@@ -65,6 +67,30 @@ export const iconColorRegistry: Record<string, string> = {
   Star:            "text-amber-500",
   Newspaper:       "text-orange-500",
   History:         "text-sky-500",
+  Activity: "text-rose-500",
+  HeartPulse: "text-rose-500",
+  Monitor: "text-sky-500",
+  MonitorPlay: "text-violet-500",
+  GraduationCap: "text-emerald-500",
+  ClipboardCheck: "text-teal-500",
+  Gauge: "text-cyan-500",
+  Headset: "text-indigo-500",
+  UserSearch: "text-blue-500",
+  MailCheck: "text-violet-500",
+  Presentation: "text-orange-500",
+  Radar: "text-cyan-500",
+  Microscope: "text-teal-500",
+  Award: "text-amber-500",
+  Rocket: "text-orange-500",
+  Stamp: "text-rose-500",
+  FileCheck: "text-emerald-500",
+  Siren: "text-rose-500",
+  ScanLine: "text-slate-500",
+  LifeBuoy: "text-sky-500",
+  Calculator: "text-slate-500",
+  Wallet: "text-emerald-500",
+  Smartphone: "text-indigo-500",
+  Zap: "text-amber-500",
 };
 
 /** Untuk app card di dashboard — fallback ke Layers */
